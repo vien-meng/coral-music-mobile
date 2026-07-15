@@ -36,4 +36,12 @@ void main() {
     expect(
         () => controller.replaceQueue(tracks, startIndex: 2), throwsRangeError);
   });
+
+  test('next and previous wrap at queue boundaries', () {
+    final controller = PlaybackQueueController();
+    controller.replaceQueue(tracks, startIndex: 0);
+
+    expect(controller.selectPrevious()?.sourceTrackId, '2');
+    expect(controller.selectNext()?.sourceTrackId, '1');
+  });
 }

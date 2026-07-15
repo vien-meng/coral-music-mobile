@@ -11,10 +11,11 @@ class MiniPlayer extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final track = ref.watch(
+    final queueTrack = ref.watch(
       playbackQueueProvider.select((queue) => queue.currentTrack),
     );
     final player = ref.watch(playerProvider);
+    final track = player.track ?? queueTrack;
     return Material(
       elevation: 3,
       child: SafeArea(

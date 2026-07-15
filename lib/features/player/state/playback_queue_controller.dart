@@ -55,4 +55,17 @@ final class PlaybackQueueController extends StateNotifier<PlaybackQueueState> {
       contextId: state.contextId,
     );
   }
+
+  Track? selectNext() => _selectOffset(1);
+
+  Track? selectPrevious() => _selectOffset(-1);
+
+  Track? _selectOffset(int offset) {
+    if (state.tracks.isEmpty) return null;
+    final currentIndex = state.currentIndex < 0 ? 0 : state.currentIndex;
+    final index =
+        (currentIndex + offset + state.tracks.length) % state.tracks.length;
+    select(index);
+    return state.currentTrack;
+  }
 }

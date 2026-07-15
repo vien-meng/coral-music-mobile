@@ -47,24 +47,25 @@ class UserApiRunner(private val activity: Activity) {
     }
 
     fun resolveMusicUrl(arguments: Map<*, *>?, result: MethodChannel.Result) {
-        val source = arguments?.get("source") as? String ?: ""
+        val requestArguments = arguments ?: emptyMap<String, Any?>()
+        val source = requestArguments["source"] as? String ?: ""
         if (!loaded || source !in sources) {
             result.error("not_ready", "当前音源未支持该歌曲来源", null)
             return
         }
-        val musicInfo = arguments["musicInfo"] as? Map<*, *> ?: emptyMap<String, Any?>()
+        val musicInfo = requestArguments["musicInfo"] as? Map<*, *> ?: emptyMap<String, Any?>()
         val payload = JSONObject().apply {
             put("source", source)
             put("action", "musicUrl")
             put("info", JSONObject().apply {
-                put("type", arguments["quality"] as? String ?: "128k")
+                put("type", requestArguments["quality"] as? String ?: "128k")
                 put("musicInfo", JSONObject(musicInfo))
             })
         }
         val requestId = UUID.randomUUID().toString()
         pendingResults[requestId] = result
         evaluate("""
-            Promise.resolve(window.__coralRequestHandler(${JSONObject.quote(payload.toString())}))
+            Promise.resolve(window.__coralRequestHandler(${payload}))
               .then((value) => NativeBridge.result(${JSONObject.quote(requestId)}, JSON.stringify({ok: true, value})))
               .catch((error) => NativeBridge.result(${JSONObject.quote(requestId)}, JSON.stringify({ok: false, error: String(error && error.message || error)})));
         """.trimIndent())

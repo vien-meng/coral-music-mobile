@@ -137,15 +137,37 @@ class _PlayerPanel extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 24),
-          FilledButton.icon(
-            key: const Key('player-detail-toggle'),
-            onPressed: () => ref.read(playerProvider.notifier).toggle(track),
-            icon: Icon(player.isPlaying ? Icons.pause : Icons.play_arrow),
-            label: Text(player.isPlaying ? '暂停播放' : '开始播放'),
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(176, 56),
-              textStyle: Theme.of(context).textTheme.titleMedium,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconButton.filledTonal(
+                tooltip: '上一首',
+                onPressed: ref.watch(playbackQueueProvider).tracks.length > 1
+                    ? () => _playSibling(ref, previous: true)
+                    : null,
+                icon: const Icon(Icons.skip_previous),
+              ),
+              const SizedBox(width: 20),
+              FilledButton.icon(
+                key: const Key('player-detail-toggle'),
+                onPressed: () =>
+                    ref.read(playerProvider.notifier).toggle(track),
+                icon: Icon(player.isPlaying ? Icons.pause : Icons.play_arrow),
+                label: Text(player.isPlaying ? '暂停播放' : '开始播放'),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(176, 56),
+                  textStyle: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+              const SizedBox(width: 20),
+              IconButton.filledTonal(
+                tooltip: '下一首',
+                onPressed: ref.watch(playbackQueueProvider).tracks.length > 1
+                    ? () => _playSibling(ref)
+                    : null,
+                icon: const Icon(Icons.skip_next),
+              ),
+            ],
           ),
           const SizedBox(height: 20),
           Text(
@@ -160,6 +182,12 @@ class _PlayerPanel extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _playSibling(WidgetRef ref, {bool previous = false}) async {
+    final queue = ref.read(playbackQueueProvider.notifier);
+    final track = previous ? queue.selectPrevious() : queue.selectNext();
+    if (track != null) await ref.read(playerProvider.notifier).playTrack(track);
   }
 }
 

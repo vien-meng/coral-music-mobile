@@ -76,3 +76,19 @@ lx.send('inited', {
 
 - `audio_session 0.2.4` 要求 Android `minSdk 24`，故将 `android/app/build.gradle` 从 Flutter 模板的 API 21 提升为 API 24；不使用 `tools:overrideLibrary`，避免在低版本系统留下未验证的运行时崩溃风险。
 - 该版本的 Android 子工程以 Java 8 编译、Kotlin 默认目标 17，会被 Kotlin 的目标一致性检查拒绝。项目在 `android/gradle.properties` 将该检查降为 warning，使 Android 构建能继续；APK 已生成，但这不是实际音频真机验收的替代，B4-01 继续保持 `DOING`。
+
+## 2026-07-15 Android 真机验收与修复
+
+- 验收设备：Samsung SM-N986U，Android 13 / API 33，USB 调试连接；安装命令为 `flutter install --debug -d R5CR70B7SMA`。
+- 固定 HTTPS 地址 `https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3` 直接播放成功。`dumpsys audio` 显示 `com.coral.music.mobile` 取得 `USAGE_MEDIA` / `CONTENT_TYPE_MUSIC` 的 `GAIN` 音频焦点。
+- 受限 WebView 脚本成功声明 `kw` 的 `musicUrl` 能力；选择酷我排行榜歌曲后，脚本返回同一 HTTPS 地址，迷你播放栏显示歌曲、`正在播放`、暂停按钮和进度条。拖动进度条到中段后滑块位置改变，音频焦点仍为 active。
+- 初次重建发现 `resolveMusicUrl` 在 Kotlin 严格空安全下对可空 `arguments` 直接索引。入口改为一次性使用 `requestArguments = arguments ?: emptyMap()`，避免不安全断言和分散空判断。
+- 首次真机取链返回“音源未返回安全的 HTTPS 播放地址”。根因是 `UserApiRunner` 以 `JSONObject.quote(payload.toString())` 将请求 JSON 作为字符串传给脚本，脚本无法解构 `action`。改为直接传递 JSON 对象字面量；返回地址仍在原生侧验证 HTTPS、host 非空和 8192 字符上限。
+- 发现直接调试播放时迷你栏只读队列当前项，错误显示“未在播放”且不出现 seek。迷你栏改为优先显示 `player.track`，没有播放项时才回退队列；新增 `test/mini_player_test.dart` 覆盖直接调试歌曲、播放状态和 seek 控件。
+
+### 验证结果
+
+- `dart format lib/features/player/view/mini_player.dart test/mini_player_test.dart`、`flutter analyze`：通过。
+- `flutter test test/mini_player_test.dart test/player_controller_test.dart`：2 个测试通过。
+- `flutter build apk --debug`：通过；最新 Debug APK 已安装到上述真机。
+- 任务仍为 `DOING`：Android 最小闭环通过；iOS/鸿蒙 User API 运行时、三端后台媒体和真实设备验收尚未开始，不能以 Android 结果标记三端能力完成。

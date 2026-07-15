@@ -28,7 +28,7 @@
 | 鸿蒙工具链 | DOING | API 18、Ohpm 5.1.3、Node 22.16、Hvigor 5.18.6 可用；已生成 unsigned HAP，待 DevEco 调试签名 |
 | Android 工具链 | READY | SDK 位于 `/opt/homebrew/share/android-commandlinetools`；API 35、Build Tools 33/35、NDK 26.1、Platform Tools 已安装，Debug APK 构建通过 |
 | iOS 工具链 | DOING | Xcode 26.6、许可、首次启动和 CocoaPods 1.17.0 已完成；待安装 iOS 26.5 Platform Runtime |
-| 真机 | BLOCKED | Flutter doctor 仅发现 macOS 与 Chrome，未发现三端真机 |
+| 真机 | DOING | SM-N986U / Android 13 已完成最小播放、seek 与 User API 取链验收；iOS、鸿蒙真机仍待配置 |
 | 功能基线 | READY | 已核对桌面端九条 React 路由和十九个设置分组 |
 | 商店政策审查 | TODO | 动态 User API、本地 HTTP 服务、后台下载需形成审查结论 |
 
@@ -54,6 +54,7 @@
 | B3-04 迁移 QQ 音乐排行榜 | DONE | `development-history/2026-07-15-018-b3-04-qq-leaderboard.md` |
 | B4-01 最小可播放闭环：音频引擎、取链与受限 User API | DOING | `development-history/2026-07-15-020-b4-01-minimum-playback-and-user-api.md` |
 | B4-02 播放详情与歌词阅读界面 | DONE | `development-history/2026-07-15-021-b4-02-player-detail-and-lyrics-ui.md` |
+| B4-03 队列前后切歌基础 | DOING | `development-history/2026-07-15-022-b4-03-queue-navigation.md` |
 
 ## 里程碑
 
@@ -61,13 +62,13 @@
 
 - `P0-01 [DONE]` 创建 `ios,android,ohos` 三端 Flutter 空壳；候选 SDK 已记录，包名锁定为 `com.coral.music.mobile`。
 - `P0-02 [DOING]` Android SDK 已完成；Xcode/CocoaPods 已完成，仍需安装 iOS Platform Runtime 并完成鸿蒙签名。
-- `P0-03 [BLOCKED]` 三端真机安装空壳并保存设备、系统版本和构建命令；鸿蒙需先配置调试签名。
-- `P0-04 [DOING]` 最小播放器已实现并安装到 Android 真机；播放/暂停/seek 等待设备解锁后验收，再扩展锁屏、耳机和中断。
+- `P0-03 [DOING]` SM-N986U / Android 13 已安装 Debug 包并保存验收记录；iOS/鸿蒙仍需真机与鸿蒙调试签名。
+- `P0-04 [DOING]` Android 真机已通过固定 HTTPS 音频播放、暂停状态、seek 与媒体焦点；iOS/鸿蒙播放、锁屏、耳机和中断待验收。
 - `P0-05` HTTP Range 小样：远程 MP3/FLAC 播放和 seek，WebDAV Basic/Digest 凭据验证。
 - `P0-06` SQLite migration 与安全存储小样；验证卸载/重装和系统备份边界。
 - `P0-07` 文件选择、目录访问与分享导入小样。
 - `P0-08` 后台下载小样：暂停、恢复、进程终止与系统重启后的状态协调。
-- `P0-09 [DOING]` Android 受限 WebView User API 小样已实现并编译；仅 `musicUrl`、受控 HTTPS、超时和响应上限，等待真机取链验收。
+- `P0-09 [DOING]` Android 受限 WebView User API 已真机通过 `kw` 的 `musicUrl` 取链与播放；iOS/鸿蒙运行时和商店门控待后续验证。
 - `P0-10` 完成依赖许可和三家商店政策结论。
 
 退出门槛：`P0-03` 至 `P0-09` 在三端真机通过。若动态脚本不满足商店政策，锁定“商店版仅签名内置源”的既定降级，不阻断其它开发。
@@ -98,9 +99,9 @@
 
 ### Phase 3：播放器核心（5 周）
 
-- `P3-01 [DOING]` B4-01 已实现最小 `AudioEngine`，三端构建通过；真机播放/seek 与 `MediaSessionBridge` 三端适配仍待完成。
-- `P3-02 [DOING]` B4-01 已实现在线 `PlaybackResolver` 与 Android 受限 User API `musicUrl`；真机验收、四类来源、音质降级/换源/cache 后续扩展。
-- `P3-03` 实现队列、三种模式、上一首/下一首、自动下一首、错误跳过和随机历史。
+- `P3-01 [DOING]` B4-01 已实现最小 `AudioEngine`，Android 真机播放/seek 通过；iOS/鸿蒙真机与 `MediaSessionBridge` 三端适配仍待完成。
+- `P3-02 [DOING]` B4-01 已实现在线 `PlaybackResolver` 与 Android 受限 User API `musicUrl`，并通过真机 `kw` 取链；四类来源、音质降级/换源/cache 后续扩展。
+- `P3-03 [DOING]` B4-03 已实现队列首尾循环的上一首/下一首与详情页控制；切歌后即时恢复播放需继续真机排查，三种模式、自动下一首、错误跳过和随机历史待补。
 - `P3-04` 实现 seek、倍速、进度保存、重启恢复和音频焦点中断。
 - `P3-05 [DOING]` B4-02 已实现可从迷你播放栏进入的播放详情、专辑卡片、进度和播放控制；共享队列、质量选择和收藏待补。
 - `P3-06 [DOING]` B4-02 已实现歌词阅读入口与数据未就绪空态；歌词解析、逐字时间轴、翻译、罗马音、偏移、缓存和本地优先级待补。
