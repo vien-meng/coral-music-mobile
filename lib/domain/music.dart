@@ -1,0 +1,87 @@
+enum OnlineSource {
+  kuwo('kw', '酷我音乐'),
+  kugou('kg', '酷狗音乐'),
+  qq('tx', 'QQ音乐'),
+  netease('wy', '网易云音乐'),
+  migu('mg', '咪咕音乐');
+
+  const OnlineSource(this.id, this.label);
+
+  final String id;
+  final String label;
+}
+
+enum TrackSourceKind { online, local, download, webdav }
+
+enum AudioQuality {
+  master,
+  atmosPlus,
+  atmos,
+  hires,
+  flac24bit,
+  flac,
+  high320k,
+  high192k,
+  standard128k,
+}
+
+final class Track {
+  const Track({
+    required this.sourceKind,
+    required this.sourceId,
+    required this.sourceTrackId,
+    required this.title,
+    required this.artist,
+    this.album,
+    this.duration,
+    this.coverUri,
+    this.localUri,
+    this.availableQualities = const [],
+    this.extra = const {},
+  });
+
+  final TrackSourceKind sourceKind;
+  final String sourceId;
+  final String sourceTrackId;
+  final String title;
+  final String artist;
+  final String? album;
+  final Duration? duration;
+  final Uri? coverUri;
+  final Uri? localUri;
+  final List<AudioQuality> availableQualities;
+  final Map<String, Object?> extra;
+
+  String get id => '${sourceKind.name}:$sourceId:$sourceTrackId';
+}
+
+final class LeaderboardBoard {
+  const LeaderboardBoard({
+    required this.id,
+    required this.source,
+    required this.name,
+    required this.remoteId,
+  });
+
+  final String id;
+  final OnlineSource source;
+  final String name;
+  final String remoteId;
+}
+
+final class PageResult<T> {
+  const PageResult({
+    required this.items,
+    required this.page,
+    required this.pageSize,
+    required this.total,
+  });
+
+  final List<T> items;
+  final int page;
+  final int pageSize;
+  final int total;
+
+  bool get hasPrevious => page > 1;
+  bool get hasNext => page * pageSize < total;
+}

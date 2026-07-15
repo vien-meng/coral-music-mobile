@@ -1,0 +1,34 @@
+{
+  "code": 200,
+  "data": {
+    "total": "2",
+    "musiclist": [
+      {
+        "id": "1001",
+        "name": "珊瑚&amp;海",
+        "artist": "歌手甲&歌手乙",
+        "album": "测试专辑",
+        "albumId": "album-1",
+        "duration": "245",
+        "pic": "https://example.com/cover.jpg",
+        "n_minfo": "level:ff,bitrate:2000,format:flac,size:30M;level:ff,bitrate:320,format:mp3,size:9M"
+      },
+      {
+        "id": "1001",
+        "name": "重复歌曲",
+        "artist": "歌手甲",
+        "duration": "245",
+        "n_minfo": "level:ff,bitrate:128,format:mp3,size:4M"
+      },
+      {
+        "id": "1002",
+        "name": "第二首",
+        "artist": "",
+        "album": "",
+        "duration": "180",
+        "pic": "not-a-url",
+        "n_minfo": "level:ff,bitrate:128,format:mp3,size:4M"
+      }
+    ]
+  }
+}
