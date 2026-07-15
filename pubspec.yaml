@@ -13,6 +13,8 @@ dependencies:
     sdk: flutter
   flutter_riverpod: ^2.6.1
   go_router: ^14.8.1
+  just_audio: ^0.10.6
+  just_audio_harmonyos: ^0.0.1
   pointycastle: ^3.9.1
 
 dev_dependencies:

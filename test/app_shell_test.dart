@@ -1,4 +1,5 @@
 import 'package:coral_music_mobile/domain/music.dart';
+import 'package:coral_music_mobile/features/player/view/mini_player.dart';
 import 'package:coral_music_mobile/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -34,7 +35,27 @@ void main() {
     await tester.pump();
 
     expect(find.text('测试歌曲'), findsNWidgets(2));
-    expect(find.text('测试歌手 · 待接入音频引擎'), findsOneWidget);
+    expect(find.text('测试歌手 · 准备播放'), findsOneWidget);
+  });
+
+  testWidgets('opens the player detail and its lyrics empty state',
+      (tester) async {
+    await tester
+        .pumpWidget(CoralMusicApp(catalogService: FakeCatalogService()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('播放全部'));
+    await tester.pump();
+    await tester.tap(find.byType(MiniPlayer));
+    await tester.pumpAndSettle();
+
+    expect(find.text('播放详情'), findsOneWidget);
+    expect(find.text('测试歌曲'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('查看歌词'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('暂无可用歌词'), findsOneWidget);
   });
 
   testWidgets('search result replaces queue and updates mini player',
@@ -51,7 +72,7 @@ void main() {
     await tester.tap(find.text('测试歌曲'));
     await tester.pump();
 
-    expect(find.text('测试歌手 · 待接入音频引擎'), findsOneWidget);
+    expect(find.text('测试歌手 · 准备播放'), findsOneWidget);
   });
 
   testWidgets('switches the leaderboard source', (tester) async {

@@ -52,6 +52,8 @@
 | B3-02 搜索状态与界面 | DONE | `development-history/2026-07-15-016-b3-02-search-state-and-ui.md` |
 | B3-03 酷狗排行榜可行性验证 | BLOCKED | `development-history/2026-07-15-017-b3-03-kugou-leaderboard-feasibility.md` |
 | B3-04 迁移 QQ 音乐排行榜 | DONE | `development-history/2026-07-15-018-b3-04-qq-leaderboard.md` |
+| B4-01 最小可播放闭环：音频引擎、取链与受限 User API | DOING | `development-history/2026-07-15-020-b4-01-minimum-playback-and-user-api.md` |
+| B4-02 播放详情与歌词阅读界面 | DONE | `development-history/2026-07-15-021-b4-02-player-detail-and-lyrics-ui.md` |
 
 ## 里程碑
 
@@ -60,12 +62,12 @@
 - `P0-01 [DONE]` 创建 `ios,android,ohos` 三端 Flutter 空壳；候选 SDK 已记录，包名锁定为 `com.coral.music.mobile`。
 - `P0-02 [DOING]` Android SDK 已完成；Xcode/CocoaPods 已完成，仍需安装 iOS Platform Runtime 并完成鸿蒙签名。
 - `P0-03 [BLOCKED]` 三端真机安装空壳并保存设备、系统版本和构建命令；鸿蒙需先配置调试签名。
-- `P0-04` 后台播放小样：锁屏/通知信息、播放暂停、上一首/下一首、耳机按键、音频中断。
+- `P0-04 [DOING]` 最小播放器已实现并安装到 Android 真机；播放/暂停/seek 等待设备解锁后验收，再扩展锁屏、耳机和中断。
 - `P0-05` HTTP Range 小样：远程 MP3/FLAC 播放和 seek，WebDAV Basic/Digest 凭据验证。
 - `P0-06` SQLite migration 与安全存储小样；验证卸载/重装和系统备份边界。
 - `P0-07` 文件选择、目录访问与分享导入小样。
 - `P0-08` 后台下载小样：暂停、恢复、进程终止与系统重启后的状态协调。
-- `P0-09` User API 沙箱小样：脚本检查、受控 HTTP、超时、响应上限、无原生访问。
+- `P0-09 [DOING]` Android 受限 WebView User API 小样已实现并编译；仅 `musicUrl`、受控 HTTPS、超时和响应上限，等待真机取链验收。
 - `P0-10` 完成依赖许可和三家商店政策结论。
 
 退出门槛：`P0-03` 至 `P0-09` 在三端真机通过。若动态脚本不满足商店政策，锁定“商店版仅签名内置源”的既定降级，不阻断其它开发。
@@ -74,7 +76,7 @@
 
 - `P1-01` 建立 CI：格式、分析、单测和 HAP/APK/iOS 无签名构建。
 - `P1-02` 建立 Material 3 珊瑚主题、简中/繁中/英文和错误边界。
-- `P1-03 [DOING]` 已建立 `go_router` 九入口、手机底栏、宽屏 Rail 和迷你播放栏；播放详情页待播放器批次。
+- `P1-03 [DOING]` 已建立 `go_router` 九入口、手机底栏、宽屏 Rail、迷你播放栏和独立播放详情页；播放器批次仍需补质量、队列与收藏。
 - `P1-04 [DOING]` 已建立 Riverpod 排行榜/队列状态和 HTTP 脱敏诊断；完整启动状态待后续。
 - `P1-05 [DOING]` 已落地 `Track`、来源、音质、榜单和分页类型；其余领域类型按真实调用方加入。
 - `P1-06` 建立 SQLite v1、显式迁移、设置存储和安全凭据引用。
@@ -96,12 +98,12 @@
 
 ### Phase 3：播放器核心（5 周）
 
-- `P3-01` 实现 `AudioEngine` 与 `MediaSessionBridge` 三端适配。
-- `P3-02` 实现四类来源解析和在线音质降级/换源/cache 策略。
+- `P3-01 [DOING]` B4-01 已实现最小 `AudioEngine`，三端构建通过；真机播放/seek 与 `MediaSessionBridge` 三端适配仍待完成。
+- `P3-02 [DOING]` B4-01 已实现在线 `PlaybackResolver` 与 Android 受限 User API `musicUrl`；真机验收、四类来源、音质降级/换源/cache 后续扩展。
 - `P3-03` 实现队列、三种模式、上一首/下一首、自动下一首、错误跳过和随机历史。
 - `P3-04` 实现 seek、倍速、进度保存、重启恢复和音频焦点中断。
-- `P3-05` 实现播放详情、共享队列、质量选择和收藏。
-- `P3-06` 实现歌词解析、逐字时间轴、翻译、罗马音、偏移、缓存和本地优先级。
+- `P3-05 [DOING]` B4-02 已实现可从迷你播放栏进入的播放详情、专辑卡片、进度和播放控制；共享队列、质量选择和收藏待补。
+- `P3-06 [DOING]` B4-02 已实现歌词阅读入口与数据未就绪空态；歌词解析、逐字时间轴、翻译、罗马音、偏移、缓存和本地优先级待补。
 - `P3-07` 实现后台元数据、媒体按键和平台允许的歌词展示。
 - `P3-08` 实现评论入口、可关闭可视化及经 Phase 0 验证的平台音效。
 
@@ -132,7 +134,7 @@
 
 ### Phase 6：高级能力与设置（4 周）
 
-- `P6-01` User API 导入/启用/删除、能力展示、执行隔离和商店版门控。
+- `P6-01 [TODO]` B4-01 已提前受限 `musicUrl` 小样；文件/URL 导入、启用/删除、能力展示、完整隔离和商店版门控仍在本阶段。
 - `P6-02` 兼容桌面列表与不感兴趣同步协议；前台服务端状态可见。
 - `P6-03` 备份、完整性校验、版本迁移和恢复预览。
 - `P6-04` 网络代理、缓存、定时停止、主题、语言和诊断。

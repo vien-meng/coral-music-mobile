@@ -3,12 +3,19 @@ import 'package:go_router/go_router.dart';
 
 import '../features/leaderboard/view/leaderboard_page.dart';
 import '../features/search/view/search_page.dart';
+import '../features/player/view/player_detail_page.dart';
+import '../features/player/view/user_api_debug_page.dart';
 import 'app_shell.dart';
 import 'placeholder_page.dart';
 
 GoRouter createAppRouter() => GoRouter(
       initialLocation: '/leaderboard',
       routes: [
+        GoRoute(
+          name: 'player',
+          path: '/player',
+          builder: (context, state) => const PlayerDetailPage(),
+        ),
         ShellRoute(
           builder: (context, state, child) => AppShell(
             location: state.uri.path,
@@ -24,6 +31,9 @@ GoRouter createAppRouter() => GoRouter(
                     return const LeaderboardPage();
                   }
                   if (destination.name == 'search') return const SearchPage();
+                  if (destination.name == 'setting') {
+                    return const UserApiDebugPage();
+                  }
                   return PlaceholderPage(destination: destination);
                 },
               ),
