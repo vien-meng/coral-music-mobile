@@ -1,0 +1,44 @@
+{
+  "code": 0,
+  "toplist": {
+    "data": {
+      "songInfoList": [
+        {
+          "id": 481456,
+          "mid": "000Tx0ZM2xaBhM",
+          "title": "樱花草",
+          "interval": 283,
+          "singer": [
+            {"mid": "001OWH813jMuAN", "name": "Sweety"},
+            {"mid": "", "name": "测试歌手"}
+          ],
+          "album": {"mid": "000pKXff1doeOd", "name": "花言乔语"},
+          "file": {
+            "media_mid": "002Y0Eb148Eyan",
+            "size_128mp3": 4542594,
+            "size_320mp3": 11355966,
+            "size_flac": 32728050,
+            "size_hires": 0
+          }
+        },
+        {
+          "id": 481456,
+          "mid": "000Tx0ZM2xaBhM",
+          "title": "重复歌曲",
+          "singer": [],
+          "album": {},
+          "file": {}
+        },
+        {
+          "id": 2,
+          "mid": "00000000000002",
+          "title": "高解析测试",
+          "interval": "120",
+          "singer": [{"mid": "singer2", "name": "歌手"}],
+          "album": {"mid": "", "name": ""},
+          "file": {"size_hires": 10}
+        }
+      ]
+    }
+  }
+}

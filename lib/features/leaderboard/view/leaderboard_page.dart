@@ -64,8 +64,20 @@ class _Toolbar extends ConsumerWidget {
                   value: OnlineSource.kuwo,
                   child: Text('酷我音乐'),
                 ),
+                DropdownMenuItem(
+                  value: OnlineSource.qq,
+                  child: Text('QQ音乐'),
+                ),
               ],
-              onChanged: state.isLoading ? null : (_) {},
+              onChanged: state.isLoading
+                  ? null
+                  : (source) {
+                      if (source != null) {
+                        ref
+                            .read(leaderboardProvider.notifier)
+                            .selectSource(source);
+                      }
+                    },
             ),
             const Spacer(),
             FilledButton.tonalIcon(

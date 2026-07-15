@@ -5,9 +5,16 @@ import '../../../core/http_client.dart';
 import '../../../domain/music.dart';
 import '../data/kuwo_catalog_service.dart';
 import '../data/online_catalog_service.dart';
+import '../data/qq_catalog_service.dart';
 
 final onlineCatalogServiceProvider = Provider<OnlineCatalogService>(
-  (ref) => KuwoCatalogService(createHttpClient()),
+  (ref) {
+    final dio = createHttpClient();
+    return MultiSourceOnlineCatalogService({
+      OnlineSource.kuwo: KuwoCatalogService(dio),
+      OnlineSource.qq: QqCatalogService(dio),
+    });
+  },
 );
 
 final leaderboardProvider =
@@ -148,6 +155,39 @@ final class LeaderboardController extends StateNotifier<LeaderboardState> {
     final board = state.activeBoard;
     if (board == null) return loadInitial();
     return selectBoard(board, page: state.page);
+  }
+
+  Future<void> selectSource(OnlineSource source) async {
+    if (source == state.source || state.isLoading) return;
+    ++_requestId;
+    state = LeaderboardState(source: source, isLoading: true);
+    try {
+      final boards = await _service.getLeaderboardBoards(source);
+      if (boards.isEmpty) {
+        state = state.copyWith(
+          boards: boards,
+          isLoading: false,
+          error: const AppFailure(
+            code: AppFailureCode.invalidData,
+            message: '暂无可用榜单',
+          ),
+        );
+        return;
+      }
+      state = state.copyWith(boards: boards, isLoading: false);
+      await selectBoard(boards.first);
+    } on AppFailure catch (error) {
+      state = state.copyWith(isLoading: false, error: error);
+    } on Object catch (error) {
+      state = state.copyWith(
+        isLoading: false,
+        error: AppFailure(
+          code: AppFailureCode.unknown,
+          message: '榜单加载失败',
+          diagnostic: error.runtimeType.toString(),
+        ),
+      );
+    }
   }
 
   Future<void> previousPage() async {

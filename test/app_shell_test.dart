@@ -1,3 +1,4 @@
+import 'package:coral_music_mobile/domain/music.dart';
 import 'package:coral_music_mobile/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -51,6 +52,20 @@ void main() {
     await tester.pump();
 
     expect(find.text('测试歌手 · 待接入音频引擎'), findsOneWidget);
+  });
+
+  testWidgets('switches the leaderboard source', (tester) async {
+    await tester
+        .pumpWidget(CoralMusicApp(catalogService: FakeCatalogService()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(DropdownButton<OnlineSource>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('QQ音乐').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('QQ 测试榜单'), findsOneWidget);
+    expect(find.text('QQ 测试歌曲'), findsOneWidget);
   });
 
   testWidgets('uses a navigation rail on a wide screen without overflow',
