@@ -2,7 +2,36 @@
 
 All notable changes to 珊瑚音乐移动端 (Coral Music Mobile) will be documented in this file.
 
-## [0.1.0] - 2026-07-16
+## [0.1.0] - 2026-07-16(02)
+
+### 咪咕排行榜
+
+- 新增 `MiguCatalogService`，迁移咪咕固定榜单目录与 HTTPS 详情请求
+- 映射 PQ/HQ/SQ/ZQ 音质并归一化为共享 `Track`
+- 接入现有多来源分派器与排行榜来源选择器
+
+### 网易云排行榜
+
+- 新增 `NeteaseCatalogService`，通过公开 HTTPS 歌单详情端点读取固定主榜
+- 接入现有多来源分派器与来源选择器
+
+### 网易云歌曲搜索
+
+- `NeteaseCatalogService` 增加公开 HTTPS 歌曲搜索及结果归一化
+- 搜索页支持酷我/网易云来源切换，复用请求序号隔离旧响应
+- 酷我空态保留热词，网易云空态不展示无效热词
+
+### 酷我歌单分类标签
+
+- `KuwoPlaylistService` 新增可用标签解析与按 tagId 加载
+- 歌单广场增加横向分类筛选控件；`digest=43` 等仅 HTTP 路径不展示
+
+### 酷我歌单排序
+
+- 歌单广场增加 `hot` / `new` 排序参数与下拉选择
+- 切换排序或标签均从第一页重新加载
+
+## [0.1.0] - 2026-07-16(01)
 
 ### QQ 音乐排行榜
 

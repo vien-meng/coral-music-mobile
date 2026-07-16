@@ -54,6 +54,11 @@
 | B3-04 迁移 QQ 音乐排行榜 | DONE | `development-history/2026-07-15-018-b3-04-qq-leaderboard.md` |
 | B3-05 酷我歌单广场纵向切片 | DOING | `development-history/2026-07-16-031-b3-05-kuwo-song-list.md` |
 | B3-06 酷我热搜词 | DOING | `development-history/2026-07-16-032-b3-06-kuwo-hot-search.md` |
+| B3-07 迁移咪咕排行榜 | DOING | `development-history/2026-07-16-033-b3-07-migu-leaderboard.md` |
+| B3-08 网易云排行榜最小 HTTPS 切片 | DOING | `development-history/2026-07-16-034-b3-08-netease-leaderboard.md` |
+| B3-09 网易云歌曲搜索与来源选择 | DOING | `development-history/2026-07-16-035-b3-09-netease-search.md` |
+| B3-10 酷我歌单 HTTPS 分类标签 | DOING | `development-history/2026-07-16-036-b3-10-kuwo-song-list-tags.md` |
+| B3-11 酷我歌单排序 | DOING | `development-history/2026-07-16-037-b3-11-kuwo-song-list-sort.md` |
 | B4-01 最小可播放闭环：音频引擎、取链与受限 User API | DOING | `development-history/2026-07-15-020-b4-01-minimum-playback-and-user-api.md` |
 | B4-02 播放详情与歌词阅读界面 | DONE | `development-history/2026-07-15-021-b4-02-player-detail-and-lyrics-ui.md` |
 | B4-03 队列前后切歌基础 | DOING | `development-history/2026-07-15-022-b4-03-queue-navigation.md` |
@@ -98,9 +103,9 @@
 ### Phase 2：在线发现（4 周）
 
 - `P2-01 [DOING]` 已提取酷我榜单 fixture；搜索、歌单和其余来源待迁移。
-- `P2-02 [DOING]` 已建立五源枚举、酷我与 QQ 真实榜单；酷狗桌面端点 TLS 不可用而阻塞，其余两源待迁移。
-- `P2-03 [DOING]` 已完成酷我歌曲搜索、分页、错误重试与旧响应隔离；B3-06 正在补热门词，综合/历史和其余来源待迁移。
-- `P2-04 [DOING]` B3-05 正在实现酷我热门歌单列表、详情和播放入口；分类、排序、收藏、导入及其他来源待后续。
+- `P2-02 [DOING]` 已建立五源枚举、酷我与 QQ 真实榜单，B3-07 已接入咪咕；B3-08 正在验证网易云最小 HTTPS 切片，酷狗桌面端点 TLS 不可用而阻塞。
+- `P2-03 [DOING]` 已完成酷我歌曲搜索、分页、错误重试、旧响应隔离和热搜词；B3-09 正在接入网易云搜索与已实现来源选择，综合/历史和其余来源待迁移。
+- `P2-04 [DOING]` B3-05 已实现酷我热门歌单列表、详情和播放入口；B3-10 正在补可用 HTTPS 分类标签，排序、收藏、导入及其他来源待后续。
 - `P2-05 [DOING]` 已实现酷我分页榜单及 QQ 当前榜单目录/详情，支持来源切换和跨导航状态；其余来源待迁移，跨来源缓存待后续。
 - `P2-06 [DOING]` 已实现榜单/搜索旧响应隔离、图片惰性列表和错误重试；取消与持久缓存待后续。
 - `P2-07 [DOING]` 已实现酷我/QQ 榜单播放全部及歌曲点击替换内存队列；歌单待迁移。

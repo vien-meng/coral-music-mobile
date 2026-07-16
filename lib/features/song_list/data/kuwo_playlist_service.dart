@@ -5,29 +5,71 @@ import '../../../core/http_client.dart';
 import '../../../domain/music.dart';
 import '../../leaderboard/data/kuwo_leaderboard_parser.dart';
 
+final class PlaylistTag {
+  const PlaylistTag({required this.id, required this.name});
+
+  final String id;
+  final String name;
+}
+
 final class KuwoPlaylistService {
   KuwoPlaylistService(this._dio);
 
   final Dio _dio;
   static const _pageSize = 30;
 
-  Future<PageResult<OnlinePlaylist>> getPopularPlaylists(int page) async {
+  Future<List<PlaylistTag>> getTags() async {
+    final uri =
+        Uri.https('wapi.kuwo.cn', '/api/pc/classify/playlist/getTagList', {
+      'cmd': 'rcm_keyword_playlist',
+      'user': '0',
+      'prod': 'kwplayer_pc_9.0.5.0',
+      'vipver': '9.0.5.0',
+      'source': 'kwplayer_pc_9.0.5.0',
+      'loginUid': '0',
+      'loginSid': '0',
+      'appUid': '76039576',
+    });
+    try {
+      final response = await _dio.getUri<Object?>(uri);
+      return _parseTags(response.data);
+    } on DioException catch (error) {
+      throw mapDioException(error);
+    } on AppFailure {
+      rethrow;
+    } on Object catch (error) {
+      throw AppFailure(
+          code: AppFailureCode.invalidData,
+          message: '歌单标签数据解析失败',
+          diagnostic: error.runtimeType.toString());
+    }
+  }
+
+  Future<PageResult<OnlinePlaylist>> getPopularPlaylists(
+    int page, {
+    String? tagId,
+    String sortId = 'hot',
+  }) async {
     if (page < 1) {
       throw const AppFailure(
         code: AppFailureCode.invalidData,
         message: '歌单页码无效',
       );
     }
+    final tagParts = tagId?.split('-');
     final uri = Uri.https(
       'wapi.kuwo.cn',
-      '/api/pc/classify/playlist/getRcmPlayList',
+      tagParts?.length == 2
+          ? '/api/pc/classify/playlist/getTagPlayList'
+          : '/api/pc/classify/playlist/getRcmPlayList',
       {
         'loginUid': '0',
         'loginSid': '0',
         'appUid': '76039576',
         'pn': '$page',
         'rn': '$_pageSize',
-        'order': 'hot',
+        'order': sortId,
+        if (tagParts?.length == 2) 'id': tagParts!.first,
       },
     );
     try {
@@ -44,6 +86,29 @@ final class KuwoPlaylistService {
         diagnostic: error.runtimeType.toString(),
       );
     }
+  }
+
+  static List<PlaylistTag> _parseTags(Object? raw) {
+    final response = _map(raw);
+    final groups = response['data'];
+    if (response['code'] != 200 || groups is! List) {
+      throw const AppFailure(
+          code: AppFailureCode.invalidData, message: '歌单标签响应异常');
+    }
+    final tags = <PlaylistTag>[];
+    for (final group in groups.whereType<Map>()) {
+      final items = group['data'];
+      if (items is! List) continue;
+      for (final item in items.whereType<Map>()) {
+        if ('${item['digest'] ?? ''}' != '10000') continue;
+        final id = '${item['id'] ?? ''}'.trim();
+        final name = '${item['name'] ?? ''}'.trim();
+        if (id.isNotEmpty && name.isNotEmpty) {
+          tags.add(PlaylistTag(id: '$id-10000', name: name));
+        }
+      }
+    }
+    return tags;
   }
 
   Future<PlaylistDetail> getPlaylistDetail(OnlinePlaylist playlist) async {

@@ -69,6 +69,14 @@ class _Toolbar extends ConsumerWidget {
                   value: OnlineSource.qq,
                   child: Text('QQ音乐'),
                 ),
+                DropdownMenuItem(
+                  value: OnlineSource.migu,
+                  child: Text('咪咕音乐'),
+                ),
+                DropdownMenuItem(
+                  value: OnlineSource.netease,
+                  child: Text('网易云音乐'),
+                ),
               ],
               onChanged: state.isLoading
                   ? null

@@ -9,6 +9,10 @@ final kuwoPlaylistServiceProvider = Provider<KuwoPlaylistService>(
   (ref) => KuwoPlaylistService(createHttpClient()),
 );
 
+final songListTagsProvider = FutureProvider<List<PlaylistTag>>(
+  (ref) => ref.watch(kuwoPlaylistServiceProvider).getTags(),
+);
+
 final songListProvider =
     StateNotifierProvider<SongListController, SongListState>(
   (ref) => SongListController(ref.watch(kuwoPlaylistServiceProvider)),
@@ -21,6 +25,8 @@ final class SongListState {
     this.page = 1,
     this.pageSize = 30,
     this.total = 0,
+    this.selectedTagId,
+    this.sortId = 'hot',
     this.isLoading = false,
     this.error,
   });
@@ -30,6 +36,8 @@ final class SongListState {
   final int page;
   final int pageSize;
   final int total;
+  final String? selectedTagId;
+  final String sortId;
   final bool isLoading;
   final AppFailure? error;
 
@@ -41,6 +49,9 @@ final class SongListState {
     int? page,
     int? pageSize,
     int? total,
+    String? selectedTagId,
+    String? sortId,
+    bool clearTag = false,
     bool? isLoading,
     AppFailure? error,
     bool clearDetail = false,
@@ -52,6 +63,8 @@ final class SongListState {
         page: page ?? this.page,
         pageSize: pageSize ?? this.pageSize,
         total: total ?? this.total,
+        selectedTagId: clearTag ? null : selectedTagId ?? this.selectedTagId,
+        sortId: sortId ?? this.sortId,
         isLoading: isLoading ?? this.isLoading,
         error: clearError ? null : error ?? this.error,
       );
@@ -74,7 +87,8 @@ final class SongListController extends StateNotifier<SongListState> {
     state =
         state.copyWith(isLoading: true, clearError: true, clearDetail: true);
     try {
-      final result = await _service.getPopularPlaylists(page);
+      final result = await _service.getPopularPlaylists(page,
+          tagId: state.selectedTagId, sortId: state.sortId);
       if (requestId != _requestId) return;
       state = state.copyWith(
         playlists: result.items,
@@ -140,4 +154,16 @@ final class SongListController extends StateNotifier<SongListState> {
   Future<void> previousPage() => loadPage(state.page - 1);
   Future<void> nextPage() =>
       state.hasNext ? loadPage(state.page + 1) : Future.value();
+
+  Future<void> selectTag(String? tagId) {
+    if (tagId == state.selectedTagId || state.isLoading) return Future.value();
+    state = state.copyWith(selectedTagId: tagId, clearTag: tagId == null);
+    return loadPage(1);
+  }
+
+  Future<void> selectSort(String sortId) {
+    if (sortId == state.sortId || state.isLoading) return Future.value();
+    state = state.copyWith(sortId: sortId);
+    return loadPage(1);
+  }
 }

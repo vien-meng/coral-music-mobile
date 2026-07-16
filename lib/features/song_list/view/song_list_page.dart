@@ -35,113 +35,162 @@ class _PlaylistSquare extends ConsumerWidget {
   final SongListState state;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
-            child: Row(
-              children: [
-                Text('歌单广场', style: Theme.of(context).textTheme.titleLarge),
-                const Spacer(),
-                IconButton(
-                  tooltip: '刷新',
-                  onPressed: state.isLoading
-                      ? null
-                      : ref.read(songListProvider.notifier).refresh,
-                  icon: const Icon(Icons.refresh),
-                ),
-              ],
-            ),
-          ),
-          if (state.error != null)
-            MaterialBanner(
-              content: Text(state.error!.message),
-              actions: [
-                TextButton(
-                  onPressed: ref.read(songListProvider.notifier).refresh,
-                  child: const Text('重试'),
-                ),
-              ],
-            ),
-          Expanded(
-            child: state.isLoading && state.playlists.isEmpty
-                ? const Center(child: CircularProgressIndicator())
-                : RefreshIndicator(
-                    onRefresh: ref.read(songListProvider.notifier).refresh,
-                    child: GridView.builder(
-                      padding: const EdgeInsets.all(16),
-                      gridDelegate:
-                          const SliverGridDelegateWithMaxCrossAxisExtent(
-                        maxCrossAxisExtent: 180,
-                        mainAxisSpacing: 16,
-                        crossAxisSpacing: 12,
-                        childAspectRatio: .72,
-                      ),
-                      itemCount: state.playlists.length,
-                      itemBuilder: (context, index) {
-                        final playlist = state.playlists[index];
-                        return InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          onTap: state.isLoading
-                              ? null
-                              : () => ref
-                                  .read(songListProvider.notifier)
-                                  .open(playlist),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                  child: _PlaylistCover(playlist: playlist)),
-                              const SizedBox(height: 8),
-                              Text(
-                                playlist.name,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.titleSmall,
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                playlist.playCount.isEmpty
-                                    ? playlist.author
-                                    : '${playlist.playCount} 播放',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ],
-                          ),
-                        );
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tags = ref.watch(songListTagsProvider);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
+          child: Row(
+            children: [
+              Text('歌单广场', style: Theme.of(context).textTheme.titleLarge),
+              const Spacer(),
+              DropdownButton<String>(
+                value: state.sortId,
+                items: const [
+                  DropdownMenuItem(value: 'hot', child: Text('最热')),
+                  DropdownMenuItem(value: 'new', child: Text('最新')),
+                ],
+                onChanged: state.isLoading
+                    ? null
+                    : (value) {
+                        if (value != null) {
+                          ref.read(songListProvider.notifier).selectSort(value);
+                        }
                       },
-                    ),
-                  ),
+              ),
+              IconButton(
+                tooltip: '刷新',
+                onPressed: state.isLoading
+                    ? null
+                    : ref.read(songListProvider.notifier).refresh,
+                icon: const Icon(Icons.refresh),
+              ),
+            ],
           ),
-          if (state.playlists.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  IconButton(
-                    tooltip: '上一页',
-                    onPressed: state.page > 1 && !state.isLoading
-                        ? ref.read(songListProvider.notifier).previousPage
-                        : null,
-                    icon: const Icon(Icons.chevron_left),
-                  ),
-                  Text('第 ${state.page} 页'),
-                  IconButton(
-                    tooltip: '下一页',
-                    onPressed: state.hasNext && !state.isLoading
-                        ? ref.read(songListProvider.notifier).nextPage
-                        : null,
-                    icon: const Icon(Icons.chevron_right),
+        ),
+        tags.when(
+          loading: () => const SizedBox(height: 36),
+          error: (_, __) => const SizedBox.shrink(),
+          data: (items) => SizedBox(
+            height: 40,
+            child: ListView(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              scrollDirection: Axis.horizontal,
+              children: [
+                ChoiceChip(
+                  label: const Text('热门'),
+                  selected: state.selectedTagId == null,
+                  onSelected: state.isLoading
+                      ? null
+                      : (_) =>
+                          ref.read(songListProvider.notifier).selectTag(null),
+                ),
+                for (final tag in items) ...[
+                  const SizedBox(width: 8),
+                  ChoiceChip(
+                    label: Text(tag.name),
+                    selected: state.selectedTagId == tag.id,
+                    onSelected: state.isLoading
+                        ? null
+                        : (_) => ref
+                            .read(songListProvider.notifier)
+                            .selectTag(tag.id),
                   ),
                 ],
-              ),
+              ],
             ),
-        ],
-      );
+          ),
+        ),
+        if (state.error != null)
+          MaterialBanner(
+            content: Text(state.error!.message),
+            actions: [
+              TextButton(
+                onPressed: ref.read(songListProvider.notifier).refresh,
+                child: const Text('重试'),
+              ),
+            ],
+          ),
+        Expanded(
+          child: state.isLoading && state.playlists.isEmpty
+              ? const Center(child: CircularProgressIndicator())
+              : RefreshIndicator(
+                  onRefresh: ref.read(songListProvider.notifier).refresh,
+                  child: GridView.builder(
+                    padding: const EdgeInsets.all(16),
+                    gridDelegate:
+                        const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 180,
+                      mainAxisSpacing: 16,
+                      crossAxisSpacing: 12,
+                      childAspectRatio: .72,
+                    ),
+                    itemCount: state.playlists.length,
+                    itemBuilder: (context, index) {
+                      final playlist = state.playlists[index];
+                      return InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: state.isLoading
+                            ? null
+                            : () => ref
+                                .read(songListProvider.notifier)
+                                .open(playlist),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(child: _PlaylistCover(playlist: playlist)),
+                            const SizedBox(height: 8),
+                            Text(
+                              playlist.name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              playlist.playCount.isEmpty
+                                  ? playlist.author
+                                  : '${playlist.playCount} 播放',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+        ),
+        if (state.playlists.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                IconButton(
+                  tooltip: '上一页',
+                  onPressed: state.page > 1 && !state.isLoading
+                      ? ref.read(songListProvider.notifier).previousPage
+                      : null,
+                  icon: const Icon(Icons.chevron_left),
+                ),
+                Text('第 ${state.page} 页'),
+                IconButton(
+                  tooltip: '下一页',
+                  onPressed: state.hasNext && !state.isLoading
+                      ? ref.read(songListProvider.notifier).nextPage
+                      : null,
+                  icon: const Icon(Icons.chevron_right),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
 }
 
 class _PlaylistDetail extends ConsumerWidget {

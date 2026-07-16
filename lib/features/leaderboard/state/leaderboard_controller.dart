@@ -4,6 +4,8 @@ import '../../../core/app_failure.dart';
 import '../../../core/http_client.dart';
 import '../../../domain/music.dart';
 import '../data/kuwo_catalog_service.dart';
+import '../data/migu_catalog_service.dart';
+import '../data/netease_catalog_service.dart';
 import '../data/online_catalog_service.dart';
 import '../data/qq_catalog_service.dart';
 
@@ -13,6 +15,8 @@ final onlineCatalogServiceProvider = Provider<OnlineCatalogService>(
     return MultiSourceOnlineCatalogService({
       OnlineSource.kuwo: KuwoCatalogService(dio),
       OnlineSource.qq: QqCatalogService(dio),
+      OnlineSource.migu: MiguCatalogService(dio),
+      OnlineSource.netease: NeteaseCatalogService(dio),
     });
   },
 );

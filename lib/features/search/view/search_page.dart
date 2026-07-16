@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../domain/music.dart';
 import '../../player/state/playback_queue_controller.dart';
 import '../../player/state/player_controller.dart';
 import '../state/search_controller.dart';
@@ -64,13 +65,29 @@ class _SearchPageState extends ConsumerState<SearchPage> {
             ],
           ),
         ),
-        const Padding(
-          padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           child: Align(
             alignment: Alignment.centerLeft,
-            child: Chip(
-              avatar: Icon(Icons.music_note, size: 18),
-              label: Text('酷我音乐'),
+            child: DropdownButton<OnlineSource>(
+              value: state.source,
+              items: const [
+                DropdownMenuItem(
+                  value: OnlineSource.kuwo,
+                  child: Text('酷我音乐'),
+                ),
+                DropdownMenuItem(
+                  value: OnlineSource.netease,
+                  child: Text('网易云音乐'),
+                ),
+              ],
+              onChanged: state.isLoading
+                  ? null
+                  : (source) {
+                      if (source != null) {
+                        ref.read(searchProvider.notifier).selectSource(source);
+                      }
+                    },
             ),
           ),
         ),
@@ -85,7 +102,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
             ],
           ),
         Expanded(
-          child: state.tracks.isEmpty && state.query.isEmpty
+          child: state.tracks.isEmpty &&
+                  state.query.isEmpty &&
+                  state.source == OnlineSource.kuwo
               ? _HotSearchTerms(
                   terms: hotTerms,
                   onSelected: (term) {

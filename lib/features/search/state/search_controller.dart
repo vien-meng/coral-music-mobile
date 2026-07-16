@@ -89,6 +89,14 @@ final class SearchController extends StateNotifier<SearchState> {
     return _load(state.query, page: state.page + 1);
   }
 
+  Future<void> selectSource(OnlineSource source) {
+    if (source == state.source || state.isLoading) return Future.value();
+    final query = state.query;
+    ++_requestId;
+    state = SearchState(source: source);
+    return query.isEmpty ? Future.value() : _load(query, page: 1);
+  }
+
   Future<void> _load(String query, {required int page}) async {
     if (query.isEmpty) {
       state = const SearchState();
