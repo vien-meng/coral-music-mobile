@@ -27,6 +27,7 @@ final class SongListState {
     this.total = 0,
     this.selectedTagId,
     this.sortId = 'hot',
+    this.query = '',
     this.isLoading = false,
     this.error,
   });
@@ -38,6 +39,7 @@ final class SongListState {
   final int total;
   final String? selectedTagId;
   final String sortId;
+  final String query;
   final bool isLoading;
   final AppFailure? error;
 
@@ -51,6 +53,7 @@ final class SongListState {
     int? total,
     String? selectedTagId,
     String? sortId,
+    String? query,
     bool clearTag = false,
     bool? isLoading,
     AppFailure? error,
@@ -65,6 +68,7 @@ final class SongListState {
         total: total ?? this.total,
         selectedTagId: clearTag ? null : selectedTagId ?? this.selectedTagId,
         sortId: sortId ?? this.sortId,
+        query: query ?? this.query,
         isLoading: isLoading ?? this.isLoading,
         error: clearError ? null : error ?? this.error,
       );
@@ -87,8 +91,10 @@ final class SongListController extends StateNotifier<SongListState> {
     state =
         state.copyWith(isLoading: true, clearError: true, clearDetail: true);
     try {
-      final result = await _service.getPopularPlaylists(page,
-          tagId: state.selectedTagId, sortId: state.sortId);
+      final result = state.query.isEmpty
+          ? await _service.getPopularPlaylists(page,
+              tagId: state.selectedTagId, sortId: state.sortId)
+          : await _service.searchPlaylists(state.query, page);
       if (requestId != _requestId) return;
       state = state.copyWith(
         playlists: result.items,
@@ -164,6 +170,13 @@ final class SongListController extends StateNotifier<SongListState> {
   Future<void> selectSort(String sortId) {
     if (sortId == state.sortId || state.isLoading) return Future.value();
     state = state.copyWith(sortId: sortId);
+    return loadPage(1);
+  }
+
+  Future<void> submitSearch(String query) {
+    final normalized = query.trim();
+    if (normalized == state.query || state.isLoading) return Future.value();
+    state = state.copyWith(query: normalized);
     return loadPage(1);
   }
 }

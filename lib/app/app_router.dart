@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/library/view/library_page.dart';
+import '../features/library/view/history_page.dart';
 import '../features/leaderboard/view/leaderboard_page.dart';
 import '../features/search/view/search_page.dart';
 import '../features/song_list/view/song_list_page.dart';
@@ -35,6 +37,11 @@ GoRouter createAppRouter() => GoRouter(
                   if (destination.name == 'song-list') {
                     return const SongListPage();
                   }
+                  if (destination.name == 'list') return const LibraryPage();
+                  if (destination.name == 'favorites') {
+                    return const LibraryPage(favoritesOnly: true);
+                  }
+                  if (destination.name == 'library') return const HistoryPage();
                   if (destination.name == 'setting') {
                     return const UserApiDebugPage();
                   }

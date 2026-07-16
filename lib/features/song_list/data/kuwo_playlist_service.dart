@@ -88,6 +88,43 @@ final class KuwoPlaylistService {
     }
   }
 
+  Future<PageResult<OnlinePlaylist>> searchPlaylists(
+    String query,
+    int page,
+  ) async {
+    final keyword = query.trim();
+    if (keyword.isEmpty || page < 1) {
+      throw const AppFailure(
+          code: AppFailureCode.invalidData, message: '歌单搜索请求参数无效');
+    }
+    final uri = Uri.https('search.kuwo.cn', '/r.s', {
+      'all': keyword,
+      'pn': '${page - 1}',
+      'rn': '30',
+      'rformat': 'json',
+      'encoding': 'utf8',
+      'ver': 'mbox',
+      'vipver': 'MUSIC_8.7.7.0_BCS37',
+      'plat': 'pc',
+      'devid': '28156413',
+      'ft': 'playlist',
+      'pay': '0',
+    });
+    try {
+      final response = await _dio.getUri<Object?>(uri);
+      return _parseSearch(response.data, page);
+    } on DioException catch (error) {
+      throw mapDioException(error);
+    } on AppFailure {
+      rethrow;
+    } on Object catch (error) {
+      throw AppFailure(
+          code: AppFailureCode.invalidData,
+          message: '歌单搜索数据解析失败',
+          diagnostic: error.runtimeType.toString());
+    }
+  }
+
   static List<PlaylistTag> _parseTags(Object? raw) {
     final response = _map(raw);
     final groups = response['data'];
@@ -244,6 +281,40 @@ final class KuwoPlaylistService {
       ),
       tracks: tracks,
     );
+  }
+
+  static PageResult<OnlinePlaylist> _parseSearch(Object? raw, int page) {
+    final response = _map(raw);
+    final items = response['abslist'];
+    if (items is! List) {
+      throw const AppFailure(
+          code: AppFailureCode.invalidData, message: '歌单搜索响应异常');
+    }
+    final playlists = <OnlinePlaylist>[];
+    for (final rawItem in items) {
+      final item = _map(rawItem);
+      final id = '${item['playlistid'] ?? ''}'.trim();
+      final name =
+          KuwoLeaderboardParser.decodeText('${item['name'] ?? ''}').trim();
+      if (id.isEmpty || name.isEmpty) continue;
+      playlists.add(OnlinePlaylist(
+        id: id,
+        source: OnlineSource.kuwo,
+        name: name,
+        author: KuwoLeaderboardParser.decodeText('${item['nickname'] ?? ''}')
+            .trim(),
+        description:
+            KuwoLeaderboardParser.decodeText('${item['intro'] ?? ''}').trim(),
+        trackCount: int.tryParse('${item['songnum'] ?? ''}') ?? 0,
+        playCount: _formatCount(item['playcnt']),
+        coverUri: _httpsUri('${item['pic'] ?? ''}'),
+      ));
+    }
+    return PageResult(
+        items: playlists,
+        page: page,
+        pageSize: 30,
+        total: int.tryParse('${response['TOTAL'] ?? ''}') ?? playlists.length);
   }
 
   static Map<Object?, Object?> _map(Object? value) => value is Map

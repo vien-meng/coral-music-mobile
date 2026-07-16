@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/app_failure.dart';
 import '../../../domain/music.dart';
+import '../../library/data/library_store.dart';
 import '../data/audio_engine.dart';
 import '../data/playback_resolver.dart';
 import '../data/user_api_runner.dart';
@@ -27,6 +28,7 @@ final playerProvider = StateNotifierProvider<PlayerController, PlayerState>(
     ref.watch(audioEngineProvider),
     ref.watch(playbackResolverProvider),
     ref.watch(playbackQueueProvider.notifier),
+    ref.watch(libraryStoreProvider),
   ),
 );
 
@@ -77,15 +79,22 @@ final class PlayerState {
 }
 
 final class PlayerController extends StateNotifier<PlayerState> {
-  PlayerController(this._engine, this._resolver, this._queue)
-      : super(const PlayerState()) {
+  PlayerController(
+    this._engine,
+    this._resolver,
+    this._queue, [
+    LibraryStore? library,
+  ])  : _library = library ?? LibraryStore(),
+        super(const PlayerState()) {
     _subscription = _engine.snapshots.listen(_onSnapshot);
   }
 
   final AudioEngine _engine;
   final PlaybackResolver _resolver;
   final PlaybackQueueController _queue;
+  final LibraryStore _library;
   final _failedTrackIds = <String>{};
+  String? _recordedHistoryTrackId;
   late final StreamSubscription<AudioEngineSnapshot> _subscription;
 
   Future<void> toggle(Track track) async {
@@ -205,6 +214,12 @@ final class PlayerController extends StateNotifier<PlayerState> {
         return;
       }
     }
+    if (snapshot.status == AudioEngineStatus.playing &&
+        snapshot.track != null &&
+        _recordedHistoryTrackId != snapshot.track!.id) {
+      _recordedHistoryTrackId = snapshot.track!.id;
+      unawaited(_recordHistory(snapshot.track!, snapshot.position));
+    }
     state = PlayerState(
       track: snapshot.track,
       position: snapshot.position,
@@ -217,6 +232,14 @@ final class PlayerController extends StateNotifier<PlayerState> {
           ? null
           : AppFailure(code: AppFailureCode.unknown, message: snapshot.error!),
     );
+  }
+
+  Future<void> _recordHistory(Track track, Duration position) async {
+    try {
+      await _library.recordHistory(track, position);
+    } on Object {
+      // ponytail: history is non-critical; surface storage failures in Library UI.
+    }
   }
 
   void _handleFailure(Track track, AppFailure error) {

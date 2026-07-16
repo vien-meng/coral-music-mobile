@@ -16,6 +16,11 @@ dependencies:
   just_audio: ^0.10.6
   just_audio_harmonyos: ^0.0.1
   pointycastle: ^3.9.1
+  sqflite:
+    git:
+      url: https://gitee.com/openharmony-sig/flutter_sqflite.git
+      ref: 0bd638a416215b9ab74f21eef98e14797827df04
+      path: sqflite
 
 dev_dependencies:
   flutter_test:

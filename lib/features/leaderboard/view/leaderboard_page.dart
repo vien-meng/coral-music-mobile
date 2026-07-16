@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/music.dart';
+import '../../library/view/playlist_picker.dart';
 import '../../player/state/playback_queue_controller.dart';
 import '../../player/state/player_controller.dart';
 import '../state/leaderboard_controller.dart';
@@ -177,7 +178,17 @@ class _Content extends ConsumerWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-            trailing: Text(_duration(track.duration)),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(_duration(track.duration)),
+                IconButton(
+                  tooltip: '添加到我的列表',
+                  onPressed: () => addTrackToPlaylist(context, ref, track),
+                  icon: const Icon(Icons.playlist_add),
+                ),
+              ],
+            ),
             onTap: () async {
               ref.read(playbackQueueProvider.notifier).replaceQueue(
                     state.tracks,

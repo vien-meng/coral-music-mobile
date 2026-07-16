@@ -381,6 +381,24 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "1.10.0"
+  sqflite:
+    dependency: "direct main"
+    description:
+      path: sqflite
+      ref: "0bd638a416215b9ab74f21eef98e14797827df04"
+      resolved-ref: "0bd638a416215b9ab74f21eef98e14797827df04"
+      url: "https://gitee.com/openharmony-sig/flutter_sqflite.git"
+    source: git
+    version: "2.2.8+3"
+  sqflite_common:
+    dependency: transitive
+    description:
+      path: sqflite_common
+      ref: HEAD
+      resolved-ref: "0bd638a416215b9ab74f21eef98e14797827df04"
+      url: "https://gitee.com/openharmony-sig/flutter_sqflite.git"
+    source: git
+    version: "2.4.5+1"
   stack_trace:
     dependency: transitive
     description:

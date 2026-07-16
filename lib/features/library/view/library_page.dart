@@ -1,0 +1,382 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../domain/music.dart';
+import '../../player/state/playback_queue_controller.dart';
+import '../../player/state/player_controller.dart';
+import '../state/library_controller.dart';
+
+class LibraryPage extends ConsumerStatefulWidget {
+  const LibraryPage({this.favoritesOnly = false, super.key});
+
+  final bool favoritesOnly;
+
+  @override
+  ConsumerState<LibraryPage> createState() => _LibraryPageState();
+}
+
+class _LibraryPageState extends ConsumerState<LibraryPage> {
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(
+      () => widget.favoritesOnly
+          ? ref.read(libraryProvider.notifier).openFavorites()
+          : ref.read(libraryProvider.notifier).load(),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(libraryProvider);
+    if (state.selectedPlaylist case final playlist?) {
+      return _PlaylistTracks(
+        playlist: playlist,
+        tracks: state.tracks,
+        showBack: !widget.favoritesOnly,
+      );
+    }
+    return Scaffold(
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: state.isLoading ? null : () => _editPlaylist(context),
+        icon: const Icon(Icons.add),
+        label: const Text('新建列表'),
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+            child: Row(
+              children: [
+                Text('我的列表', style: Theme.of(context).textTheme.titleLarge),
+                const Spacer(),
+                IconButton(
+                  tooltip: '刷新',
+                  onPressed: state.isLoading
+                      ? null
+                      : ref.read(libraryProvider.notifier).load,
+                  icon: const Icon(Icons.refresh),
+                ),
+              ],
+            ),
+          ),
+          if (state.error != null)
+            MaterialBanner(
+              content: Text(state.error!.message),
+              actions: [
+                TextButton(
+                  onPressed: ref.read(libraryProvider.notifier).load,
+                  child: const Text('重试'),
+                ),
+              ],
+            ),
+          Expanded(
+            child: state.isLoading && state.playlists.isEmpty
+                ? const Center(child: CircularProgressIndicator())
+                : state.playlists.isEmpty
+                    ? const _EmptyLibrary()
+                    : ReorderableListView.builder(
+                        buildDefaultDragHandles: false,
+                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 88),
+                        itemCount: state.playlists.length,
+                        onReorder: state.isLoading
+                            ? (_, __) {}
+                            : ref.read(libraryProvider.notifier).reorder,
+                        itemBuilder: (context, index) {
+                          final playlist = state.playlists[index];
+                          return Card(
+                            key: ValueKey(playlist.id),
+                            child: ListTile(
+                              leading: CircleAvatar(
+                                child: Text('${index + 1}'),
+                              ),
+                              title: Text(playlist.name),
+                              subtitle: const Text('点击查看歌曲'),
+                              onTap: state.isLoading
+                                  ? null
+                                  : () => ref
+                                      .read(libraryProvider.notifier)
+                                      .open(playlist),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    tooltip: '重命名',
+                                    onPressed: state.isLoading
+                                        ? null
+                                        : () => _editPlaylist(
+                                              context,
+                                              playlist: playlist,
+                                            ),
+                                    icon: const Icon(Icons.edit_outlined),
+                                  ),
+                                  IconButton(
+                                    tooltip: '删除',
+                                    onPressed: state.isLoading
+                                        ? null
+                                        : () =>
+                                            _deletePlaylist(context, playlist),
+                                    icon: const Icon(Icons.delete_outline),
+                                  ),
+                                  ReorderableDragStartListener(
+                                    index: index,
+                                    child: const Padding(
+                                      padding: EdgeInsets.all(12),
+                                      child: Icon(Icons.drag_handle),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _editPlaylist(
+    BuildContext context, {
+    UserPlaylist? playlist,
+  }) async {
+    final controller = TextEditingController(text: playlist?.name);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(playlist == null ? '新建列表' : '重命名列表'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (value) => Navigator.pop(context, value),
+          decoration: const InputDecoration(hintText: '列表名称'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    final normalized = name?.trim();
+    if (normalized == null || normalized.isEmpty) return;
+    final library = ref.read(libraryProvider.notifier);
+    if (playlist == null) {
+      await library.create(normalized);
+    } else {
+      await library.rename(playlist, normalized);
+    }
+  }
+
+  Future<void> _deletePlaylist(
+    BuildContext context,
+    UserPlaylist playlist,
+  ) async {
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('删除列表？'),
+        content: Text('“${playlist.name}”中的歌曲也会一并删除。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (accepted == true) {
+      await ref.read(libraryProvider.notifier).delete(playlist.id);
+    }
+  }
+}
+
+class _PlaylistTracks extends ConsumerStatefulWidget {
+  const _PlaylistTracks({
+    required this.playlist,
+    required this.tracks,
+    required this.showBack,
+  });
+
+  final UserPlaylist playlist;
+  final List<Track> tracks;
+  final bool showBack;
+
+  @override
+  ConsumerState<_PlaylistTracks> createState() => _PlaylistTracksState();
+}
+
+class _PlaylistTracksState extends ConsumerState<_PlaylistTracks> {
+  String _query = '';
+  TrackSourceKind? _sourceKind;
+
+  @override
+  Widget build(BuildContext context) {
+    final playlist = widget.playlist;
+    final tracks = widget.tracks;
+    final visibleTracks = tracks.where(_matchesFilter).toList(growable: false);
+    final isLoading = ref.watch(libraryProvider).isLoading;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+          child: Row(
+            children: [
+              if (widget.showBack)
+                IconButton(
+                  tooltip: '返回我的列表',
+                  onPressed: ref.read(libraryProvider.notifier).close,
+                  icon: const Icon(Icons.arrow_back),
+                ),
+              Expanded(
+                child: Text(
+                  playlist.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: visibleTracks.isEmpty || isLoading
+                    ? null
+                    : () async {
+                        ref.read(playbackQueueProvider.notifier).replaceQueue(
+                              visibleTracks,
+                              contextId: 'library:${playlist.id}',
+                            );
+                        await ref
+                            .read(playerProvider.notifier)
+                            .playTrack(visibleTracks.first);
+                      },
+                icon: const Icon(Icons.play_arrow),
+                label: const Text('播放全部'),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  onChanged: (value) => setState(() => _query = value),
+                  decoration: const InputDecoration(
+                    hintText: '搜索当前列表',
+                    prefixIcon: Icon(Icons.search),
+                    isDense: true,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              DropdownButton<TrackSourceKind?>(
+                value: _sourceKind,
+                hint: const Text('来源'),
+                items: [
+                  const DropdownMenuItem(value: null, child: Text('全部')),
+                  for (final source in TrackSourceKind.values)
+                    DropdownMenuItem(
+                      value: source,
+                      child: Text(_sourceKindLabel(source)),
+                    ),
+                ],
+                onChanged: (value) => setState(() => _sourceKind = value),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: tracks.isEmpty
+              ? const _EmptyLibrary(message: '列表还没有歌曲。')
+              : visibleTracks.isEmpty
+                  ? const _EmptyLibrary(message: '没有匹配的歌曲。')
+                  : ListView.separated(
+                      itemCount: visibleTracks.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final track = visibleTracks[index];
+                        return ListTile(
+                          leading: Text('${index + 1}'.padLeft(2, '0')),
+                          title: Text(
+                            track.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            track.artist.isEmpty ? '未知歌手' : track.artist,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          trailing: IconButton(
+                            tooltip: '从列表移除',
+                            onPressed: isLoading
+                                ? null
+                                : () => ref
+                                    .read(libraryProvider.notifier)
+                                    .removeTrack(track.id),
+                            icon: const Icon(Icons.remove_circle_outline),
+                          ),
+                          onTap: isLoading
+                              ? null
+                              : () async {
+                                  ref
+                                      .read(playbackQueueProvider.notifier)
+                                      .replaceQueue(
+                                        visibleTracks,
+                                        startIndex: index,
+                                        contextId: 'library:${playlist.id}',
+                                      );
+                                  await ref
+                                      .read(playerProvider.notifier)
+                                      .playTrack(track);
+                                },
+                        );
+                      },
+                    ),
+        ),
+      ],
+    );
+  }
+
+  bool _matchesFilter(Track track) {
+    if (_sourceKind != null && track.sourceKind != _sourceKind) return false;
+    final query = _query.trim().toLowerCase();
+    if (query.isEmpty) return true;
+    return [track.title, track.artist, track.album ?? '', track.sourceId]
+        .join('\n')
+        .toLowerCase()
+        .contains(query);
+  }
+
+  String _sourceKindLabel(TrackSourceKind source) => switch (source) {
+        TrackSourceKind.online => '在线',
+        TrackSourceKind.local => '本地',
+        TrackSourceKind.download => '下载',
+        TrackSourceKind.webdav => 'WebDAV',
+      };
+}
+
+class _EmptyLibrary extends StatelessWidget {
+  const _EmptyLibrary({this.message = '还没有列表，点击右下角新建一个吧。'});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: Text(message),
+      );
+}

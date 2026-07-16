@@ -65,6 +65,77 @@ final class PlaybackQueueController extends StateNotifier<PlaybackQueueState> {
     _setIndex(index);
   }
 
+  void appendTracks(List<Track> tracks) {
+    if (tracks.isEmpty) return;
+    final ids = state.tracks.map((track) => track.id).toSet();
+    final additions = tracks.where((track) => ids.add(track.id)).toList();
+    if (additions.isEmpty) return;
+    state = PlaybackQueueState(
+      tracks: List.unmodifiable([...state.tracks, ...additions]),
+      currentIndex: state.currentIndex,
+      contextId: state.contextId,
+      mode: state.mode,
+    );
+  }
+
+  void removeAt(int index) {
+    if (index < 0 || index >= state.tracks.length) {
+      throw RangeError.index(index, state.tracks, 'index');
+    }
+    if (index == state.currentIndex) {
+      throw StateError('当前播放歌曲不可直接删除');
+    }
+    final tracks = [...state.tracks]..removeAt(index);
+    if (tracks.isEmpty) {
+      state = const PlaybackQueueState();
+      return;
+    }
+    final shiftedHistory = _shuffleHistory
+        .where((item) => item != index)
+        .map((item) => item > index ? item - 1 : item)
+        .toSet();
+    _shuffleHistory
+      ..clear()
+      ..addAll(shiftedHistory);
+    state = PlaybackQueueState(
+      tracks: List.unmodifiable(tracks),
+      currentIndex: index < state.currentIndex
+          ? state.currentIndex - 1
+          : state.currentIndex,
+      contextId: state.contextId,
+      mode: state.mode,
+    );
+  }
+
+  void move(int oldIndex, int newIndex) {
+    if (oldIndex < 0 ||
+        oldIndex >= state.tracks.length ||
+        newIndex < 0 ||
+        newIndex > state.tracks.length) {
+      throw RangeError.range(newIndex, 0, state.tracks.length, 'newIndex');
+    }
+    if (oldIndex == state.currentIndex) {
+      throw StateError('当前播放歌曲不可拖动');
+    }
+    final target = newIndex > oldIndex ? newIndex - 1 : newIndex;
+    if (target == oldIndex) return;
+    final tracks = [...state.tracks];
+    final track = tracks.removeAt(oldIndex);
+    tracks.insert(target, track);
+    var currentIndex = state.currentIndex;
+    if (oldIndex < currentIndex && target >= currentIndex) currentIndex--;
+    if (oldIndex > currentIndex && target <= currentIndex) currentIndex++;
+    _shuffleHistory
+      ..clear()
+      ..add(currentIndex);
+    state = PlaybackQueueState(
+      tracks: List.unmodifiable(tracks),
+      currentIndex: currentIndex,
+      contextId: state.contextId,
+      mode: state.mode,
+    );
+  }
+
   Track? selectNext() => _selectOffset(1);
 
   Track? selectPrevious() => _selectOffset(-1);

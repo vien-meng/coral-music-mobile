@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/music.dart';
+import '../../library/state/library_controller.dart';
 import '../data/audio_engine.dart';
 import '../state/playback_queue_controller.dart';
 import '../state/player_controller.dart';
@@ -19,6 +20,8 @@ class PlayerDetailPage extends ConsumerStatefulWidget {
 
 class _PlayerDetailPageState extends ConsumerState<PlayerDetailPage> {
   var _panel = _DetailPanel.player;
+  String? _favoriteTrackId;
+  Future<bool>? _favorite;
 
   @override
   Widget build(BuildContext context) {
@@ -28,12 +31,39 @@ class _PlayerDetailPageState extends ConsumerState<PlayerDetailPage> {
     );
     final track = player.track ?? queueTrack;
     final colors = Theme.of(context).colorScheme;
+    if (track?.id != _favoriteTrackId) {
+      _favoriteTrackId = track?.id;
+      _favorite = track == null
+          ? null
+          : ref.read(libraryProvider.notifier).isFavorite(track.id);
+    }
 
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         title: const Text('播放详情'),
         actions: [
+          if (track != null)
+            FutureBuilder<bool>(
+              future: _favorite,
+              builder: (context, snapshot) => IconButton(
+                tooltip: snapshot.data == true ? '取消收藏' : '收藏歌曲',
+                onPressed: snapshot.connectionState != ConnectionState.done
+                    ? null
+                    : () async {
+                        final favorite = await ref
+                            .read(libraryProvider.notifier)
+                            .toggleFavorite(track);
+                        if (!mounted) return;
+                        setState(() => _favorite = Future.value(favorite));
+                      },
+                icon: Icon(
+                  snapshot.data == true
+                      ? Icons.favorite
+                      : Icons.favorite_border,
+                ),
+              ),
+            ),
           Builder(
             builder: (context) => IconButton(
               key: const Key('player-queue-button'),
@@ -105,12 +135,15 @@ class _PlaybackQueueDrawer extends ConsumerWidget {
             Expanded(
               child: queue.tracks.isEmpty
                   ? const Center(child: Text('队列为空'))
-                  : ListView.builder(
+                  : ReorderableListView.builder(
+                      buildDefaultDragHandles: false,
                       itemCount: queue.tracks.length,
+                      onReorder: ref.read(playbackQueueProvider.notifier).move,
                       itemBuilder: (context, index) {
                         final track = queue.tracks[index];
                         final isCurrent = index == queue.currentIndex;
                         return ListTile(
+                          key: ValueKey(track.id),
                           selected: isCurrent,
                           leading: Icon(
                             isCurrent
@@ -126,6 +159,25 @@ class _PlaybackQueueDrawer extends ConsumerWidget {
                             track.artist.isEmpty ? '未知歌手' : track.artist,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                tooltip: isCurrent ? '当前播放歌曲不可删除' : '移出队列',
+                                onPressed: isCurrent
+                                    ? null
+                                    : () => ref
+                                        .read(playbackQueueProvider.notifier)
+                                        .removeAt(index),
+                                icon: const Icon(Icons.remove_circle_outline),
+                              ),
+                              if (!isCurrent)
+                                ReorderableDragStartListener(
+                                  index: index,
+                                  child: const Icon(Icons.drag_handle),
+                                ),
+                            ],
                           ),
                           onTap: () async {
                             ref

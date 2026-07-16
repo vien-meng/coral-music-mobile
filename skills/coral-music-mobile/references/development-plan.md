@@ -59,6 +59,16 @@
 | B3-09 网易云歌曲搜索与来源选择 | DOING | `development-history/2026-07-16-035-b3-09-netease-search.md` |
 | B3-10 酷我歌单 HTTPS 分类标签 | DOING | `development-history/2026-07-16-036-b3-10-kuwo-song-list-tags.md` |
 | B3-11 酷我歌单排序 | DOING | `development-history/2026-07-16-037-b3-11-kuwo-song-list-sort.md` |
+| B3-12 酷我歌单搜索 | DOING | `development-history/2026-07-16-038-b3-12-kuwo-playlist-search.md` |
+| B3-13 迁移咪咕歌曲搜索 | DOING | `development-history/2026-07-16-039-b3-13-migu-search.md` |
+| B4-14 队列追加与安全删除 | DOING | `development-history/2026-07-16-040-b4-14-queue-editing.md` |
+| B4-15 队列拖动排序 | DOING | `development-history/2026-07-16-041-b4-15-queue-reorder.md` |
+| B5-01 三端 SQLite 可行性与列表 Schema v1 | DOING | `development-history/2026-07-16-042-b5-01-sqlite-list-schema.md` |
+| B5-02 我的列表 CRUD 与排序 | DOING | `development-history/2026-07-16-043-b5-02-library-crud.md` |
+| B5-03 列表歌曲成员与去重 | DOING | `development-history/2026-07-16-044-b5-03-playlist-tracks.md` |
+| B5-04 收藏歌曲与播放页入口 | DOING | `development-history/2026-07-16-045-b5-04-favorite-tracks.md` |
+| B5-05 播放历史与音乐分类入口 | DOING | `development-history/2026-07-16-046-b5-05-play-history.md` |
+| B5-06 列表内搜索与来源筛选 | DOING | `development-history/2026-07-16-047-b5-06-playlist-search-filter.md` |
 | B4-01 最小可播放闭环：音频引擎、取链与受限 User API | DOING | `development-history/2026-07-15-020-b4-01-minimum-playback-and-user-api.md` |
 | B4-02 播放详情与歌词阅读界面 | DONE | `development-history/2026-07-15-021-b4-02-player-detail-and-lyrics-ui.md` |
 | B4-03 队列前后切歌基础 | DOING | `development-history/2026-07-15-022-b4-03-queue-navigation.md` |
@@ -80,7 +90,7 @@
 - `P0-03 [DOING]` SM-N986U / Android 13 已安装 Debug 包并保存验收记录；iOS/鸿蒙仍需真机与鸿蒙调试签名。
 - `P0-04 [DOING]` Android 真机已通过固定 HTTPS 音频播放、暂停状态、seek 与媒体焦点；iOS/鸿蒙播放、锁屏、耳机和中断待验收。
 - `P0-05` HTTP Range 小样：远程 MP3/FLAC 播放和 seek，WebDAV Basic/Digest 凭据验证。
-- `P0-06` SQLite migration 与安全存储小样；验证卸载/重装和系统备份边界。
+- `P0-06 [DOING]` B5-01 正在以 OpenHarmony 适配的 `flutter_sqflite` 固定版本验证 SQLite migration；卸载/重装、系统备份边界和安全存储仍待真机验证。
 - `P0-07` 文件选择、目录访问与分享导入小样。
 - `P0-08` 后台下载小样：暂停、恢复、进程终止与系统重启后的状态协调。
 - `P0-09 [DOING]` Android 受限 WebView User API 已真机通过 `kw` 的 `musicUrl` 取链与播放；iOS/鸿蒙运行时和商店门控待后续验证。
@@ -95,7 +105,7 @@
 - `P1-03 [DOING]` 已建立 `go_router` 九入口、手机底栏、宽屏 Rail、迷你播放栏和独立播放详情页；播放器批次仍需补质量、队列与收藏。
 - `P1-04 [DOING]` 已建立 Riverpod 排行榜/队列状态和 HTTP 脱敏诊断；完整启动状态待后续。
 - `P1-05 [DOING]` 已落地 `Track`、来源、音质、榜单和分页类型；其余领域类型按真实调用方加入。
-- `P1-06` 建立 SQLite v1、显式迁移、设置存储和安全凭据引用。
+- `P1-06 [DOING]` B5-01 正在建立 SQLite v1、显式迁移和列表持久化；设置存储与安全凭据引用后续按真实调用方加入。
 - `P1-07` 只为 Phase 0 已验证能力接入平台桥接。
 
 退出门槛：九个入口可导航，排行榜为默认页；三端构建通过；数据库可创建、迁移和恢复失败备份。
@@ -104,7 +114,7 @@
 
 - `P2-01 [DOING]` 已提取酷我榜单 fixture；搜索、歌单和其余来源待迁移。
 - `P2-02 [DOING]` 已建立五源枚举、酷我与 QQ 真实榜单，B3-07 已接入咪咕；B3-08 正在验证网易云最小 HTTPS 切片，酷狗桌面端点 TLS 不可用而阻塞。
-- `P2-03 [DOING]` 已完成酷我歌曲搜索、分页、错误重试、旧响应隔离和热搜词；B3-09 正在接入网易云搜索与已实现来源选择，综合/历史和其余来源待迁移。
+- `P2-03 [DOING]` 已完成酷我/网易云歌曲搜索、分页、错误重试、旧响应隔离和酷我热搜词；B3-12 正在补酷我歌单搜索，综合/历史和其余来源待迁移。
 - `P2-04 [DOING]` B3-05 已实现酷我热门歌单列表、详情和播放入口；B3-10 正在补可用 HTTPS 分类标签，排序、收藏、导入及其他来源待后续。
 - `P2-05 [DOING]` 已实现酷我分页榜单及 QQ 当前榜单目录/详情，支持来源切换和跨导航状态；其余来源待迁移，跨来源缓存待后续。
 - `P2-06 [DOING]` 已实现榜单/搜索旧响应隔离、图片惰性列表和错误重试；取消与持久缓存待后续。
@@ -127,12 +137,12 @@
 
 ### Phase 4：列表与媒体库（4 周）
 
-- `P4-01` 列表 CRUD、排序和跨重启持久化。
+- `P4-01 [DOING]` B5-01 正在建立三端 SQLite 与列表 schema；列表 CRUD、排序和跨重启真机验收后续完成。
 - `P4-02` 歌曲批量选择、删除、复制、移动、置顶、排序和搜索。
 - `P4-03` 列表导入导出、重复检测与复核。
 - `P4-04` 本地文件/目录导入、元数据、封面、失败报告。
 - `P4-05` 支持 P0 格式并按 Phase 0 结果扩展；完成 CUE 分轨。
-- `P4-06` 实现历史、歌曲/歌单/专辑收藏和四种分类。
+- `P4-06 [DOING]` B5-04 已实现歌曲收藏与播放详情入口；B5-05 已实现播放历史写入和读取，歌单/专辑收藏及专辑/艺术家/类型/年份分类待继续。
 - `P4-07` 实现不感兴趣规则并接入自动播放过滤。
 
 退出门槛：1000 首列表操作稳定；本地文件从导入、歌词到后台播放全链路通过。

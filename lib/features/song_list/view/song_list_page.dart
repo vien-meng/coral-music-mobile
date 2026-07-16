@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/music.dart';
+import '../../library/view/playlist_picker.dart';
 import '../../player/state/playback_queue_controller.dart';
 import '../../player/state/player_controller.dart';
 import '../state/song_list_controller.dart';
@@ -68,6 +69,18 @@ class _PlaylistSquare extends ConsumerWidget {
                 icon: const Icon(Icons.refresh),
               ),
             ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+          child: TextField(
+            textInputAction: TextInputAction.search,
+            onSubmitted: ref.read(songListProvider.notifier).submitSearch,
+            decoration: const InputDecoration(
+              hintText: '搜索歌单（清空并搜索可返回广场）',
+              prefixIcon: Icon(Icons.search),
+              isDense: true,
+            ),
           ),
         ),
         tags.when(
@@ -264,6 +277,11 @@ class _PlaylistDetail extends ConsumerWidget {
                     track.artist.isEmpty ? '未知歌手' : track.artist,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: IconButton(
+                    tooltip: '添加到我的列表',
+                    onPressed: () => addTrackToPlaylist(context, ref, track),
+                    icon: const Icon(Icons.playlist_add),
                   ),
                   onTap: () async {
                     ref.read(playbackQueueProvider.notifier).replaceQueue(

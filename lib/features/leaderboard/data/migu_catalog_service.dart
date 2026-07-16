@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 
 import '../../../core/app_failure.dart';
@@ -88,8 +91,54 @@ final class MiguCatalogService implements OnlineCatalogService {
 
   @override
   Future<PageResult<Track>> searchTracks(
-          OnlineSource source, String query, int page) =>
-      throw _unsupported('歌曲搜索');
+    OnlineSource source,
+    String query,
+    int page,
+  ) async {
+    final keyword = query.trim();
+    if (source != OnlineSource.migu || keyword.isEmpty || page < 1) {
+      throw const AppFailure(
+          code: AppFailureCode.invalidData, message: '咪咕搜索请求参数无效');
+    }
+    const deviceId = '963B7AA0D21511ED807EE5846EC87D20';
+    const salt =
+        '6cdc72a439cef99a3418d2a78aa28c73yyapp2d16148780a1dcc7408e06336b98cfd50';
+    final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+    final signature =
+        md5.convert(utf8.encode('$keyword$salt$deviceId$timestamp')).toString();
+    final uri =
+        Uri.https('jadeite.migu.cn', '/music_search/v3/search/searchAll', {
+      'isCorrect': '0',
+      'isCopyright': '1',
+      'searchSwitch':
+          '{"song":1,"album":0,"singer":0,"tagSong":1,"mvSong":0,"bestShow":1,"songlist":0,"lyricSong":0}',
+      'pageSize': '20',
+      'text': keyword,
+      'pageNo': '$page',
+      'sort': '0',
+      'sid': 'USS',
+    });
+    try {
+      final response = await _dio.getUri<Object?>(uri,
+          options: Options(headers: {
+            'uiVersion': 'A_music_3.6.1',
+            'deviceId': deviceId,
+            'timestamp': timestamp,
+            'sign': signature,
+            'channel': '0146921'
+          }));
+      return _parseSearch(response.data, page);
+    } on DioException catch (error) {
+      throw mapDioException(error);
+    } on AppFailure {
+      rethrow;
+    } on Object catch (error) {
+      throw AppFailure(
+          code: AppFailureCode.invalidData,
+          message: '咪咕搜索数据解析失败',
+          diagnostic: error.runtimeType.toString());
+    }
+  }
 
   static PageResult<Track> _parse(Object? raw) {
     if (raw is! Map || raw['code'] != '000000') {
@@ -128,6 +177,52 @@ final class MiguCatalogService implements OnlineCatalogService {
     }
     return PageResult(
         items: tracks, page: 1, pageSize: tracks.length, total: tracks.length);
+  }
+
+  static PageResult<Track> _parseSearch(Object? raw, int page) {
+    final result = raw is Map ? raw['songResultData'] : null;
+    final groups = result is Map ? result['resultList'] : null;
+    if (groups is! List) {
+      throw const AppFailure(
+          code: AppFailureCode.invalidData, message: '咪咕搜索歌曲缺失');
+    }
+    final tracks = <Track>[];
+    final ids = <String>{};
+    for (final group in groups.whereType<List>()) {
+      for (final song in group.whereType<Map>()) {
+        final id = '${song['songId'] ?? ''}';
+        final title = '${song['name'] ?? ''}'.trim();
+        if (id.isEmpty || title.isEmpty || !ids.add(id)) continue;
+        final singers = song['singerList'];
+        final duration = int.tryParse('${song['duration'] ?? ''}');
+        tracks.add(Track(
+            sourceKind: TrackSourceKind.online,
+            sourceId: OnlineSource.migu.id,
+            sourceTrackId: id,
+            title: title,
+            artist: singers is List
+                ? singers
+                    .whereType<Map>()
+                    .map((item) => '${item['name'] ?? ''}')
+                    .where((name) => name.isNotEmpty)
+                    .join('、')
+                : '',
+            album: '${song['album'] ?? ''}',
+            duration: duration == null ? null : Duration(seconds: duration),
+            coverUri: Uri.tryParse(
+                '${song['img3'] ?? song['img2'] ?? song['img1'] ?? ''}'),
+            availableQualities: _qualities(song['audioFormats']),
+            extra: {
+              'albumId': song['albumId'],
+              'copyrightId': song['copyrightId']
+            }));
+      }
+    }
+    return PageResult(
+        items: tracks,
+        page: page,
+        pageSize: 20,
+        total: int.tryParse('${result['totalCount'] ?? ''}') ?? tracks.length);
   }
 
   static String _artists(Object? raw) => raw is List

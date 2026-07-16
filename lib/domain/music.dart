@@ -100,6 +100,36 @@ final class PlaylistDetail {
   final List<Track> tracks;
 }
 
+final class UserPlaylist {
+  const UserPlaylist({
+    required this.id,
+    required this.name,
+    required this.position,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final String id;
+  final String name;
+  final int position;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+}
+
+final class PlayHistoryEntry {
+  const PlayHistoryEntry({
+    required this.track,
+    required this.playedAt,
+    required this.playCount,
+    required this.lastPosition,
+  });
+
+  final Track track;
+  final DateTime playedAt;
+  final int playCount;
+  final Duration lastPosition;
+}
+
 final class PageResult<T> {
   const PageResult({
     required this.items,

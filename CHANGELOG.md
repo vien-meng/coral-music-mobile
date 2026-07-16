@@ -2,6 +2,57 @@
 
 All notable changes to 珊瑚音乐移动端 (Coral Music Mobile) will be documented in this file.
 
+## [0.1.0] - 2026-07-16(03)
+
+### 酷我歌单搜索
+
+- 接入 HTTPS 歌单搜索（`search.kuwo.cn/r.s`，`ft=playlist`），支持结果解析、分页与广场搜索输入
+- 提交空关键词恢复当前标签与排序的广场请求
+
+### 咪咕歌曲搜索
+
+- 迁移咪咕签名 HTTPS 搜索（固定 deviceId、时间戳、MD5 签名，jadeite 接口）
+- 解析咪咕嵌套搜索结果并开放咪咕搜索来源
+
+### 播放队列编辑
+
+- 实现按 Track ID 去重的队列追加、非当前项删除与当前索引修正
+- 随机历史索引同步修正；当前播放项禁用删除
+- 实现未播放项拖动排序（`ReorderableListView`），当前索引重算，随机历史重置
+- 当前项无拖动手柄
+
+### SQLite 持久化基础
+
+- 引入 OpenHarmony-SIG 适配的 `flutter_sqflite`（固定提交 `0bd638a`），三端共用 SQLite
+- 建立 `user_playlist` schema v1：id、名称、位置、创建/更新时间；不保存凭据
+- HAP / APK Debug 构建通过，注册器包含 `SqflitePlugin`
+
+### 我的列表
+
+- 新增 `LibraryStore`、`LibraryController` 与 `/list` 页面，UI 不直接访问 SQLite
+- 实现列表创建、重命名、删除与拖动排序；排序写回数据库后重新读取
+- schema 升级至 v2，新增 `user_playlist_track`（`(playlist_id, track_id)` 去重）
+- 列表详情支持列表内播放、单曲移除
+- 排行榜、搜索、歌单详情三个在线入口增加"添加到我的列表"选择器
+
+### 收藏歌曲
+
+- 使用固定内部 id `favorites` 复用 `user_playlist_track`，不复制曲目存储
+- `/favorites` 路由接为实际页面，可读取、播放、移除收藏歌曲
+- 播放详情增加收藏状态读取与收藏/取消收藏按钮
+
+### 播放历史
+
+- schema 升级至 v3，新增 `play_history`（`Track.id` 主键，最多 1000 条）
+- `PlayerController` 仅在 `playing` 首次到达时异步记录，写入失败不影响播放
+- `/library` 替换为播放历史页面，可读取、清空、点击恢复队列并播放
+
+### 列表内搜索与来源筛选
+
+- 列表详情按标题、歌手、专辑、来源标识检索
+- 按 online / local / download / webdav 四类来源筛选
+- 内存过滤，不新增数据库索引与网络请求
+
 ## [0.1.0] - 2026-07-16(02)
 
 ### 咪咕排行榜
