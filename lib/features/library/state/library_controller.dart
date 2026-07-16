@@ -206,6 +206,63 @@ final class LibraryController extends StateNotifier<LibraryState> {
     });
   }
 
+  Future<int> transferTracks(String targetPlaylistId, Iterable<String> ids,
+      {required bool move}) async {
+    if (state.isLoading) return 0;
+    final playlist = state.selectedPlaylist;
+    if (playlist == null) return 0;
+    final selected = ids.toSet();
+    final tracks = state.tracks
+        .where((track) => selected.contains(track.id))
+        .toList(growable: false);
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final added = await _store.transferTracks(
+        fromPlaylistId: playlist.id,
+        toPlaylistId: targetPlaylistId,
+        tracks: tracks,
+        move: move,
+      );
+      state = state.copyWith(
+        tracks: move ? await _store.listTracks(playlist.id) : null,
+        isLoading: false,
+        clearError: true,
+      );
+      return added;
+    } on Object catch (error) {
+      state = state.copyWith(
+        isLoading: false,
+        error: AppFailure(
+          code: AppFailureCode.unknown,
+          message: move ? '移动歌曲失败' : '复制歌曲失败',
+          diagnostic: error.runtimeType.toString(),
+        ),
+      );
+      return 0;
+    }
+  }
+
+  Future<void> pinTracks(Iterable<String> ids) {
+    final playlist = state.selectedPlaylist;
+    if (playlist == null) return Future.value();
+    final selected = ids.toSet();
+    final tracks = [
+      ...state.tracks.where((track) => selected.contains(track.id)),
+      ...state.tracks.where((track) => !selected.contains(track.id)),
+    ];
+    return _run(() async {
+      await _store.saveTrackOrder(
+        playlist.id,
+        tracks.map((track) => track.id).toList(growable: false),
+      );
+      state = state.copyWith(
+        tracks: await _store.listTracks(playlist.id),
+        isLoading: false,
+        clearError: true,
+      );
+    });
+  }
+
   Future<void> reorder(int oldIndex, int newIndex) {
     if (oldIndex < newIndex) newIndex--;
     if (oldIndex == newIndex) return Future.value();

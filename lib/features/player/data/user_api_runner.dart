@@ -1,17 +1,22 @@
+import 'dart:convert';
+
 import 'package:flutter/services.dart';
 
 import '../../../core/app_failure.dart';
 import '../../../domain/music.dart';
 
 final class UserApiManifest {
-  const UserApiManifest(this.musicUrlSources);
+  const UserApiManifest(this.musicUrlSources, {this.lyricSources = const {}});
 
   final Set<String> musicUrlSources;
+  final Set<String> lyricSources;
 }
 
 abstract interface class UserApiRunner {
   Future<UserApiManifest> load(String script);
+  Future<void> clear();
   Future<Uri> resolveMusicUrl(Track track, AudioQuality quality);
+  Future<LyricPayload?> resolveLyric(Track track);
 }
 
 final class MethodChannelUserApiRunner implements UserApiRunner {
@@ -22,7 +27,7 @@ final class MethodChannelUserApiRunner implements UserApiRunner {
 
   @override
   Future<UserApiManifest> load(String script) async {
-    if (script.isEmpty || script.length > _scriptLimit) {
+    if (script.trim().isEmpty || script.length > _scriptLimit) {
       throw const AppFailure(
         code: AppFailureCode.invalidData,
         message: '音源脚本为空或超过大小限制',
@@ -35,17 +40,40 @@ final class MethodChannelUserApiRunner implements UserApiRunner {
           (result?['musicUrlSources'] as List<Object?>? ?? const <Object?>[])
               .whereType<String>()
               .toSet();
+      final lyricSources =
+          (result?['lyricSources'] as List<Object?>? ?? const <Object?>[])
+              .whereType<String>()
+              .toSet();
       if (sources.isEmpty) {
         throw const AppFailure(
           code: AppFailureCode.invalidData,
           message: '音源脚本未声明可用的 musicUrl 来源',
         );
       }
-      return _manifest = UserApiManifest(sources);
+      return _manifest = UserApiManifest(sources, lyricSources: lyricSources);
     } on PlatformException catch (error) {
       throw AppFailure(
         code: AppFailureCode.invalidData,
         message: error.message ?? '音源脚本加载失败',
+        diagnostic: error.code,
+      );
+    } on MissingPluginException {
+      throw const AppFailure(
+        code: AppFailureCode.invalidData,
+        message: '当前平台尚未验证受限音源脚本运行时',
+      );
+    }
+  }
+
+  @override
+  Future<void> clear() async {
+    try {
+      await _channel.invokeMethod<void>('clear');
+      _manifest = null;
+    } on PlatformException catch (error) {
+      throw AppFailure(
+        code: AppFailureCode.invalidData,
+        message: error.message ?? '音源脚本清理失败',
         diagnostic: error.code,
       );
     } on MissingPluginException {
@@ -73,10 +101,13 @@ final class MethodChannelUserApiRunner implements UserApiRunner {
         'musicInfo': _legacyMusicInfo(track),
       });
       final uri = Uri.tryParse(value ?? '');
-      if (uri == null || uri.scheme != 'https' || value!.length > 8192) {
+      if (uri == null ||
+          !{'http', 'https'}.contains(uri.scheme) ||
+          uri.host.isEmpty ||
+          value!.length > 8192) {
         throw const AppFailure(
           code: AppFailureCode.invalidData,
-          message: '音源未返回安全的 HTTPS 播放地址',
+          message: '音源未返回有效的 HTTP 播放地址',
         );
       }
       return uri;
@@ -85,6 +116,54 @@ final class MethodChannelUserApiRunner implements UserApiRunner {
         code: AppFailureCode.invalidData,
         message: error.message ?? '音源取链失败',
         diagnostic: error.code,
+      );
+    } on MissingPluginException {
+      throw const AppFailure(
+        code: AppFailureCode.invalidData,
+        message: '当前平台尚未验证受限音源脚本运行时',
+      );
+    }
+  }
+
+  @override
+  Future<LyricPayload?> resolveLyric(Track track) async {
+    final manifest = _manifest;
+    if (manifest == null || !manifest.lyricSources.contains(track.sourceId)) {
+      return null;
+    }
+    try {
+      final raw = await _channel.invokeMethod<String>('resolveLyric', {
+        'source': track.sourceId,
+        'musicInfo': _legacyMusicInfo(track),
+      });
+      if (raw == null || raw.length > 256 * 1024) {
+        throw const AppFailure(
+          code: AppFailureCode.invalidData,
+          message: '音源未返回有效歌词',
+        );
+      }
+      final value = jsonDecode(raw);
+      final data = value is Map<String, dynamic> && value['data'] is Map
+          ? value['data'] as Map<Object?, Object?>
+          : value is Map
+              ? value
+              : <Object?, Object?>{'lyric': value};
+      return LyricPayload(
+        lyric: data['lyric'] as String? ?? '',
+        lxlyric: data['lxlyric'] as String? ?? '',
+        tlyric: data['tlyric'] as String? ?? '',
+        rlyric: data['rlyric'] as String? ?? '',
+      );
+    } on PlatformException catch (error) {
+      throw AppFailure(
+        code: AppFailureCode.invalidData,
+        message: error.message ?? '音源歌词获取失败',
+        diagnostic: error.code,
+      );
+    } on FormatException {
+      throw const AppFailure(
+        code: AppFailureCode.invalidData,
+        message: '音源未返回有效歌词',
       );
     } on MissingPluginException {
       throw const AppFailure(
@@ -106,15 +185,48 @@ final class MethodChannelUserApiRunner implements UserApiRunner {
         AudioQuality.master => 'master',
       };
 
-  static Map<String, Object?> _legacyMusicInfo(Track track) => {
-        'source': track.sourceId,
-        'songmid': track.sourceTrackId,
-        'name': track.title,
-        'singer': track.artist,
-        'albumName': track.album ?? '',
-        'albumId': track.extra['albumId'],
-        'albumMid': track.extra['albumMid'],
-        'songId': track.extra['songId'],
-        'strMediaMid': track.extra['mediaMid'],
-      };
+  static Map<String, Object?> _legacyMusicInfo(Track track) {
+    final songId = track.extra['songId'] ?? track.sourceTrackId;
+    final meta = <String, Object?>{
+      'songId': songId,
+      'albumName': track.album ?? '',
+      'picUrl': track.coverUri?.toString(),
+      'albumId': track.extra['albumId'],
+      'albumMid': track.extra['albumMid'],
+      'strMediaMid': track.extra['mediaMid'],
+      'hash': track.extra['hash'],
+      'copyrightId': track.extra['copyrightId'] ?? songId,
+      'qualitys': [
+        for (final quality in track.availableQualities)
+          {'type': _qualityName(quality), 'size': null},
+      ],
+      '_qualitys': {
+        for (final quality in track.availableQualities)
+          _qualityName(quality): {'size': null},
+      },
+    };
+    return {
+      // Desktop User API scripts consume this MusicInfo shape.
+      'id': track.sourceTrackId,
+      'name': track.title,
+      'singer': track.artist,
+      'source': track.sourceId,
+      'interval': _formatInterval(track.duration),
+      'meta': meta,
+      // These fields keep compatibility with older scripts that predate meta.
+      'songmid': track.sourceTrackId,
+      'albumName': track.album ?? '',
+      'albumId': meta['albumId'],
+      'albumMid': meta['albumMid'],
+      'songId': songId,
+      'strMediaMid': meta['strMediaMid'],
+    };
+  }
+
+  static String? _formatInterval(Duration? duration) {
+    if (duration == null) return null;
+    final minutes = duration.inMinutes;
+    final seconds = duration.inSeconds.remainder(60);
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
 }

@@ -148,18 +148,13 @@ SQLite 使用显式版本迁移，至少包含：
 ```dart
 abstract interface class AudioEngine {
   Stream<PlaybackSnapshot> get snapshots;
+  Stream<AudioEngineCommand> get commands;
   Future<void> load(Track track, Uri uri, {Duration? startAt});
   Future<void> play();
   Future<void> pause();
   Future<void> seek(Duration position);
   Future<void> setSpeed(double speed);
   Future<void> stop();
-}
-
-abstract interface class MediaSessionBridge {
-  Future<void> publish(Track track, PlaybackSnapshot snapshot);
-  Stream<MediaCommand> get commands;
-  Future<void> clear();
 }
 
 abstract interface class SourcePluginRunner {
@@ -183,7 +178,7 @@ abstract interface class BackgroundDownloadService {
 
 ### 在线播放
 
-`歌曲点击 -> PlayerController -> PlaybackResolver -> URL 缓存 -> User API/在线取链 -> 音质降级 -> AudioEngine -> MediaSessionBridge -> PlaybackSnapshot`
+`歌曲点击 -> PlayerController -> PlaybackResolver -> URL 缓存 -> User API/在线取链 -> 音质降级 -> AudioEngine（含系统媒体处理器） -> PlaybackSnapshot`
 
 - URL 成功后异步补齐封面和歌词。
 - 只对明确的“音源未找到/地址失效”重试一次；鉴权、权限和格式错误不盲目换源。
@@ -192,7 +187,7 @@ abstract interface class BackgroundDownloadService {
 
 `文件选择 -> 扩展名过滤 -> 元数据读取 -> Track(local) -> 同目录歌词 -> AudioEngine`
 
-- 不调用在线取链；只有本地歌词缺失时才允许在线歌词匹配。
+- 不调用在线取链或 User API 歌词；只读取受支持的本地歌词来源。
 - 目录访问权限失效时提示重新授权，不删除列表记录。
 
 ### WebDAV

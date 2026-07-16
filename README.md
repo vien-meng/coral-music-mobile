@@ -42,6 +42,10 @@ lib/
 - **PlaybackQueue**：播放队列，支持替换、切歌、context 跟踪
 - **OnlineSource**：酷我、酷狗、QQ、网易云、咪咕 五类在线音乐源
 
+### 产品界面
+
+<p><img width="100%" src="./doc/images/app.png" alt="珊瑚音乐 UI 截图"></p>
+
 ### 产品入口
 
 九个产品入口，与桌面端行为对齐：

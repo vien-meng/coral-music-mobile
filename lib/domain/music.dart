@@ -27,6 +27,20 @@ enum AudioQuality {
 
 enum PlaybackMode { listLoop, singleLoop, shuffle }
 
+final class LyricPayload {
+  const LyricPayload({
+    this.lyric = '',
+    this.lxlyric = '',
+    this.tlyric = '',
+    this.rlyric = '',
+  });
+
+  final String lyric;
+  final String lxlyric;
+  final String tlyric;
+  final String rlyric;
+}
+
 final class Track {
   const Track({
     required this.sourceKind,

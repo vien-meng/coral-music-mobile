@@ -32,3 +32,5 @@
 ## 当日实施进度
 
 - `PlaybackResolver` 已接受显式音质，播放器状态保存实际选择；详情页仅对曲目声明的质量展示菜单，选择后重新取链加载。
+- 音质切换会携带当前进度、倍速、音量及播放/暂停意图：暂停时只预加载并保持暂停，播放中则在同一有效进度继续播放。在线取链失败后的刷新和降级重试也保持同一意图。
+- 验证入口：`test/player_controller_test.dart` 的 `keeps a paused track position and player settings when changing quality`；Android 多音质音源的真机验收仍待补，因此任务维持 `DOING`。

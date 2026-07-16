@@ -143,6 +143,32 @@ final class LibraryStore {
     });
   }
 
+  Future<int> transferTracks({
+    required String fromPlaylistId,
+    required String toPlaylistId,
+    required Iterable<Track> tracks,
+    required bool move,
+  }) async {
+    if (fromPlaylistId == toPlaylistId) return 0;
+    final sourceTracks = tracks.toList(growable: false);
+    if (sourceTracks.isEmpty) return 0;
+    final database = await _database;
+    return database.transaction((transaction) async {
+      final added =
+          await _appendTracks(transaction, toPlaylistId, sourceTracks);
+      if (move) {
+        for (final track in sourceTracks) {
+          await transaction.delete(
+            'user_playlist_track',
+            where: 'playlist_id = ? AND track_id = ?',
+            whereArgs: [fromPlaylistId, track.id],
+          );
+        }
+      }
+      return added;
+    });
+  }
+
   Future<List<Track>> listFavorites() => listTracks(favoritesId);
 
   Future<bool> isFavorite(String trackId) async {
@@ -248,6 +274,19 @@ final class LibraryStore {
         )
       ''');
     });
+  }
+
+  Future<void> updateHistoryPosition(String trackId, Duration position) async {
+    final database = await _database;
+    await database.update(
+      'play_history',
+      {
+        'last_position_ms': position.inMilliseconds,
+        'played_at': DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'track_id = ?',
+      whereArgs: [trackId],
+    );
   }
 
   Future<void> clearHistory() async {
@@ -397,6 +436,33 @@ final class LibraryStore {
                 .map(AudioQuality.values.byName)
                 .toList(growable: false),
       );
+
+  Future<int> _appendTracks(
+    DatabaseExecutor database,
+    String playlistId,
+    List<Track> tracks,
+  ) async {
+    var position = Sqflite.firstIntValue(
+          await database.rawQuery(
+            'SELECT MAX(position) FROM user_playlist_track WHERE playlist_id = ?',
+            [playlistId],
+          ),
+        ) ??
+        -1;
+    var added = 0;
+    for (final track in tracks) {
+      final inserted = await database.insert(
+        'user_playlist_track',
+        _trackToRow(playlistId, track, position + 1),
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
+      if (inserted != 0) {
+        position++;
+        added++;
+      }
+    }
+    return added;
+  }
 
   String _trackSnapshot(Track track) => jsonEncode({
         'source_kind': track.sourceKind.name,
