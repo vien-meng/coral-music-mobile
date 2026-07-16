@@ -174,6 +174,38 @@ final class LibraryController extends StateNotifier<LibraryState> {
         );
       });
 
+  Future<void> removeTracks(Iterable<String> trackIds) => _run(() async {
+        final playlist = state.selectedPlaylist;
+        if (playlist == null) return;
+        await _store.removeTracks(playlist.id, trackIds);
+        state = state.copyWith(
+          tracks: await _store.listTracks(playlist.id),
+          isLoading: false,
+          clearError: true,
+        );
+      });
+
+  Future<void> reorderTracks(int oldIndex, int newIndex) {
+    if (oldIndex < newIndex) newIndex--;
+    if (oldIndex == newIndex) return Future.value();
+    final tracks = [...state.tracks];
+    final moved = tracks.removeAt(oldIndex);
+    tracks.insert(newIndex, moved);
+    return _run(() async {
+      final playlist = state.selectedPlaylist;
+      if (playlist == null) return;
+      await _store.saveTrackOrder(
+        playlist.id,
+        tracks.map((track) => track.id).toList(growable: false),
+      );
+      state = state.copyWith(
+        tracks: await _store.listTracks(playlist.id),
+        isLoading: false,
+        clearError: true,
+      );
+    });
+  }
+
   Future<void> reorder(int oldIndex, int newIndex) {
     if (oldIndex < newIndex) newIndex--;
     if (oldIndex == newIndex) return Future.value();

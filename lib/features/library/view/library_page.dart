@@ -222,6 +222,7 @@ class _PlaylistTracks extends ConsumerStatefulWidget {
 class _PlaylistTracksState extends ConsumerState<_PlaylistTracks> {
   String _query = '';
   TrackSourceKind? _sourceKind;
+  final _selectedTrackIds = <String>{};
 
   @override
   Widget build(BuildContext context) {
@@ -229,6 +230,10 @@ class _PlaylistTracksState extends ConsumerState<_PlaylistTracks> {
     final tracks = widget.tracks;
     final visibleTracks = tracks.where(_matchesFilter).toList(growable: false);
     final isLoading = ref.watch(libraryProvider).isLoading;
+    final canReorder = !isLoading &&
+        _selectedTrackIds.isEmpty &&
+        _query.trim().isEmpty &&
+        _sourceKind == null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -244,27 +249,42 @@ class _PlaylistTracksState extends ConsumerState<_PlaylistTracks> {
                 ),
               Expanded(
                 child: Text(
-                  playlist.name,
+                  _selectedTrackIds.isEmpty
+                      ? playlist.name
+                      : '已选择 ${_selectedTrackIds.length} 首',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
-              FilledButton.tonalIcon(
-                onPressed: visibleTracks.isEmpty || isLoading
-                    ? null
-                    : () async {
-                        ref.read(playbackQueueProvider.notifier).replaceQueue(
-                              visibleTracks,
-                              contextId: 'library:${playlist.id}',
-                            );
-                        await ref
-                            .read(playerProvider.notifier)
-                            .playTrack(visibleTracks.first);
-                      },
-                icon: const Icon(Icons.play_arrow),
-                label: const Text('播放全部'),
-              ),
+              if (_selectedTrackIds.isEmpty)
+                FilledButton.tonalIcon(
+                  onPressed: visibleTracks.isEmpty || isLoading
+                      ? null
+                      : () async {
+                          ref.read(playbackQueueProvider.notifier).replaceQueue(
+                                visibleTracks,
+                                contextId: 'library:${playlist.id}',
+                              );
+                          await ref
+                              .read(playerProvider.notifier)
+                              .playTrack(visibleTracks.first);
+                        },
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text('播放全部'),
+                )
+              else ...[
+                IconButton(
+                  tooltip: '取消选择',
+                  onPressed: () => setState(_selectedTrackIds.clear),
+                  icon: const Icon(Icons.close),
+                ),
+                IconButton(
+                  tooltip: '删除已选歌曲',
+                  onPressed: isLoading ? null : () => _removeSelected(context),
+                  icon: const Icon(Icons.delete_outline),
+                ),
+              ],
             ],
           ),
         ),
@@ -304,49 +324,31 @@ class _PlaylistTracksState extends ConsumerState<_PlaylistTracks> {
               ? const _EmptyLibrary(message: '列表还没有歌曲。')
               : visibleTracks.isEmpty
                   ? const _EmptyLibrary(message: '没有匹配的歌曲。')
-                  : ListView.separated(
-                      itemCount: visibleTracks.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (context, index) {
-                        final track = visibleTracks[index];
-                        return ListTile(
-                          leading: Text('${index + 1}'.padLeft(2, '0')),
-                          title: Text(
-                            track.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                  : canReorder
+                      ? ReorderableListView.builder(
+                          buildDefaultDragHandles: false,
+                          itemCount: tracks.length,
+                          onReorder:
+                              ref.read(libraryProvider.notifier).reorderTracks,
+                          itemBuilder: (context, index) => _trackTile(
+                            tracks[index],
+                            index,
+                            tracks,
+                            isLoading,
+                            true,
                           ),
-                          subtitle: Text(
-                            track.artist.isEmpty ? '未知歌手' : track.artist,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                        )
+                      : ListView.separated(
+                          itemCount: visibleTracks.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (context, index) => _trackTile(
+                            visibleTracks[index],
+                            index,
+                            visibleTracks,
+                            isLoading,
+                            false,
                           ),
-                          trailing: IconButton(
-                            tooltip: '从列表移除',
-                            onPressed: isLoading
-                                ? null
-                                : () => ref
-                                    .read(libraryProvider.notifier)
-                                    .removeTrack(track.id),
-                            icon: const Icon(Icons.remove_circle_outline),
-                          ),
-                          onTap: isLoading
-                              ? null
-                              : () async {
-                                  ref
-                                      .read(playbackQueueProvider.notifier)
-                                      .replaceQueue(
-                                        visibleTracks,
-                                        startIndex: index,
-                                        contextId: 'library:${playlist.id}',
-                                      );
-                                  await ref
-                                      .read(playerProvider.notifier)
-                                      .playTrack(track);
-                                },
-                        );
-                      },
-                    ),
+                        ),
         ),
       ],
     );
@@ -362,12 +364,103 @@ class _PlaylistTracksState extends ConsumerState<_PlaylistTracks> {
         .contains(query);
   }
 
+  void _toggleSelected(String id) => setState(() {
+        if (!_selectedTrackIds.add(id)) _selectedTrackIds.remove(id);
+      });
+
+  Future<void> _removeSelected(BuildContext context) async {
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('删除已选歌曲？'),
+        content: Text('将从当前列表移除 ${_selectedTrackIds.length} 首歌曲。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (accepted != true) return;
+    await ref.read(libraryProvider.notifier).removeTracks(_selectedTrackIds);
+    if (mounted) setState(_selectedTrackIds.clear);
+  }
+
   String _sourceKindLabel(TrackSourceKind source) => switch (source) {
         TrackSourceKind.online => '在线',
         TrackSourceKind.local => '本地',
         TrackSourceKind.download => '下载',
         TrackSourceKind.webdav => 'WebDAV',
       };
+
+  Widget _trackTile(
+    Track track,
+    int index,
+    List<Track> queueTracks,
+    bool isLoading,
+    bool canReorder,
+  ) {
+    final selected = _selectedTrackIds.contains(track.id);
+    return ListTile(
+      key: ValueKey(track.id),
+      selected: selected,
+      leading: Checkbox(
+        value: selected,
+        onChanged: isLoading ? null : (_) => _toggleSelected(track.id),
+      ),
+      title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Text(
+        track.artist.isEmpty ? '未知歌手' : track.artist,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            tooltip: '从列表移除',
+            onPressed: isLoading
+                ? null
+                : () async {
+                    await ref
+                        .read(libraryProvider.notifier)
+                        .removeTrack(track.id);
+                    if (mounted) {
+                      setState(() => _selectedTrackIds.remove(track.id));
+                    }
+                  },
+            icon: const Icon(Icons.remove_circle_outline),
+          ),
+          if (canReorder)
+            ReorderableDragStartListener(
+              index: index,
+              child: const Padding(
+                padding: EdgeInsets.all(12),
+                child: Icon(Icons.drag_handle),
+              ),
+            ),
+        ],
+      ),
+      onTap: isLoading
+          ? null
+          : _selectedTrackIds.isNotEmpty
+              ? () => _toggleSelected(track.id)
+              : () async {
+                  ref.read(playbackQueueProvider.notifier).replaceQueue(
+                        queueTracks,
+                        startIndex: index,
+                        contextId: 'library:${widget.playlist.id}',
+                      );
+                  await ref.read(playerProvider.notifier).playTrack(track);
+                },
+      onLongPress: isLoading ? null : () => _toggleSelected(track.id),
+    );
+  }
 }
 
 class _EmptyLibrary extends StatelessWidget {

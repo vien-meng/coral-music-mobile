@@ -69,6 +69,8 @@
 | B5-04 收藏歌曲与播放页入口 | DOING | `development-history/2026-07-16-045-b5-04-favorite-tracks.md` |
 | B5-05 播放历史与音乐分类入口 | DOING | `development-history/2026-07-16-046-b5-05-play-history.md` |
 | B5-06 列表内搜索与来源筛选 | DOING | `development-history/2026-07-16-047-b5-06-playlist-search-filter.md` |
+| B5-07 列表歌曲批量选择与删除 | DOING | `development-history/2026-07-16-048-b5-07-playlist-batch-delete.md` |
+| B5-08 列表歌曲拖动排序 | DOING | `development-history/2026-07-16-049-b5-08-playlist-track-reorder.md` |
 | B4-01 最小可播放闭环：音频引擎、取链与受限 User API | DOING | `development-history/2026-07-15-020-b4-01-minimum-playback-and-user-api.md` |
 | B4-02 播放详情与歌词阅读界面 | DONE | `development-history/2026-07-15-021-b4-02-player-detail-and-lyrics-ui.md` |
 | B4-03 队列前后切歌基础 | DOING | `development-history/2026-07-15-022-b4-03-queue-navigation.md` |

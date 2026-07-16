@@ -109,6 +109,40 @@ final class LibraryStore {
     );
   }
 
+  Future<void> removeTracks(
+      String playlistId, Iterable<String> trackIds) async {
+    final ids = trackIds.toList(growable: false);
+    if (ids.isEmpty) return;
+    final database = await _database;
+    await database.transaction((transaction) async {
+      final batch = transaction.batch();
+      for (final id in ids) {
+        batch.delete(
+          'user_playlist_track',
+          where: 'playlist_id = ? AND track_id = ?',
+          whereArgs: [playlistId, id],
+        );
+      }
+      await batch.commit(noResult: true);
+    });
+  }
+
+  Future<void> saveTrackOrder(String playlistId, List<String> trackIds) async {
+    final database = await _database;
+    await database.transaction((transaction) async {
+      final batch = transaction.batch();
+      for (var index = 0; index < trackIds.length; index++) {
+        batch.update(
+          'user_playlist_track',
+          {'position': index},
+          where: 'playlist_id = ? AND track_id = ?',
+          whereArgs: [playlistId, trackIds[index]],
+        );
+      }
+      await batch.commit(noResult: true);
+    });
+  }
+
   Future<List<Track>> listFavorites() => listTracks(favoritesId);
 
   Future<bool> isFavorite(String trackId) async {
