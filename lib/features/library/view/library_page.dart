@@ -280,6 +280,32 @@ class _PlaylistTracksState extends ConsumerState<_PlaylistTracks> {
                   icon: const Icon(Icons.close),
                 ),
                 IconButton(
+                  tooltip: '复制到其他列表',
+                  onPressed: isLoading
+                      ? null
+                      : () => _transferSelected(context, move: false),
+                  icon: const Icon(Icons.content_copy_outlined),
+                ),
+                IconButton(
+                  tooltip: '移动到其他列表',
+                  onPressed: isLoading
+                      ? null
+                      : () => _transferSelected(context, move: true),
+                  icon: const Icon(Icons.drive_file_move_outline),
+                ),
+                IconButton(
+                  tooltip: '置顶已选歌曲',
+                  onPressed: isLoading
+                      ? null
+                      : () async {
+                          await ref
+                              .read(libraryProvider.notifier)
+                              .pinTracks(_selectedTrackIds);
+                          if (mounted) setState(_selectedTrackIds.clear);
+                        },
+                  icon: const Icon(Icons.vertical_align_top),
+                ),
+                IconButton(
                   tooltip: '删除已选歌曲',
                   onPressed: isLoading ? null : () => _removeSelected(context),
                   icon: const Icon(Icons.delete_outline),
@@ -389,6 +415,53 @@ class _PlaylistTracksState extends ConsumerState<_PlaylistTracks> {
     if (accepted != true) return;
     await ref.read(libraryProvider.notifier).removeTracks(_selectedTrackIds);
     if (mounted) setState(_selectedTrackIds.clear);
+  }
+
+  Future<void> _transferSelected(
+    BuildContext context, {
+    required bool move,
+  }) async {
+    final controller = ref.read(libraryProvider.notifier);
+    await controller.load();
+    if (!context.mounted) return;
+    final destinations = ref
+        .read(libraryProvider)
+        .playlists
+        .where((playlist) => playlist.id != widget.playlist.id)
+        .toList(growable: false);
+    if (destinations.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请先新建另一个列表。')),
+      );
+      return;
+    }
+    final destination = await showModalBottomSheet<UserPlaylist>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => ListView(
+        shrinkWrap: true,
+        children: [
+          ListTile(title: Text(move ? '移动到其他列表' : '复制到其他列表')),
+          for (final playlist in destinations)
+            ListTile(
+              leading: const Icon(Icons.queue_music),
+              title: Text(playlist.name),
+              onTap: () => Navigator.pop(context, playlist),
+            ),
+        ],
+      ),
+    );
+    if (destination == null || !context.mounted) return;
+    final added = await controller.transferTracks(
+      destination.id,
+      _selectedTrackIds,
+      move: move,
+    );
+    if (!context.mounted) return;
+    setState(_selectedTrackIds.clear);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${move ? '移动' : '复制'}完成，新增 $added 首歌曲。')),
+    );
   }
 
   String _sourceKindLabel(TrackSourceKind source) => switch (source) {

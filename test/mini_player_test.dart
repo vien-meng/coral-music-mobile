@@ -42,6 +42,9 @@ final class _DebugAudioEngine implements AudioEngine {
   Stream<AudioEngineSnapshot> get snapshots => _snapshots.stream;
 
   @override
+  Stream<AudioEngineCommand> get commands => const Stream.empty();
+
+  @override
   Future<void> dispose() => _snapshots.close();
 
   @override

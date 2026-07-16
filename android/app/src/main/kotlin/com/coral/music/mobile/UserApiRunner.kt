@@ -20,10 +20,12 @@ class UserApiRunner(private val activity: Activity) {
     private val handler = Handler(Looper.getMainLooper())
     private val executor = Executors.newSingleThreadExecutor()
     private val pendingResults = mutableMapOf<String, MethodChannel.Result>()
+    private val pendingLyricResults = mutableMapOf<String, MethodChannel.Result>()
     private var pendingLoad: MethodChannel.Result? = null
     private var script = ""
     private var loaded = false
     private var sources = emptySet<String>()
+    private var lyricSources = emptySet<String>()
     private var webView: WebView? = null
 
     fun load(rawScript: String, result: MethodChannel.Result) {
@@ -32,12 +34,15 @@ class UserApiRunner(private val activity: Activity) {
             return
         }
         pendingLoad?.error("cancelled", "新的音源脚本替换了当前加载", null)
+        pendingLoad = null
+        cancelPendingRequests("新的音源脚本替换了当前运行时")
         pendingLoad = result
         script = rawScript
         loaded = false
         sources = emptySet()
+        lyricSources = emptySet()
         val view = ensureWebView()
-        view.loadDataWithBaseURL("https://localhost.invalid/", "<html><body></body></html>", "text/html", "UTF-8", null)
+        resetWebView(view)
         handler.postDelayed({
             if (!loaded && pendingLoad === result) {
                 pendingLoad = null
@@ -74,11 +79,50 @@ class UserApiRunner(private val activity: Activity) {
         }, 20_000)
     }
 
+    fun resolveLyric(arguments: Map<*, *>?, result: MethodChannel.Result) {
+        val requestArguments = arguments ?: emptyMap<String, Any?>()
+        val source = requestArguments["source"] as? String ?: ""
+        if (!loaded || source !in lyricSources) {
+            result.error("not_ready", "当前音源未支持该歌曲来源的歌词", null)
+            return
+        }
+        val musicInfo = requestArguments["musicInfo"] as? Map<*, *> ?: emptyMap<String, Any?>()
+        val payload = JSONObject().apply {
+            put("source", source)
+            put("action", "lyric")
+            put("info", JSONObject().apply {
+                put("isGetLyricx", true)
+                put("musicInfo", JSONObject(musicInfo))
+            })
+        }
+        val requestId = UUID.randomUUID().toString()
+        pendingLyricResults[requestId] = result
+        evaluate("""
+            Promise.resolve(window.__coralRequestHandler(${payload}))
+              .then((value) => NativeBridge.lyricResult(${JSONObject.quote(requestId)}, JSON.stringify({ok: true, value})))
+              .catch((error) => NativeBridge.lyricResult(${JSONObject.quote(requestId)}, JSON.stringify({ok: false, error: String(error && error.message || error)})));
+        """.trimIndent())
+        handler.postDelayed({
+            pendingLyricResults.remove(requestId)?.error("timeout", "音源歌词获取超时", null)
+        }, 20_000)
+    }
+
+    fun clear(result: MethodChannel.Result) {
+        pendingLoad?.error("cancelled", "音源脚本已移除", null)
+        pendingLoad = null
+        cancelPendingRequests("音源脚本已移除")
+        script = ""
+        loaded = false
+        sources = emptySet()
+        lyricSources = emptySet()
+        webView?.let(::resetWebView)
+        result.success(null)
+    }
+
     fun dispose() {
         pendingLoad?.error("cancelled", "音源运行时已关闭", null)
         pendingLoad = null
-        pendingResults.values.forEach { it.error("cancelled", "音源运行时已关闭", null) }
-        pendingResults.clear()
+        cancelPendingRequests("音源运行时已关闭")
         webView?.destroy()
         webView = null
         executor.shutdownNow()
@@ -111,6 +155,21 @@ class UserApiRunner(private val activity: Activity) {
         handler.post { webView?.evaluateJavascript(script, null) }
     }
 
+    private fun resetWebView(view: WebView) = view.loadDataWithBaseURL(
+        "https://localhost.invalid/",
+        "<html><body></body></html>",
+        "text/html",
+        "UTF-8",
+        null,
+    )
+
+    private fun cancelPendingRequests(message: String) {
+        pendingResults.values.forEach { it.error("cancelled", message, null) }
+        pendingResults.clear()
+        pendingLyricResults.values.forEach { it.error("cancelled", message, null) }
+        pendingLyricResults.clear()
+    }
+
     private inner class Bridge {
         @JavascriptInterface
         fun ready(rawManifest: String) {
@@ -124,10 +183,18 @@ class UserApiRunner(private val activity: Activity) {
                             if (info?.optString("type") == "music" && actions?.toString()?.contains("musicUrl") == true) add(source)
                         }
                     }
+                    val lyricEnabled = buildSet {
+                        sourceObject.keys().forEach { source ->
+                            val info = sourceObject.optJSONObject(source)
+                            val actions = info?.optJSONArray("actions")
+                            if (info?.optString("type") == "music" && actions?.toString()?.contains("lyric") == true) add(source)
+                        }
+                    }
                     if (enabled.isEmpty()) throw IllegalArgumentException("音源脚本未声明可用的 musicUrl 来源")
                     sources = enabled
+                    lyricSources = lyricEnabled
                     loaded = true
-                    pendingLoad?.success(mapOf("musicUrlSources" to enabled.toList()))
+                    pendingLoad?.success(mapOf("musicUrlSources" to enabled.toList(), "lyricSources" to lyricEnabled.toList()))
                     pendingLoad = null
                 } catch (error: Exception) {
                     pendingLoad?.error("invalid_manifest", error.message, null)
@@ -207,6 +274,30 @@ class UserApiRunner(private val activity: Activity) {
                     }
                 } catch (error: Exception) {
                     result.error("invalid_result", "音源未返回安全的 HTTPS 播放地址", null)
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun lyricResult(id: String, rawResult: String) {
+            handler.post {
+                val result = pendingLyricResults.remove(id) ?: return@post
+                try {
+                    val data = JSONObject(rawResult)
+                    if (!data.optBoolean("ok")) {
+                        result.error("invalid_result", "音源歌词获取失败", null)
+                        return@post
+                    }
+                    val value = data.opt("value")
+                    val payload = when (value) {
+                        is JSONObject -> value.toString()
+                        is String -> JSONObject().put("lyric", value).toString()
+                        else -> throw IllegalArgumentException()
+                    }
+                    if (payload.length > 256 * 1024) throw IllegalArgumentException()
+                    result.success(payload)
+                } catch (error: Exception) {
+                    result.error("invalid_result", "音源未返回有效歌词", null)
                 }
             }
         }

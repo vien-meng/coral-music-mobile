@@ -14,7 +14,9 @@ class MainActivity: FlutterActivity() {
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "load" -> userApiRunner.load(call.argument<String>("script") ?: "", result)
+                    "clear" -> userApiRunner.clear(result)
                     "resolveMusicUrl" -> userApiRunner.resolveMusicUrl(call.arguments as? Map<*, *>, result)
+                    "resolveLyric" -> userApiRunner.resolveLyric(call.arguments as? Map<*, *>, result)
                     else -> result.notImplemented()
                 }
             }

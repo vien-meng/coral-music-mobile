@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../domain/music.dart';
 import '../../library/state/library_controller.dart';
 import '../data/audio_engine.dart';
+import '../data/lyric_timeline.dart';
+import '../state/lyric_controller.dart';
 import '../state/playback_queue_controller.dart';
 import '../state/player_controller.dart';
 
@@ -368,45 +370,146 @@ class _PlayerPanel extends ConsumerWidget {
   }
 }
 
-class _LyricsPanel extends StatelessWidget {
+class _LyricsPanel extends ConsumerStatefulWidget {
   const _LyricsPanel({required this.track});
 
   final Track track;
 
   @override
-  Widget build(BuildContext context) => Center(
-        key: const ValueKey('lyrics-panel'),
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.lyrics_outlined,
-                size: 54,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-              const SizedBox(height: 20),
-              Text(
-                track.title,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                '暂无可用歌词',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '歌词数据服务将在后续任务接入；届时会优先显示本地 LRC。',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+  ConsumerState<_LyricsPanel> createState() => _LyricsPanelState();
+}
+
+class _LyricsPanelState extends ConsumerState<_LyricsPanel> {
+  final _scrollController = ScrollController();
+  var _activeLine = -1;
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final track = widget.track;
+    final lyric = ref.watch(lyricProvider(track));
+    final position =
+        ref.watch(playerProvider.select((state) => state.position));
+    return lyric.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (_, __) => const Center(child: Text('歌词加载失败')),
+      data: (payload) {
+        final lines =
+            payload == null ? const <LyricLine>[] : parseLyricTimeline(payload);
+        if (lines.isEmpty) return _LyricEmpty(track: track);
+        var active = 0;
+        for (var index = 0; index < lines.length; index++) {
+          if (lines[index].at <= position) active = index;
+        }
+        if (active != _activeLine) {
+          _activeLine = active;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!_scrollController.hasClients) return;
+            // ponytail: estimated line height; switch to measured keys only if lyric layouts drift visibly.
+            final target = (active * 82.0).clamp(
+              0.0,
+              _scrollController.position.maxScrollExtent,
+            );
+            _scrollController.animateTo(
+              target,
+              duration: const Duration(milliseconds: 260),
+              curve: Curves.easeOut,
+            );
+          });
+        }
+        return ListView.builder(
+          key: const ValueKey('lyrics-panel'),
+          controller: _scrollController,
+          padding: const EdgeInsets.fromLTRB(28, 32, 28, 80),
+          itemCount: lines.length,
+          itemBuilder: (context, index) {
+            final line = lines[index];
+            final isActive = index == active;
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Column(
+                children: [
+                  Text.rich(
+                    line.words.isEmpty
+                        ? TextSpan(text: line.text)
+                        : TextSpan(
+                            children: line.words.map((word) {
+                              final wordActive = position >= word.start &&
+                                  position < word.start + word.duration;
+                              return TextSpan(
+                                text: word.text,
+                                style: wordActive
+                                    ? const TextStyle(
+                                        fontWeight: FontWeight.bold)
+                                    : null,
+                              );
+                            }).toList(growable: false),
+                          ),
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: isActive
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontWeight: isActive ? FontWeight.bold : null,
+                        ),
+                  ),
+                  if (line.translation case final translation?)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        translation,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
+                      ),
                     ),
+                  if (line.romanization case final romanization?)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        romanization,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
+                      ),
+                    ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _LyricEmpty extends StatelessWidget {
+  const _LyricEmpty({required this.track});
+
+  final Track track;
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(track.title, style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 12),
+            const Text('暂无可用歌词'),
+            const SizedBox(height: 6),
+            const Text('当前音源未提供可用歌词'),
+          ],
         ),
       );
 }

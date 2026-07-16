@@ -1,5 +1,8 @@
 import 'dart:async';
 
+import 'package:audio_service/audio_service.dart';
+import 'package:audio_session/audio_session.dart';
+import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../../../domain/music.dart';
@@ -13,6 +16,8 @@ enum AudioEngineStatus {
   completed,
   error
 }
+
+enum AudioEngineCommand { next, previous }
 
 final class AudioEngineSnapshot {
   const AudioEngineSnapshot({
@@ -34,6 +39,7 @@ final class AudioEngineSnapshot {
 
 abstract interface class AudioEngine {
   Stream<AudioEngineSnapshot> get snapshots;
+  Stream<AudioEngineCommand> get commands;
 
   Future<void> load(Track track, Uri uri);
   Future<void> play();
@@ -46,54 +52,129 @@ abstract interface class AudioEngine {
 }
 
 final class JustAudioEngine implements AudioEngine {
-  JustAudioEngine() {
-    _subscriptions.add(_player.playerStateStream.listen((state) {
-      _emit(
-        status: switch (state.processingState) {
-          ProcessingState.idle => AudioEngineStatus.idle,
-          ProcessingState.loading ||
-          ProcessingState.buffering =>
-            AudioEngineStatus.loading,
-          ProcessingState.ready => state.playing
-              ? AudioEngineStatus.playing
-              : AudioEngineStatus.paused,
-          ProcessingState.completed => AudioEngineStatus.completed,
-        },
-      );
-    }));
-    _subscriptions.add(
-        _player.positionStream.listen((position) => _emit(position: position)));
-    _subscriptions.add(
-        _player.durationStream.listen((duration) => _emit(duration: duration)));
-    _subscriptions.add(_player.errorStream.listen((_) {
-      _emit(status: AudioEngineStatus.error, error: '音频播放失败');
-    }));
-  }
-
-  final AudioPlayer _player = AudioPlayer();
+  Future<_CoralAudioHandler>? _handler;
   final _snapshots = StreamController<AudioEngineSnapshot>.broadcast();
-  final _subscriptions = <StreamSubscription<Object?>>[];
-  AudioEngineSnapshot _snapshot = const AudioEngineSnapshot();
+  final _commands = StreamController<AudioEngineCommand>.broadcast();
+  Future<StreamSubscription<AudioEngineSnapshot>>? _snapshotSubscription;
+  Future<StreamSubscription<AudioEngineCommand>>? _commandSubscription;
 
   @override
   Stream<AudioEngineSnapshot> get snapshots => _snapshots.stream;
 
   @override
+  Stream<AudioEngineCommand> get commands => _commands.stream;
+
+  @override
+  Future<void> load(Track track, Uri uri) async {
+    await (await _getHandler()).load(track, uri);
+  }
+
+  @override
+  Future<void> play() async => (await _getHandler()).play();
+
+  @override
+  Future<void> pause() async => (await _getHandler()).pause();
+
+  @override
+  Future<void> seek(Duration position) async =>
+      (await _getHandler()).seek(position);
+
+  @override
+  Future<void> setSpeed(double speed) async =>
+      (await _getHandler()).setSpeed(speed);
+
+  @override
+  Future<void> setVolume(double volume) async =>
+      (await _getHandler()).setVolume(volume);
+
+  @override
+  Future<void> stop() async => (await _getHandler()).stop();
+
+  @override
+  Future<void> dispose() async {
+    await (await _snapshotSubscription)?.cancel();
+    await (await _commandSubscription)?.cancel();
+    await _snapshots.close();
+    await _commands.close();
+  }
+
+  Future<_CoralAudioHandler> _getHandler() {
+    final handler = _handler ??= _createHandler();
+    _snapshotSubscription ??= handler.then(
+      (value) => value.snapshots.listen(
+        _snapshots.add,
+        onError: (_, __) => _snapshots.add(const AudioEngineSnapshot(
+          status: AudioEngineStatus.error,
+          error: '音频播放失败',
+        )),
+      ),
+    );
+    _commandSubscription ??=
+        handler.then((value) => value.commands.listen(_commands.add));
+    return handler;
+  }
+}
+
+Future<_CoralAudioHandler> _createHandler() async {
+  try {
+    final handler = await AudioService.init(
+      builder: _CoralAudioHandler.new,
+      config: const AudioServiceConfig(
+        androidNotificationChannelId: 'com.coral.music.mobile.playback',
+        androidNotificationChannelName: '珊瑚音乐播放',
+      ),
+    );
+    await (await AudioSession.instance)
+        .configure(AudioSessionConfiguration.music());
+    return handler;
+  } on MissingPluginException {
+    // ponytail: Harmony falls back to its just_audio implementation until audio_service gains an OHOS backend.
+    return _CoralAudioHandler();
+  }
+}
+
+final class _CoralAudioHandler extends BaseAudioHandler with SeekHandler {
+  _CoralAudioHandler() {
+    _subscriptions.add(_player.playerStateStream.listen((value) {
+      _emit(status: _statusOf(value));
+    }));
+    _subscriptions
+        .add(_player.positionStream.listen((value) => _emit(position: value)));
+    _subscriptions
+        .add(_player.durationStream.listen((value) => _emit(duration: value)));
+    _subscriptions.add(_player.errorStream.listen(
+        (_) => _emit(status: AudioEngineStatus.error, error: '音频播放失败')));
+  }
+
+  final _player = AudioPlayer();
+  final _snapshots = StreamController<AudioEngineSnapshot>.broadcast();
+  final _commands = StreamController<AudioEngineCommand>.broadcast();
+  final _subscriptions = <StreamSubscription<Object?>>[];
+  AudioEngineSnapshot _snapshot = const AudioEngineSnapshot();
+
+  Stream<AudioEngineSnapshot> get snapshots => _snapshots.stream;
+  Stream<AudioEngineCommand> get commands => _commands.stream;
+
   Future<void> load(Track track, Uri uri) async {
     _snapshot =
         AudioEngineSnapshot(track: track, status: AudioEngineStatus.loading);
     _snapshots.add(_snapshot);
+    mediaItem.add(MediaItem(
+      id: uri.toString(),
+      title: track.title,
+      artist: track.artist,
+      album: track.album,
+      duration: track.duration,
+      artUri: track.coverUri,
+    ));
     await _player.setUrl(uri.toString());
     _emit(track: track, status: AudioEngineStatus.ready, error: null);
   }
 
   @override
-  Future<void> play() {
+  Future<void> play() async {
     _emit(status: AudioEngineStatus.playing, error: null);
-    unawaited(_player.play().catchError((_) {
-      _emit(status: AudioEngineStatus.error, error: '音频播放失败');
-    }));
-    return Future.value();
+    await _player.play();
   }
 
   @override
@@ -108,28 +189,28 @@ final class JustAudioEngine implements AudioEngine {
   @override
   Future<void> setSpeed(double speed) => _player.setSpeed(speed);
 
-  @override
   Future<void> setVolume(double volume) => _player.setVolume(volume);
 
   @override
-  Future<void> stop() => _player.stop();
+  Future<void> skipToNext() async => _commands.add(AudioEngineCommand.next);
 
   @override
-  Future<void> dispose() async {
-    for (final subscription in _subscriptions) {
-      await subscription.cancel();
-    }
-    await _player.dispose();
-    await _snapshots.close();
+  Future<void> skipToPrevious() async =>
+      _commands.add(AudioEngineCommand.previous);
+
+  @override
+  Future<void> stop() async {
+    await _player.stop();
+    _emit(status: AudioEngineStatus.idle);
+    await super.stop();
   }
 
-  void _emit({
-    Track? track,
-    Duration? position,
-    Duration? duration,
-    AudioEngineStatus? status,
-    String? error,
-  }) {
+  void _emit(
+      {Track? track,
+      Duration? position,
+      Duration? duration,
+      AudioEngineStatus? status,
+      String? error}) {
     _snapshot = AudioEngineSnapshot(
       track: track ?? _snapshot.track,
       position: position ?? _snapshot.position,
@@ -138,5 +219,41 @@ final class JustAudioEngine implements AudioEngine {
       error: error,
     );
     _snapshots.add(_snapshot);
+    playbackState.add(PlaybackState(
+      controls: _snapshot.status == AudioEngineStatus.playing
+          ? const [
+              MediaControl.skipToPrevious,
+              MediaControl.pause,
+              MediaControl.skipToNext,
+            ]
+          : const [
+              MediaControl.skipToPrevious,
+              MediaControl.play,
+              MediaControl.skipToNext,
+            ],
+      systemActions: const {MediaAction.seek},
+      androidCompactActionIndices: const [0, 1, 2],
+      processingState: switch (_snapshot.status) {
+        AudioEngineStatus.idle => AudioProcessingState.idle,
+        AudioEngineStatus.loading => AudioProcessingState.loading,
+        AudioEngineStatus.completed => AudioProcessingState.completed,
+        AudioEngineStatus.error => AudioProcessingState.error,
+        _ => AudioProcessingState.ready,
+      },
+      playing: _snapshot.status == AudioEngineStatus.playing,
+      updatePosition: _snapshot.position,
+      speed: _player.speed,
+    ));
   }
+
+  AudioEngineStatus _statusOf(PlayerState state) =>
+      switch (state.processingState) {
+        ProcessingState.idle => AudioEngineStatus.idle,
+        ProcessingState.loading ||
+        ProcessingState.buffering =>
+          AudioEngineStatus.loading,
+        ProcessingState.ready =>
+          state.playing ? AudioEngineStatus.playing : AudioEngineStatus.paused,
+        ProcessingState.completed => AudioEngineStatus.completed,
+      };
 }

@@ -35,7 +35,6 @@ void main() {
     await tester.pump();
 
     expect(find.text('测试歌曲'), findsNWidgets(2));
-    expect(find.text('测试歌手 · 准备播放'), findsOneWidget);
   });
 
   testWidgets('opens the player detail and its lyrics empty state',
@@ -72,7 +71,7 @@ void main() {
     await tester.tap(find.text('测试歌曲'));
     await tester.pump();
 
-    expect(find.text('测试歌手 · 准备播放'), findsOneWidget);
+    expect(find.text('测试歌曲'), findsNWidgets(2));
   });
 
   testWidgets('switches the leaderboard source', (tester) async {

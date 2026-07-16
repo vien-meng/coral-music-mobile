@@ -60,7 +60,7 @@ class HistoryPage extends ConsumerWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                         subtitle: Text(
-                          '${entry.track.artist.isEmpty ? '未知歌手' : entry.track.artist} · 播放 ${entry.playCount} 次',
+                          '${entry.track.artist.isEmpty ? '未知歌手' : entry.track.artist} · 播放 ${entry.playCount} 次 · 上次 ${_duration(entry.lastPosition)}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -72,9 +72,10 @@ class HistoryPage extends ConsumerWidget {
                                 startIndex: index,
                                 contextId: 'history',
                               );
-                          await ref
-                              .read(playerProvider.notifier)
-                              .playTrack(entry.track);
+                          await ref.read(playerProvider.notifier).playTrack(
+                                entry.track,
+                                initialPosition: entry.lastPosition,
+                              );
                         },
                       );
                     },
@@ -84,4 +85,10 @@ class HistoryPage extends ConsumerWidget {
       ),
     );
   }
+}
+
+String _duration(Duration value) {
+  final minutes = value.inMinutes.toString().padLeft(2, '0');
+  final seconds = (value.inSeconds % 60).toString().padLeft(2, '0');
+  return '$minutes:$seconds';
 }

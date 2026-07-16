@@ -87,6 +87,7 @@ final class PlayerController extends StateNotifier<PlayerState> {
   ])  : _library = library ?? LibraryStore(),
         super(const PlayerState()) {
     _subscription = _engine.snapshots.listen(_onSnapshot);
+    _engineCommandSubscription = _engine.commands.listen(_onEngineCommand);
   }
 
   final AudioEngine _engine;
@@ -94,8 +95,16 @@ final class PlayerController extends StateNotifier<PlayerState> {
   final PlaybackQueueController _queue;
   final LibraryStore _library;
   final _failedTrackIds = <String>{};
+  final _refreshedTrackQualities = <String>{};
+  var _playRequest = 0;
   String? _recordedHistoryTrackId;
+  String? _lastPersistedTrackId;
+  Duration _lastPersistedPosition = Duration.zero;
+  Future<void> _historyWrites = Future.value();
   late final StreamSubscription<AudioEngineSnapshot> _subscription;
+  late final StreamSubscription<AudioEngineCommand> _engineCommandSubscription;
+
+  static const _positionCheckpoint = Duration(seconds: 15);
 
   Future<void> toggle(Track track) async {
     if (state.track?.id == track.id && state.isPlaying) return pause();
@@ -111,33 +120,88 @@ final class PlayerController extends StateNotifier<PlayerState> {
     Track track, {
     AudioQuality? quality,
     bool retryFailed = true,
+    bool refreshUrl = false,
+    Duration? initialPosition,
+    bool autoPlay = true,
   }) async {
-    if (retryFailed) _failedTrackIds.remove(track.id);
+    final request = ++_playRequest;
+    if (state.track?.id != track.id &&
+        state.status != AudioEngineStatus.idle &&
+        state.status != AudioEngineStatus.loading) {
+      await _engine.stop();
+      if (request != _playRequest) return;
+    }
+    if (retryFailed) {
+      _failedTrackIds.remove(track.id);
+      _refreshedTrackQualities
+          .removeWhere((key) => key.startsWith('${track.id}:'));
+    }
     final resolvedQuality = quality ?? _defaultQuality(track);
     state = PlayerState(
       track: track,
       status: AudioEngineStatus.loading,
+      speed: state.speed,
+      volume: state.volume,
       quality: resolvedQuality,
     );
+    Uri uri;
     try {
-      final uri = await _resolver.resolve(track, quality: resolvedQuality);
-      await _engine.load(track, uri);
-      await _engine.play();
+      uri = await _resolver.resolve(
+        track,
+        quality: resolvedQuality,
+        forceRefresh: refreshUrl,
+      );
     } on AppFailure catch (error) {
+      if (request != _playRequest) return;
       _handleFailure(track, error);
+      return;
     } on Object catch (error) {
+      if (request != _playRequest) return;
       _handleFailure(
         track,
+        AppFailure(
+          code: AppFailureCode.unknown,
+          message: '播放地址解析失败',
+          diagnostic: error.runtimeType.toString(),
+        ),
+      );
+      return;
+    }
+    if (request != _playRequest) return;
+    try {
+      await _engine.load(track, uri);
+      if (request != _playRequest) return;
+      final resumePosition = _validResumePosition(track, initialPosition);
+      if (resumePosition != null) await _engine.seek(resumePosition);
+      if (request != _playRequest) return;
+      if (autoPlay) await _engine.play();
+    } on AppFailure catch (error) {
+      if (request != _playRequest) return;
+      _handleEngineFailure(
+        track,
+        resolvedQuality,
+        error,
+        initialPosition: initialPosition,
+        autoPlay: autoPlay,
+      );
+    } on Object catch (error) {
+      if (request != _playRequest) return;
+      _handleEngineFailure(
+        track,
+        resolvedQuality,
         AppFailure(
           code: AppFailureCode.unknown,
           message: '播放加载失败',
           diagnostic: error.runtimeType.toString(),
         ),
+        initialPosition: initialPosition,
+        autoPlay: autoPlay,
       );
     }
   }
 
   Future<void> playDebugUrl(String rawUrl) async {
+    final request = ++_playRequest;
     final uri = Uri.tryParse(rawUrl.trim());
     if (uri == null || uri.scheme != 'https') {
       state = state.copyWith(
@@ -156,11 +220,18 @@ final class PlayerController extends StateNotifier<PlayerState> {
       title: '调试音频',
       artist: uri.host,
     );
-    state = PlayerState(track: track, status: AudioEngineStatus.loading);
+    state = PlayerState(
+      track: track,
+      status: AudioEngineStatus.loading,
+      speed: state.speed,
+      volume: state.volume,
+    );
     try {
       await _engine.load(track, uri);
+      if (request != _playRequest) return;
       await _engine.play();
     } on Object catch (error) {
+      if (request != _playRequest) return;
       state = state.copyWith(
         status: AudioEngineStatus.error,
         error: AppFailure(
@@ -172,9 +243,19 @@ final class PlayerController extends StateNotifier<PlayerState> {
     }
   }
 
-  Future<void> pause() => _engine.pause();
+  Future<void> pause() async {
+    await _engine.pause();
+    final track = state.track;
+    if (track != null) _persistPosition(track, state.position, force: true);
+  }
 
-  Future<void> seek(Duration position) => _engine.seek(position);
+  Future<void> seek(Duration position) async {
+    await _engine.seek(position);
+    final track = state.track;
+    if (track == null) return;
+    state = state.copyWith(position: position);
+    _persistPosition(track, position, force: true);
+  }
 
   Future<void> setSpeed(double speed) async {
     final normalized = speed.clamp(.5, 2.0).toDouble();
@@ -193,21 +274,29 @@ final class PlayerController extends StateNotifier<PlayerState> {
     if (track == null || !track.availableQualities.contains(quality)) {
       return Future.value();
     }
-    return playTrack(track, quality: quality);
+    return playTrack(
+      track,
+      quality: quality,
+      initialPosition: state.position,
+      autoPlay: state.isPlaying,
+    );
   }
 
   void _onSnapshot(AudioEngineSnapshot snapshot) {
     if (state.track != null && snapshot.track?.id != state.track?.id) return;
     if (snapshot.status == AudioEngineStatus.error && snapshot.track != null) {
-      _handleFailure(
+      _handleEngineFailure(
         snapshot.track!,
+        state.quality,
         AppFailure(
             code: AppFailureCode.unknown, message: snapshot.error ?? '音频播放失败'),
+        initialPosition: snapshot.position,
       );
       return;
     }
     if (snapshot.status == AudioEngineStatus.completed &&
         snapshot.track?.id == state.track?.id) {
+      _persistPosition(snapshot.track!, Duration.zero, force: true);
       final nextTrack = _queue.selectAfterCompletion();
       if (nextTrack != null) {
         unawaited(playTrack(nextTrack));
@@ -218,7 +307,15 @@ final class PlayerController extends StateNotifier<PlayerState> {
         snapshot.track != null &&
         _recordedHistoryTrackId != snapshot.track!.id) {
       _recordedHistoryTrackId = snapshot.track!.id;
-      unawaited(_recordHistory(snapshot.track!, snapshot.position));
+      _recordHistory(snapshot.track!, snapshot.position);
+    } else if (snapshot.track != null &&
+        (snapshot.status == AudioEngineStatus.playing ||
+            snapshot.status == AudioEngineStatus.paused)) {
+      _persistPosition(
+        snapshot.track!,
+        snapshot.position,
+        force: snapshot.status == AudioEngineStatus.paused,
+      );
     }
     state = PlayerState(
       track: snapshot.track,
@@ -234,12 +331,41 @@ final class PlayerController extends StateNotifier<PlayerState> {
     );
   }
 
-  Future<void> _recordHistory(Track track, Duration position) async {
-    try {
-      await _library.recordHistory(track, position);
-    } on Object {
-      // ponytail: history is non-critical; surface storage failures in Library UI.
+  void _onEngineCommand(AudioEngineCommand command) {
+    switch (command) {
+      case AudioEngineCommand.next:
+        final next = _queue.selectNext();
+        if (next != null) unawaited(playTrack(next));
+      case AudioEngineCommand.previous:
+        final previous = _queue.selectPrevious();
+        if (previous != null) unawaited(playTrack(previous));
     }
+  }
+
+  void _recordHistory(Track track, Duration position) => _queueHistoryWrite(
+        () => _library.recordHistory(track, position),
+      );
+
+  void _persistPosition(Track track, Duration position, {bool force = false}) {
+    final sameTrack = _lastPersistedTrackId == track.id;
+    final difference = position - _lastPersistedPosition;
+    if (!force && sameTrack && difference.abs() < _positionCheckpoint) return;
+    _lastPersistedTrackId = track.id;
+    _lastPersistedPosition = position;
+    _updateHistoryPosition(track.id, position);
+  }
+
+  void _updateHistoryPosition(String trackId, Duration position) =>
+      _queueHistoryWrite(
+        () => _library.updateHistoryPosition(trackId, position),
+      );
+
+  void _queueHistoryWrite(Future<void> Function() write) {
+    _historyWrites = _historyWrites
+        .then((_) => write())
+        .onError((Object error, StackTrace stackTrace) {
+      // ponytail: history is non-critical; surface storage failures stay in Library UI.
+    });
   }
 
   void _handleFailure(Track track, AppFailure error) {
@@ -250,6 +376,43 @@ final class PlayerController extends StateNotifier<PlayerState> {
       return;
     }
     state = state.copyWith(status: AudioEngineStatus.error, error: error);
+  }
+
+  void _handleEngineFailure(
+    Track track,
+    AudioQuality quality,
+    AppFailure error, {
+    Duration? initialPosition,
+    bool autoPlay = true,
+  }) {
+    if (_refreshedTrackQualities.add('${track.id}:${quality.name}')) {
+      _resolver.invalidate(track, quality: quality);
+      unawaited(
+        playTrack(
+          track,
+          quality: quality,
+          retryFailed: false,
+          refreshUrl: true,
+          initialPosition: initialPosition,
+          autoPlay: autoPlay,
+        ),
+      );
+      return;
+    }
+    final fallback = _lowerQuality(track, quality);
+    if (fallback != null) {
+      unawaited(
+        playTrack(
+          track,
+          quality: fallback,
+          retryFailed: false,
+          initialPosition: initialPosition,
+          autoPlay: autoPlay,
+        ),
+      );
+      return;
+    }
+    _handleFailure(track, error);
   }
 
   Track? _nextAvailableTrackAfterFailure() {
@@ -265,9 +428,27 @@ final class PlayerController extends StateNotifier<PlayerState> {
       ? AudioQuality.standard128k
       : track.availableQualities.last;
 
+  AudioQuality? _lowerQuality(Track track, AudioQuality quality) {
+    final candidates = track.availableQualities
+        .where((item) => item.index > quality.index)
+        .toList()
+      ..sort((left, right) => left.index.compareTo(right.index));
+    return candidates.firstOrNull;
+  }
+
+  Duration? _validResumePosition(Track track, Duration? position) {
+    if (position == null || position < const Duration(seconds: 5)) return null;
+    final duration = track.duration;
+    if (duration != null && position >= duration - const Duration(seconds: 3)) {
+      return null;
+    }
+    return position;
+  }
+
   @override
   void dispose() {
     _subscription.cancel();
+    _engineCommandSubscription.cancel();
     super.dispose();
   }
 }

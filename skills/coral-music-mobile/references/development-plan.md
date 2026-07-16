@@ -21,67 +21,85 @@
 
 记录日期：2026-07-15。
 
-| 项目 | 状态 | 证据/下一步 |
-| --- | --- | --- |
-| 移动仓库 | DOING | Batch 1、酷我排行榜及歌曲搜索纵向切片已完成；其余四源、歌单、音频和持久化待后续批次 |
-| Flutter/Dart | READY-CANDIDATE | `3.27.5-ohos-0.1.1-Beta3` / Dart `3.6.2`；分析与测试通过，仍需评估 Beta 商店风险 |
-| 鸿蒙工具链 | DOING | API 18、Ohpm 5.1.3、Node 22.16、Hvigor 5.18.6 可用；已生成 unsigned HAP，待 DevEco 调试签名 |
-| Android 工具链 | READY | SDK 位于 `/opt/homebrew/share/android-commandlinetools`；API 35、Build Tools 33/35、NDK 26.1、Platform Tools 已安装，Debug APK 构建通过 |
-| iOS 工具链 | DOING | Xcode 26.6、许可、首次启动和 CocoaPods 1.17.0 已完成；待安装 iOS 26.5 Platform Runtime |
-| 真机 | DOING | SM-N986U / Android 13 已完成最小播放、seek 与 User API 取链验收；iOS、鸿蒙真机仍待配置 |
-| 功能基线 | READY | 已核对桌面端九条 React 路由和十九个设置分组 |
-| 商店政策审查 | TODO | 动态 User API、本地 HTTP 服务、后台下载需形成审查结论 |
+| 项目           | 状态            | 证据/下一步                                                                                                                             |
+| -------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| 移动仓库       | DOING           | Batch 1、酷我排行榜及歌曲搜索纵向切片已完成；其余四源、歌单、音频和持久化待后续批次                                                     |
+| Flutter/Dart   | READY-CANDIDATE | `3.27.5-ohos-0.1.1-Beta3` / Dart `3.6.2`；分析与测试通过，仍需评估 Beta 商店风险                                                        |
+| 鸿蒙工具链     | DOING           | API 18、Ohpm 5.1.3、Node 22.16、Hvigor 5.18.6 可用；已生成 unsigned HAP，待 DevEco 调试签名                                             |
+| Android 工具链 | READY           | SDK 位于 `/opt/homebrew/share/android-commandlinetools`；API 35、Build Tools 33/35、NDK 26.1、Platform Tools 已安装，Debug APK 构建通过 |
+| iOS 工具链     | DOING           | Xcode 26.6、许可、首次启动和 CocoaPods 1.17.0 已完成；待安装 iOS 26.5 Platform Runtime                                                  |
+| 真机           | DOING           | SM-N986U / Android 13 已完成最小播放、seek 与 User API 取链验收；iOS、鸿蒙真机仍待配置                                                  |
+| 功能基线       | READY           | 已核对桌面端九条 React 路由和十九个设置分组                                                                                             |
+| 商店政策审查   | TODO            | 动态 User API、本地 HTTP 服务、后台下载需形成审查结论                                                                                   |
 
 ## 当前业务批次
 
-| 任务 | 状态 | 历史记录 |
-| --- | --- | --- |
-| B1-01 建立开发历史制度 | DONE | `development-history/2026-07-15-003-b1-01-development-history.md` |
-| B1-02 拆分应用壳 | DONE | `development-history/2026-07-15-004-b1-02-app-structure.md` |
-| B1-03 接入最小依赖 | DONE | `development-history/2026-07-15-005-b1-03-minimum-dependencies.md` |
-| B1-04 建立领域模型 | DONE | `development-history/2026-07-15-006-b1-04-domain-models.md` |
-| B1-05 建立 HTTP 客户端 | DONE | `development-history/2026-07-15-007-b1-05-http-client.md` |
-| B1-06 建立具名路由 | DONE | `development-history/2026-07-15-008-b1-06-named-routing.md` |
-| B2-01 提取酷我 fixture | DONE | `development-history/2026-07-15-009-b2-01-kuwo-fixtures.md` |
-| B2-02 迁移酷我榜单 | DONE | `development-history/2026-07-15-010-b2-02-kuwo-leaderboard.md` |
-| B2-03 排行榜状态 | DONE | `development-history/2026-07-15-011-b2-03-leaderboard-state.md` |
-| B2-04 排行榜界面 | DONE | `development-history/2026-07-15-012-b2-04-leaderboard-ui.md` |
-| B2-05 内存播放队列 | DONE | `development-history/2026-07-15-013-b2-05-playback-queue.md` |
-| B2-06 迷你播放栏 | DONE | `development-history/2026-07-15-014-b2-06-mini-player.md` |
-| B3-01 迁移酷我歌曲搜索 | DONE | `development-history/2026-07-15-015-b3-01-kuwo-track-search.md` |
-| B3-02 搜索状态与界面 | DONE | `development-history/2026-07-15-016-b3-02-search-state-and-ui.md` |
-| B3-03 酷狗排行榜可行性验证 | BLOCKED | `development-history/2026-07-15-017-b3-03-kugou-leaderboard-feasibility.md` |
-| B3-04 迁移 QQ 音乐排行榜 | DONE | `development-history/2026-07-15-018-b3-04-qq-leaderboard.md` |
-| B3-05 酷我歌单广场纵向切片 | DOING | `development-history/2026-07-16-031-b3-05-kuwo-song-list.md` |
-| B3-06 酷我热搜词 | DOING | `development-history/2026-07-16-032-b3-06-kuwo-hot-search.md` |
-| B3-07 迁移咪咕排行榜 | DOING | `development-history/2026-07-16-033-b3-07-migu-leaderboard.md` |
-| B3-08 网易云排行榜最小 HTTPS 切片 | DOING | `development-history/2026-07-16-034-b3-08-netease-leaderboard.md` |
-| B3-09 网易云歌曲搜索与来源选择 | DOING | `development-history/2026-07-16-035-b3-09-netease-search.md` |
-| B3-10 酷我歌单 HTTPS 分类标签 | DOING | `development-history/2026-07-16-036-b3-10-kuwo-song-list-tags.md` |
-| B3-11 酷我歌单排序 | DOING | `development-history/2026-07-16-037-b3-11-kuwo-song-list-sort.md` |
-| B3-12 酷我歌单搜索 | DOING | `development-history/2026-07-16-038-b3-12-kuwo-playlist-search.md` |
-| B3-13 迁移咪咕歌曲搜索 | DOING | `development-history/2026-07-16-039-b3-13-migu-search.md` |
-| B4-14 队列追加与安全删除 | DOING | `development-history/2026-07-16-040-b4-14-queue-editing.md` |
-| B4-15 队列拖动排序 | DOING | `development-history/2026-07-16-041-b4-15-queue-reorder.md` |
-| B5-01 三端 SQLite 可行性与列表 Schema v1 | DOING | `development-history/2026-07-16-042-b5-01-sqlite-list-schema.md` |
-| B5-02 我的列表 CRUD 与排序 | DOING | `development-history/2026-07-16-043-b5-02-library-crud.md` |
-| B5-03 列表歌曲成员与去重 | DOING | `development-history/2026-07-16-044-b5-03-playlist-tracks.md` |
-| B5-04 收藏歌曲与播放页入口 | DOING | `development-history/2026-07-16-045-b5-04-favorite-tracks.md` |
-| B5-05 播放历史与音乐分类入口 | DOING | `development-history/2026-07-16-046-b5-05-play-history.md` |
-| B5-06 列表内搜索与来源筛选 | DOING | `development-history/2026-07-16-047-b5-06-playlist-search-filter.md` |
-| B5-07 列表歌曲批量选择与删除 | DOING | `development-history/2026-07-16-048-b5-07-playlist-batch-delete.md` |
-| B5-08 列表歌曲拖动排序 | DOING | `development-history/2026-07-16-049-b5-08-playlist-track-reorder.md` |
-| B4-01 最小可播放闭环：音频引擎、取链与受限 User API | DOING | `development-history/2026-07-15-020-b4-01-minimum-playback-and-user-api.md` |
-| B4-02 播放详情与歌词阅读界面 | DONE | `development-history/2026-07-15-021-b4-02-player-detail-and-lyrics-ui.md` |
-| B4-03 队列前后切歌基础 | DOING | `development-history/2026-07-15-022-b4-03-queue-navigation.md` |
-| B4-04 播放完成自动下一首 | DOING | `development-history/2026-07-16-023-b4-04-auto-next.md` |
-| B4-05 播放模式与随机历史 | DOING | `development-history/2026-07-16-024-b4-05-playback-modes.md` |
-| B4-06 失效音源自动跳过 | DOING | `development-history/2026-07-16-025-b4-06-error-skip.md` |
-| B4-07 播放倍速控制 | DOING | `development-history/2026-07-16-026-b4-07-playback-rate.md` |
-| B4-08 播放音量控制 | DOING | `development-history/2026-07-16-027-b4-08-volume-control.md` |
-| B4-09 共享播放队列面板 | DOING | `development-history/2026-07-16-028-b4-09-queue-panel.md` |
-| B4-10 当前曲目音质选择 | DOING | `development-history/2026-07-16-029-b4-10-quality-selection.md` |
-| B4-11 在线列表播放入口接线 | DOING | `development-history/2026-07-16-030-b4-11-online-play-entry.md` |
+| 任务　　　　　　　　　　　　　　　　　　　　　　　　 | 状态　　 | 历史记录　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　 |
+| ---------------------------------------------------- | -------- | ---------------------------------------------------------------------------- |
+| B1-01 建立开发历史制度　　　　　　　　　　　　　　　 | DONE　　 | `development-history/2026-07-15-003-b1-01-development-history.md`　　　　　  |
+| B1-02 拆分应用壳　　　　　　　　　　　　　　　　　　 | DONE　　 | `development-history/2026-07-15-004-b1-02-app-structure.md`　　　　　　　　  |
+| B1-03 接入最小依赖　　　　　　　　　　　　　　　　　 | DONE　　 | `development-history/2026-07-15-005-b1-03-minimum-dependencies.md`　　　　　 |
+| B1-04 建立领域模型　　　　　　　　　　　　　　　　　 | DONE　　 | `development-history/2026-07-15-006-b1-04-domain-models.md`　　　　　　　　  |
+| B1-05 建立 HTTP 客户端　　　　　　　　　　　　　　　 | DONE　　 | `development-history/2026-07-15-007-b1-05-http-client.md`　　　　　　　　　  |
+| B1-06 建立具名路由　　　　　　　　　　　　　　　　　 | DONE　　 | `development-history/2026-07-15-008-b1-06-named-routing.md`　　　　　　　　  |
+| B2-01 提取酷我 fixture　　　　　　　　　　　　　　　 | DONE　　 | `development-history/2026-07-15-009-b2-01-kuwo-fixtures.md`　　　　　　　　  |
+| B2-02 迁移酷我榜单　　　　　　　　　　　　　　　　　 | DONE　　 | `development-history/2026-07-15-010-b2-02-kuwo-leaderboard.md`　　　　　　　 |
+| B2-03 排行榜状态　　　　　　　　　　　　　　　　　　 | DONE　　 | `development-history/2026-07-15-011-b2-03-leaderboard-state.md`　　　　　　  |
+| B2-04 排行榜界面　　　　　　　　　　　　　　　　　　 | DONE　　 | `development-history/2026-07-15-012-b2-04-leaderboard-ui.md`　　　　　　　　 |
+| B2-05 内存播放队列　　　　　　　　　　　　　　　　　 | DONE　　 | `development-history/2026-07-15-013-b2-05-playback-queue.md`　　　　　　　　 |
+| B2-06 迷你播放栏　　　　　　　　　　　　　　　　　　 | DONE　　 | `development-history/2026-07-15-014-b2-06-mini-player.md`　　　　　　　　　  |
+| B3-01 迁移酷我歌曲搜索　　　　　　　　　　　　　　　 | DONE　　 | `development-history/2026-07-15-015-b3-01-kuwo-track-search.md`　　　　　　  |
+| B3-02 搜索状态与界面　　　　　　　　　　　　　　　　 | DONE　　 | `development-history/2026-07-15-016-b3-02-search-state-and-ui.md`　　　　　  |
+| B3-03 酷狗排行榜可行性验证　　　　　　　　　　　　　 | BLOCKED  | `development-history/2026-07-15-017-b3-03-kugou-leaderboard-feasibility.md`  |
+| B3-04 迁移 QQ 音乐排行榜　　　　　　　　　　　　　　 | DONE　　 | `development-history/2026-07-15-018-b3-04-qq-leaderboard.md`　　　　　　　　 |
+| B3-05 酷我歌单广场纵向切片　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-031-b3-05-kuwo-song-list.md`　　　　　　　　 |
+| B3-06 酷我热搜词　　　　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-032-b3-06-kuwo-hot-search.md`　　　　　　　  |
+| B3-07 迁移咪咕排行榜　　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-033-b3-07-migu-leaderboard.md`　　　　　　　 |
+| B3-08 网易云排行榜最小 HTTPS 切片　　　　　　　　　  | DOING　  | `development-history/2026-07-16-034-b3-08-netease-leaderboard.md`　　　　　  |
+| B3-09 网易云歌曲搜索与来源选择　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-035-b3-09-netease-search.md`　　　　　　　　 |
+| B3-10 酷我歌单 HTTPS 分类标签　　　　　　　　　　　  | DOING　  | `development-history/2026-07-16-036-b3-10-kuwo-song-list-tags.md`　　　　　  |
+| B3-11 酷我歌单排序　　　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-037-b3-11-kuwo-song-list-sort.md`　　　　　  |
+| B3-12 酷我歌单搜索　　　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-038-b3-12-kuwo-playlist-search.md`　　　　　 |
+| B3-13 迁移咪咕歌曲搜索　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-039-b3-13-migu-search.md`　　　　　　　　　  |
+| B4-14 队列追加与安全删除　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-040-b4-14-queue-editing.md`　　　　　　　　  |
+| B4-15 队列拖动排序　　　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-041-b4-15-queue-reorder.md`　　　　　　　　  |
+| B5-01 三端 SQLite 可行性与列表 Schema v1　　　　　　 | DOING　  | `development-history/2026-07-16-042-b5-01-sqlite-list-schema.md`　　　　　　 |
+| B5-02 我的列表 CRUD 与排序　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-043-b5-02-library-crud.md`　　　　　　　　　 |
+| B5-03 列表歌曲成员与去重　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-044-b5-03-playlist-tracks.md`　　　　　　　  |
+| B5-04 收藏歌曲与播放页入口　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-045-b5-04-favorite-tracks.md`　　　　　　　  |
+| B5-05 播放历史与音乐分类入口　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-046-b5-05-play-history.md`　　　　　　　　　 |
+| B5-06 列表内搜索与来源筛选　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-047-b5-06-playlist-search-filter.md`　　　　 |
+| B5-07 列表歌曲批量选择与删除　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-048-b5-07-playlist-batch-delete.md`　　　　  |
+| B5-08 列表歌曲拖动排序　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-049-b5-08-playlist-track-reorder.md`　　　　 |
+| B5-09 列表歌曲复制与移动　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-050-b5-09-playlist-copy-move.md`　　　　　　 |
+| B5-10 列表歌曲批量置顶　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-051-b5-10-playlist-pin-top.md`　　　　　　　 |
+| B4-01 最小可播放闭环：音频引擎、取链与受限 User API  | DOING　  | `development-history/2026-07-15-020-b4-01-minimum-playback-and-user-api.md`  |
+| B4-02 播放详情与歌词阅读界面　　　　　　　　　　　　 | DONE　　 | `development-history/2026-07-15-021-b4-02-player-detail-and-lyrics-ui.md`　  |
+| B4-03 队列前后切歌基础　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-15-022-b4-03-queue-navigation.md`　　　　　　　 |
+| B4-04 播放完成自动下一首　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-023-b4-04-auto-next.md`　　　　　　　　　　  |
+| B4-05 播放模式与随机历史　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-024-b4-05-playback-modes.md`　　　　　　　　 |
+| B4-06 失效音源自动跳过　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-025-b4-06-error-skip.md`　　　　　　　　　　 |
+| B4-07 播放倍速控制　　　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-026-b4-07-playback-rate.md`　　　　　　　　  |
+| B4-08 播放音量控制　　　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-027-b4-08-volume-control.md`　　　　　　　　 |
+| B4-09 共享播放队列面板　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-028-b4-09-queue-panel.md`　　　　　　　　　  |
+| B4-10 当前曲目音质选择　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-029-b4-10-quality-selection.md`　　　　　　  |
+| B4-11 在线列表播放入口接线　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-030-b4-11-online-play-entry.md`　　　　　　  |
+| B4-12 User API 音源导入与运行时管理　　　　　　　　　 | DOING　  | `development-history/2026-07-16-053-b4-12-user-api-source-management.md`　　 |
+| B4-13 在线取链缓存与过期刷新重试　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-054-b4-13-playback-url-cache.md`　　　　　  |
+| B4-16 播放进度保存与历史继续播放　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-055-b4-16-playback-progress-resume.md`　　  |
+| B4-17 User API 歌词与播放详情时间轴　　　　　　　　　 | DOING　  | `development-history/2026-07-16-056-b4-17-user-api-lyrics.md`　　　　　　  |
+| B4-18 Android MediaSession 前台媒体控制　　　　　　　 | DOING　  | `development-history/2026-07-16-057-b4-18-android-media-session.md`　　　  |
+| B4-19 在线音质降级重试　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-058-b4-19-quality-fallback.md`　　　　　  |
+| B4-20 User API HTTPS 地址导入　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-059-b4-20-user-api-url-import.md`　　　　 |
+| B4-21 同目录本地 LRC 优先读取　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-060-b4-21-local-lrc-priority.md`　　　　 |
+| B4-22 三端后台播放运行时与系统媒体服务　　　　　　　 | DOING　  | `development-history/2026-07-16-061-b4-22-background-audio-service.md`　 |
+| B4-23 快速切歌旧请求隔离　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-063-b4-23-play-request-isolation.md`　 |
+
+### 2026-07-16 开发顺序修订
+
+- `B5-01` 至 `B5-10` 已完成的 SQLite、列表和收藏基础保留，但暂停新增 Batch 5 范围；后续开发优先回到 Batch 4。
+- 当前顺序为：B4-12 音源导入/启用/移除 → 在线取链与播放回归 → 进度恢复、后台媒体与歌词。只有播放器闭环达到可用标准后才恢复本地媒体库扩展。
+- 本次修订记录：`development-history/2026-07-16-052-plan-b4-player-and-source-priority.md`。
 
 ## 里程碑
 
@@ -126,13 +144,13 @@
 
 ### Phase 3：播放器核心（5 周）
 
-- `P3-01 [DOING]` B4-01 已实现最小 `AudioEngine`，Android 真机播放/seek 通过；B4-11 正在把排行榜的点歌/播放全部接入统一播放控制器，iOS/鸿蒙真机与 `MediaSessionBridge` 三端适配仍待完成。
-- `P3-02 [DOING]` B4-01 已实现在线 `PlaybackResolver` 与 Android 受限 User API `musicUrl`，并通过真机 `kw` 取链；B4-10 正在接入当前曲目音质选择，音质降级、换源/cache 与四类来源待后续扩展。
+- `P3-01 [DOING]` B4-01 已实现最小 `AudioEngine`，Android 真机播放/seek 通过；B4-11 正在把排行榜的点歌/播放全部接入统一播放控制器。B4-22 将系统媒体处理器收敛在 `AudioEngine` 内，iOS/鸿蒙真机验收仍待完成。
+- `P3-02 [DOING]` B4-01 已实现在线 `PlaybackResolver` 与 Android 受限 User API `musicUrl`，并通过真机 `kw` 取链；B4-12 已完成会话内音源管理，B4-13 已实现 URL 缓存/刷新，B4-19 已实现已声明质量内的降级重试。跨来源换源与四类来源待后续扩展。
 - `P3-03 [DOING]` B4-03 已实现队列首尾循环的上一首/下一首与详情页控制；B4-04 已接入完成事件自动切歌，B4-05 正在扩展三种模式与随机历史，B4-06 正在补失效音源自动跳过。切歌后即时恢复播放仍待 Android 回归。
-- `P3-04 [DOING]` seek 已在 B4-01 通过 Android 真机；B4-07 正在接入 0.5–2.0 倍速控制，进度保存、重启恢复和音频焦点中断待后续。
+- `P3-04 [DOING]` seek 已在 B4-01 通过 Android 真机；B4-07 已接入 0.5–2.0 倍速控制，B4-16 已实现进度保存和从历史继续播放；应用启动恢复和音频焦点中断待后续。
 - `P3-05 [DOING]` B4-02 已实现可从迷你播放栏进入的播放详情、专辑卡片、进度和播放控制；B4-09 正在实现共享队列面板，质量选择和收藏待补。
-- `P3-06 [DOING]` B4-02 已实现歌词阅读入口与数据未就绪空态；歌词解析、逐字时间轴、翻译、罗马音、偏移、缓存和本地优先级待补。
-- `P3-07` 实现后台元数据、媒体按键和平台允许的歌词展示。
+- `P3-06 [DOING]` B4-02 已实现歌词阅读入口，B4-17 已接通 User API 原文/翻译/罗马音与 LX 逐字 LRC、当前行高亮及 LRC `offset`；缓存和本地优先级待补。
+- `P3-07 [DOING]` B4-22 已接入 `audio_service` 作为系统前台媒体运行时，Android Debug 构建通过；播放/暂停/seek 与上一首/下一首已进入统一处理器，音频焦点中断及三端真机验收待补。
 - `P3-08` 实现评论入口、可关闭可视化及经 Phase 0 验证的平台音效。
 
 退出门槛：四类来源均可播放/seek；锁屏和耳机控制通过；60 分钟连续播放无阻断错误。
@@ -162,7 +180,7 @@
 
 ### Phase 6：高级能力与设置（4 周）
 
-- `P6-01 [TODO]` B4-01 已提前受限 `musicUrl` 小样；文件/URL 导入、启用/删除、能力展示、完整隔离和商店版门控仍在本阶段。
+- `P6-01 [DOING]` B4-01 已提前受限 `musicUrl` 小样，B4-12 提前实现会话内脚本导入、启用/删除与能力展示；安全持久化、文件/URL 系统导入、完整隔离和商店版门控仍在本阶段。
 - `P6-02` 兼容桌面列表与不感兴趣同步协议；前台服务端状态可见。
 - `P6-03` 备份、完整性校验、版本迁移和恢复预览。
 - `P6-04` 网络代理、缓存、定时停止、主题、语言和诊断。
