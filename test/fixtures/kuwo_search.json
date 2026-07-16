@@ -1,0 +1,28 @@
+{
+  "TOTAL": "2",
+  "abslist": [
+    {
+      "MUSICRID": "MUSIC_123",
+      "SONGNAME": "晴天&amp;雨",
+      "ARTIST": "周杰伦&测试歌手",
+      "ALBUM": "叶惠美",
+      "ALBUMID": "456",
+      "DURATION": "269",
+      "N_MINFO": "bitrate:128;bitrate:320;bitrate:2000"
+    },
+    {
+      "MUSICRID": "MUSIC_123",
+      "SONGNAME": "重复歌曲",
+      "ARTIST": "测试",
+      "DURATION": "1"
+    },
+    {
+      "MUSICRID": "MUSIC_789",
+      "SONGNAME": "无损测试",
+      "ARTIST": "歌手",
+      "ALBUM": "专辑",
+      "DURATION": "200",
+      "N_MINFO": "bitrate:4000"
+    }
+  ]
+}

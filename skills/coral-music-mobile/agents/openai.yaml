@@ -1,0 +1,4 @@
+interface:
+  display_name: "珊瑚音乐移动端"
+  short_description: "Flutter 三端功能复刻、架构与分阶段开发计划"
+  default_prompt: "使用 $coral-music-mobile 按桌面端功能基线规划或实施珊瑚音乐移动端开发。"

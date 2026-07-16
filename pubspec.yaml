@@ -1,0 +1,31 @@
+name: coral_music_mobile
+description: "珊瑚音乐 iOS、Android、鸿蒙移动客户端"
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.6.2
+
+dependencies:
+  crypto: ^3.0.7
+  dio: ^5.9.0
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^2.6.1
+  go_router: ^14.8.1
+  just_audio: ^0.10.6
+  just_audio_harmonyos: ^0.0.1
+  pointycastle: ^3.9.1
+  sqflite:
+    git:
+      url: https://gitee.com/openharmony-sig/flutter_sqflite.git
+      ref: 0bd638a416215b9ab74f21eef98e14797827df04
+      path: sqflite
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
