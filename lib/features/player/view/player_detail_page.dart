@@ -34,6 +34,14 @@ class _PlayerDetailPageState extends ConsumerState<PlayerDetailPage> {
         backgroundColor: Colors.transparent,
         title: const Text('播放详情'),
         actions: [
+          Builder(
+            builder: (context) => IconButton(
+              key: const Key('player-queue-button'),
+              tooltip: '播放队列',
+              onPressed: Scaffold.of(context).openEndDrawer,
+              icon: const Icon(Icons.queue_music),
+            ),
+          ),
           IconButton(
             tooltip: _panel == _DetailPanel.player ? '查看歌词' : '查看播放',
             onPressed: () => setState(
@@ -49,6 +57,7 @@ class _PlayerDetailPageState extends ConsumerState<PlayerDetailPage> {
           ),
         ],
       ),
+      endDrawer: const _PlaybackQueueDrawer(),
       body: DecoratedBox(
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -73,6 +82,71 @@ class _PlayerDetailPageState extends ConsumerState<PlayerDetailPage> {
   }
 }
 
+class _PlaybackQueueDrawer extends ConsumerWidget {
+  const _PlaybackQueueDrawer();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final queue = ref.watch(playbackQueueProvider);
+    return Drawer(
+      child: SafeArea(
+        child: Column(
+          children: [
+            ListTile(
+              title: const Text('播放队列'),
+              subtitle: Text('${queue.tracks.length} 首歌曲'),
+              trailing: IconButton(
+                tooltip: '关闭队列',
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close),
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: queue.tracks.isEmpty
+                  ? const Center(child: Text('队列为空'))
+                  : ListView.builder(
+                      itemCount: queue.tracks.length,
+                      itemBuilder: (context, index) {
+                        final track = queue.tracks[index];
+                        final isCurrent = index == queue.currentIndex;
+                        return ListTile(
+                          selected: isCurrent,
+                          leading: Icon(
+                            isCurrent
+                                ? Icons.graphic_eq
+                                : Icons.music_note_outlined,
+                          ),
+                          title: Text(
+                            track.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            track.artist.isEmpty ? '未知歌手' : track.artist,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          onTap: () async {
+                            ref
+                                .read(playbackQueueProvider.notifier)
+                                .select(index);
+                            await ref
+                                .read(playerProvider.notifier)
+                                .playTrack(track);
+                            if (context.mounted) Navigator.pop(context);
+                          },
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _PlayerPanel extends ConsumerWidget {
   const _PlayerPanel({required this.track, required this.player});
 
@@ -81,6 +155,9 @@ class _PlayerPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final mode = ref.watch(
+      playbackQueueProvider.select((queue) => queue.mode),
+    );
     final duration = player.track?.id == track.id
         ? player.duration ?? track.duration
         : track.duration;
@@ -117,6 +194,21 @@ class _PlayerPanel extends ConsumerWidget {
                 ),
           ),
           const SizedBox(height: 28),
+          Row(
+            children: [
+              const Icon(Icons.volume_up_outlined),
+              Expanded(
+                child: Semantics(
+                  label: '播放音量',
+                  value: '${(player.volume * 100).round()}%',
+                  child: Slider(
+                    value: player.volume,
+                    onChanged: ref.read(playerProvider.notifier).setVolume,
+                  ),
+                ),
+              ),
+            ],
+          ),
           Slider(
             value: progressMilliseconds,
             max: maxMilliseconds,
@@ -140,6 +232,39 @@ class _PlayerPanel extends ConsumerWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              IconButton.filledTonal(
+                tooltip: _playbackModeLabel(mode),
+                onPressed: ref.read(playbackQueueProvider.notifier).cycleMode,
+                icon: Icon(_playbackModeIcon(mode)),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: () => ref
+                    .read(playerProvider.notifier)
+                    .setSpeed(_nextPlaybackSpeed(player.speed)),
+                child: Text(
+                    '${player.speed.toStringAsFixed(player.speed % 1 == 0 ? 0 : 2)}x'),
+              ),
+              const SizedBox(width: 8),
+              if (track.availableQualities.isNotEmpty) ...[
+                PopupMenuButton<AudioQuality>(
+                  tooltip: '播放音质',
+                  onSelected: ref.read(playerProvider.notifier).setQuality,
+                  itemBuilder: (context) => [
+                    for (final quality in track.availableQualities)
+                      CheckedPopupMenuItem(
+                        value: quality,
+                        checked: quality == player.quality,
+                        child: Text(_qualityLabel(quality)),
+                      ),
+                  ],
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Text(_qualityLabel(player.quality)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
               IconButton.filledTonal(
                 tooltip: '上一首',
                 onPressed: ref.watch(playbackQueueProvider).tracks.length > 1
@@ -333,4 +458,35 @@ String _statusText(AudioEngineStatus status) => switch (status) {
       AudioEngineStatus.completed => '播放完成',
       AudioEngineStatus.error => '播放失败',
       AudioEngineStatus.idle => '准备播放',
+    };
+
+String _playbackModeLabel(PlaybackMode mode) => switch (mode) {
+      PlaybackMode.listLoop => '列表循环',
+      PlaybackMode.singleLoop => '单曲循环',
+      PlaybackMode.shuffle => '随机播放',
+    };
+
+IconData _playbackModeIcon(PlaybackMode mode) => switch (mode) {
+      PlaybackMode.listLoop => Icons.repeat,
+      PlaybackMode.singleLoop => Icons.repeat_one,
+      PlaybackMode.shuffle => Icons.shuffle,
+    };
+
+double _nextPlaybackSpeed(double current) {
+  const values = [.5, .75, 1.0, 1.25, 1.5, 2.0];
+  final currentIndex =
+      values.indexWhere((value) => (value - current).abs() < .01);
+  return values[(currentIndex + 1) % values.length];
+}
+
+String _qualityLabel(AudioQuality quality) => switch (quality) {
+      AudioQuality.master => '臻品母带',
+      AudioQuality.atmosPlus => '臻品全景声',
+      AudioQuality.atmos => '全景声',
+      AudioQuality.hires => 'Hi-Res',
+      AudioQuality.flac24bit => '24bit FLAC',
+      AudioQuality.flac => 'FLAC',
+      AudioQuality.high320k => '320k',
+      AudioQuality.high192k => '192k',
+      AudioQuality.standard128k => '128k',
     };

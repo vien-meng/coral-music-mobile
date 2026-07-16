@@ -2,6 +2,53 @@
 
 All notable changes to 珊瑚音乐移动端 (Coral Music Mobile) will be documented in this file.
 
+## [0.1.0] - 2026-07-16
+
+### QQ 音乐排行榜
+
+- 对接 QQ 音乐固定榜单与歌曲详情（HTTPS POST，期数自动取当前）
+- 实现 `MultiSourceOnlineCatalogService` 多来源分派器，支持酷我/QQ 来源切换
+- 音乐源下拉支持 QQ 来源
+- 使用 requestId 机制防止跨来源响应覆盖
+
+### 酷我歌单广场
+
+- 实现酷我热门歌单广场列表与详情页
+- 歌单详情支持歌曲列表、播放全部与单曲点击播放
+- 新增 `OnlinePlaylist` 与 `PlaylistDetail` 歌单领域模型
+
+### 酷我热搜词
+
+- 对接酷我热搜词 API（HTTPS），搜索空态显示热词 Chip，点击回填并搜索
+
+### 音频引擎与播放器
+
+- 引入 `just_audio` / `just_audio_harmonyos` 三端音频引擎，实现 `AudioEngine` 抽象及 `JustAudioEngine` 实现
+- 实现最小可播放闭环：`AudioEngine` + `PlaybackResolver` + 受限 User API
+- Android WebView User API 桥：最小 `lx` 对象，强制 HTTPS、GET/POST、20s 超时
+- 播放队列上一首/下一首（首尾循环）、播放完成自动下一首
+- 三种播放模式：列表循环、单曲循环、随机（含本轮已播放索引）
+- 新增 `PlaybackMode` 枚举（listLoop / singleLoop / shuffle）
+- 失效音源自动跳过，全队列失败后停止
+- 0.5–2.0 倍速控制、0–100% 应用内音量控制
+- 当前曲目音质选择，切换后重新取链加载
+- 排行榜、搜索、歌单详情播放入口统一接入 `PlayerController`
+
+### 播放详情页
+
+- 独立 `/player` 路由，珊瑚色渐变沉浸式详情：圆形封面、进度条、歌词入口
+- 迷你播放栏接入真实播放/暂停状态、进度条和可 seek 滑块
+
+### 共享队列面板
+
+- 播放详情右侧全高 `endDrawer`，当前项高亮、点击切歌
+
+### 平台适配
+
+- Android `minSdk` 21 → 24（`just_audio` 要求）
+- Android 真机（SM-N986U / Android 13）验证通过：`musicUrl` 取链 → 播放 → seek
+- 三端 Debug 构建通过（APK / IPA / unsigned HAP）
+
 ## [0.1.0] - 2026-07-15
 
 ### 项目初始化

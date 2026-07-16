@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../features/leaderboard/view/leaderboard_page.dart';
 import '../features/search/view/search_page.dart';
+import '../features/song_list/view/song_list_page.dart';
 import '../features/player/view/player_detail_page.dart';
 import '../features/player/view/user_api_debug_page.dart';
 import 'app_shell.dart';
@@ -31,6 +32,9 @@ GoRouter createAppRouter() => GoRouter(
                     return const LeaderboardPage();
                   }
                   if (destination.name == 'search') return const SearchPage();
+                  if (destination.name == 'song-list') {
+                    return const SongListPage();
+                  }
                   if (destination.name == 'setting') {
                     return const UserApiDebugPage();
                   }

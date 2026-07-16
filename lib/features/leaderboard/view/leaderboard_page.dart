@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/music.dart';
 import '../../player/state/playback_queue_controller.dart';
+import '../../player/state/player_controller.dart';
 import '../state/leaderboard_controller.dart';
 
 class LeaderboardPage extends ConsumerStatefulWidget {
@@ -83,12 +84,15 @@ class _Toolbar extends ConsumerWidget {
             FilledButton.tonalIcon(
               onPressed: state.tracks.isEmpty
                   ? null
-                  : () {
+                  : () async {
                       ref.read(playbackQueueProvider.notifier).replaceQueue(
                             state.tracks,
                             contextId:
                                 'leaderboard:${state.activeBoard?.id}:${state.page}',
                           );
+                      await ref
+                          .read(playerProvider.notifier)
+                          .playTrack(state.tracks.first);
                     },
               icon: const Icon(Icons.play_arrow),
               label: const Text('播放全部'),
@@ -166,12 +170,15 @@ class _Content extends ConsumerWidget {
               overflow: TextOverflow.ellipsis,
             ),
             trailing: Text(_duration(track.duration)),
-            onTap: () => ref.read(playbackQueueProvider.notifier).replaceQueue(
-                  state.tracks,
-                  startIndex: index,
-                  contextId:
-                      'leaderboard:${state.activeBoard?.id}:${state.page}',
-                ),
+            onTap: () async {
+              ref.read(playbackQueueProvider.notifier).replaceQueue(
+                    state.tracks,
+                    startIndex: index,
+                    contextId:
+                        'leaderboard:${state.activeBoard?.id}:${state.page}',
+                  );
+              await ref.read(playerProvider.notifier).playTrack(track);
+            },
           );
         },
       ),

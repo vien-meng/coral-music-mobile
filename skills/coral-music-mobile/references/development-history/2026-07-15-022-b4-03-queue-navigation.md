@@ -39,3 +39,9 @@
 ## 当前状态、风险与精确恢复入口
 
 状态保持 `DOING`。真机切换后的详情页一度显示“已暂停”，尚未确认每次切歌都立即恢复 `playing` 状态；不得据此把“队列切歌播放”标记 `DONE`。下一步从 `JustAudioEngine.load/play` 的 player-state 事件顺序开始，记录切歌时的 `processingState` 和 `playing`，再决定修复位置。随后补播放模式、自动下一首、错误跳过和随机历史。
+
+### 2026-07-16 回归中断与恢复入口
+
+- 已将 `ProcessingState.ready && !playing` 映射为 `paused`，并在 `play()` 调用后先发出 `playing` 快照，避免新曲加载完成的瞬时 `ready` 覆盖播放中的界面状态；对应单元测试已通过。
+- 最新 Debug APK 已构建，但执行 `flutter install --debug -d R5CR70B7SMA` 时 Flutter 返回“`No supported devices found with id R5CR70B7SMA`”。这是调试真机当前未连接或未授权，不是构建或业务错误。
+- 恢复时先确认 `adb devices -l` 中该设备为 `device`，再用受控 `kw` 音源重复“首曲播放 → 播放详情下一首”并确认第二曲立即为 `正在播放`、媒体焦点仍为 active。设备恢复前继续独立的自动切歌实现与单元验证。

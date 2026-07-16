@@ -1,9 +1,19 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/app_failure.dart';
+import '../../../core/http_client.dart';
 import '../../../domain/music.dart';
 import '../../leaderboard/data/online_catalog_service.dart';
 import '../../leaderboard/state/leaderboard_controller.dart';
+import '../data/kuwo_hot_search_service.dart';
+
+final kuwoHotSearchServiceProvider = Provider<KuwoHotSearchService>(
+  (ref) => KuwoHotSearchService(createHttpClient()),
+);
+
+final kuwoHotSearchProvider = FutureProvider<List<String>>(
+  (ref) => ref.watch(kuwoHotSearchServiceProvider).load(),
+);
 
 final searchProvider = StateNotifierProvider<SearchController, SearchState>(
   (ref) => SearchController(ref.watch(onlineCatalogServiceProvider)),

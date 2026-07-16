@@ -25,6 +25,8 @@ enum AudioQuality {
   standard128k,
 }
 
+enum PlaybackMode { listLoop, singleLoop, shuffle }
+
 final class Track {
   const Track({
     required this.sourceKind,
@@ -67,6 +69,35 @@ final class LeaderboardBoard {
   final OnlineSource source;
   final String name;
   final String remoteId;
+}
+
+final class OnlinePlaylist {
+  const OnlinePlaylist({
+    required this.id,
+    required this.source,
+    required this.name,
+    this.author = '',
+    this.description = '',
+    this.trackCount = 0,
+    this.playCount = '',
+    this.coverUri,
+  });
+
+  final String id;
+  final OnlineSource source;
+  final String name;
+  final String author;
+  final String description;
+  final int trackCount;
+  final String playCount;
+  final Uri? coverUri;
+}
+
+final class PlaylistDetail {
+  const PlaylistDetail({required this.playlist, required this.tracks});
+
+  final OnlinePlaylist playlist;
+  final List<Track> tracks;
 }
 
 final class PageResult<T> {

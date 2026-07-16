@@ -72,5 +72,11 @@ final class _DebugAudioEngine implements AudioEngine {
   Future<void> seek(Duration position) async {}
 
   @override
+  Future<void> setSpeed(double speed) async {}
+
+  @override
+  Future<void> setVolume(double volume) async {}
+
+  @override
   Future<void> stop() async {}
 }

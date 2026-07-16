@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../player/state/playback_queue_controller.dart';
+import '../../player/state/player_controller.dart';
 import '../state/search_controller.dart';
 
 class SearchPage extends ConsumerStatefulWidget {
@@ -23,6 +24,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(searchProvider);
+    final hotTerms = ref.watch(kuwoHotSearchProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -82,7 +84,19 @@ class _SearchPageState extends ConsumerState<SearchPage> {
               ),
             ],
           ),
-        Expanded(child: _SearchResults(state: state)),
+        Expanded(
+          child: state.tracks.isEmpty && state.query.isEmpty
+              ? _HotSearchTerms(
+                  terms: hotTerms,
+                  onSelected: (term) {
+                    _queryController.text = term;
+                    _submit(term);
+                    setState(() {});
+                  },
+                  onRetry: () => ref.invalidate(kuwoHotSearchProvider),
+                )
+              : _SearchResults(state: state),
+        ),
         if (state.tracks.isNotEmpty) _Pagination(state: state),
       ],
     );
@@ -92,6 +106,50 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     FocusScope.of(context).unfocus();
     ref.read(searchProvider.notifier).submit(query);
   }
+}
+
+class _HotSearchTerms extends StatelessWidget {
+  const _HotSearchTerms({
+    required this.terms,
+    required this.onSelected,
+    required this.onRetry,
+  });
+
+  final AsyncValue<List<String>> terms;
+  final ValueChanged<String> onSelected;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => terms.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (_, __) => Center(
+          child: TextButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh),
+            label: const Text('热搜词加载失败，点击重试'),
+          ),
+        ),
+        data: (items) => items.isEmpty
+            ? const Center(child: Text('暂无热搜词'))
+            : ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  Text('热搜词', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final term in items)
+                        ActionChip(
+                          label: Text(term),
+                          onPressed: () => onSelected(term),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+      );
 }
 
 class _SearchResults extends ConsumerWidget {
@@ -129,12 +187,15 @@ class _SearchResults extends ConsumerWidget {
               overflow: TextOverflow.ellipsis,
             ),
             trailing: Text(_duration(track.duration)),
-            onTap: () => ref.read(playbackQueueProvider.notifier).replaceQueue(
-                  state.tracks,
-                  startIndex: index,
-                  contextId:
-                      'search:${state.source.id}:${state.query}:${state.page}',
-                ),
+            onTap: () async {
+              ref.read(playbackQueueProvider.notifier).replaceQueue(
+                    state.tracks,
+                    startIndex: index,
+                    contextId:
+                        'search:${state.source.id}:${state.query}:${state.page}',
+                  );
+              await ref.read(playerProvider.notifier).playTrack(track);
+            },
           );
         },
       ),

@@ -52,9 +52,19 @@
 | B3-02 搜索状态与界面 | DONE | `development-history/2026-07-15-016-b3-02-search-state-and-ui.md` |
 | B3-03 酷狗排行榜可行性验证 | BLOCKED | `development-history/2026-07-15-017-b3-03-kugou-leaderboard-feasibility.md` |
 | B3-04 迁移 QQ 音乐排行榜 | DONE | `development-history/2026-07-15-018-b3-04-qq-leaderboard.md` |
+| B3-05 酷我歌单广场纵向切片 | DOING | `development-history/2026-07-16-031-b3-05-kuwo-song-list.md` |
+| B3-06 酷我热搜词 | DOING | `development-history/2026-07-16-032-b3-06-kuwo-hot-search.md` |
 | B4-01 最小可播放闭环：音频引擎、取链与受限 User API | DOING | `development-history/2026-07-15-020-b4-01-minimum-playback-and-user-api.md` |
 | B4-02 播放详情与歌词阅读界面 | DONE | `development-history/2026-07-15-021-b4-02-player-detail-and-lyrics-ui.md` |
 | B4-03 队列前后切歌基础 | DOING | `development-history/2026-07-15-022-b4-03-queue-navigation.md` |
+| B4-04 播放完成自动下一首 | DOING | `development-history/2026-07-16-023-b4-04-auto-next.md` |
+| B4-05 播放模式与随机历史 | DOING | `development-history/2026-07-16-024-b4-05-playback-modes.md` |
+| B4-06 失效音源自动跳过 | DOING | `development-history/2026-07-16-025-b4-06-error-skip.md` |
+| B4-07 播放倍速控制 | DOING | `development-history/2026-07-16-026-b4-07-playback-rate.md` |
+| B4-08 播放音量控制 | DOING | `development-history/2026-07-16-027-b4-08-volume-control.md` |
+| B4-09 共享播放队列面板 | DOING | `development-history/2026-07-16-028-b4-09-queue-panel.md` |
+| B4-10 当前曲目音质选择 | DOING | `development-history/2026-07-16-029-b4-10-quality-selection.md` |
+| B4-11 在线列表播放入口接线 | DOING | `development-history/2026-07-16-030-b4-11-online-play-entry.md` |
 
 ## 里程碑
 
@@ -89,8 +99,8 @@
 
 - `P2-01 [DOING]` 已提取酷我榜单 fixture；搜索、歌单和其余来源待迁移。
 - `P2-02 [DOING]` 已建立五源枚举、酷我与 QQ 真实榜单；酷狗桌面端点 TLS 不可用而阻塞，其余两源待迁移。
-- `P2-03 [DOING]` 已完成酷我歌曲搜索、分页、错误重试与旧响应隔离；歌单、综合、历史、热门词和其余来源待迁移。
-- `P2-04` 实现歌单分类、排序、列表、详情、收藏和导入。
+- `P2-03 [DOING]` 已完成酷我歌曲搜索、分页、错误重试与旧响应隔离；B3-06 正在补热门词，综合/历史和其余来源待迁移。
+- `P2-04 [DOING]` B3-05 正在实现酷我热门歌单列表、详情和播放入口；分类、排序、收藏、导入及其他来源待后续。
 - `P2-05 [DOING]` 已实现酷我分页榜单及 QQ 当前榜单目录/详情，支持来源切换和跨导航状态；其余来源待迁移，跨来源缓存待后续。
 - `P2-06 [DOING]` 已实现榜单/搜索旧响应隔离、图片惰性列表和错误重试；取消与持久缓存待后续。
 - `P2-07 [DOING]` 已实现酷我/QQ 榜单播放全部及歌曲点击替换内存队列；歌单待迁移。
@@ -99,11 +109,11 @@
 
 ### Phase 3：播放器核心（5 周）
 
-- `P3-01 [DOING]` B4-01 已实现最小 `AudioEngine`，Android 真机播放/seek 通过；iOS/鸿蒙真机与 `MediaSessionBridge` 三端适配仍待完成。
-- `P3-02 [DOING]` B4-01 已实现在线 `PlaybackResolver` 与 Android 受限 User API `musicUrl`，并通过真机 `kw` 取链；四类来源、音质降级/换源/cache 后续扩展。
-- `P3-03 [DOING]` B4-03 已实现队列首尾循环的上一首/下一首与详情页控制；切歌后即时恢复播放需继续真机排查，三种模式、自动下一首、错误跳过和随机历史待补。
-- `P3-04` 实现 seek、倍速、进度保存、重启恢复和音频焦点中断。
-- `P3-05 [DOING]` B4-02 已实现可从迷你播放栏进入的播放详情、专辑卡片、进度和播放控制；共享队列、质量选择和收藏待补。
+- `P3-01 [DOING]` B4-01 已实现最小 `AudioEngine`，Android 真机播放/seek 通过；B4-11 正在把排行榜的点歌/播放全部接入统一播放控制器，iOS/鸿蒙真机与 `MediaSessionBridge` 三端适配仍待完成。
+- `P3-02 [DOING]` B4-01 已实现在线 `PlaybackResolver` 与 Android 受限 User API `musicUrl`，并通过真机 `kw` 取链；B4-10 正在接入当前曲目音质选择，音质降级、换源/cache 与四类来源待后续扩展。
+- `P3-03 [DOING]` B4-03 已实现队列首尾循环的上一首/下一首与详情页控制；B4-04 已接入完成事件自动切歌，B4-05 正在扩展三种模式与随机历史，B4-06 正在补失效音源自动跳过。切歌后即时恢复播放仍待 Android 回归。
+- `P3-04 [DOING]` seek 已在 B4-01 通过 Android 真机；B4-07 正在接入 0.5–2.0 倍速控制，进度保存、重启恢复和音频焦点中断待后续。
+- `P3-05 [DOING]` B4-02 已实现可从迷你播放栏进入的播放详情、专辑卡片、进度和播放控制；B4-09 正在实现共享队列面板，质量选择和收藏待补。
 - `P3-06 [DOING]` B4-02 已实现歌词阅读入口与数据未就绪空态；歌词解析、逐字时间轴、翻译、罗马音、偏移、缓存和本地优先级待补。
 - `P3-07` 实现后台元数据、媒体按键和平台允许的歌词展示。
 - `P3-08` 实现评论入口、可关闭可视化及经 Phase 0 验证的平台音效。

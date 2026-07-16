@@ -39,6 +39,8 @@ abstract interface class AudioEngine {
   Future<void> play();
   Future<void> pause();
   Future<void> seek(Duration position);
+  Future<void> setSpeed(double speed);
+  Future<void> setVolume(double volume);
   Future<void> stop();
   Future<void> dispose();
 }
@@ -52,8 +54,9 @@ final class JustAudioEngine implements AudioEngine {
           ProcessingState.loading ||
           ProcessingState.buffering =>
             AudioEngineStatus.loading,
-          ProcessingState.ready =>
-            state.playing ? AudioEngineStatus.playing : AudioEngineStatus.ready,
+          ProcessingState.ready => state.playing
+              ? AudioEngineStatus.playing
+              : AudioEngineStatus.paused,
           ProcessingState.completed => AudioEngineStatus.completed,
         },
       );
@@ -85,15 +88,28 @@ final class JustAudioEngine implements AudioEngine {
   }
 
   @override
-  Future<void> play() async {
-    unawaited(_player.play());
+  Future<void> play() {
+    _emit(status: AudioEngineStatus.playing, error: null);
+    unawaited(_player.play().catchError((_) {
+      _emit(status: AudioEngineStatus.error, error: '音频播放失败');
+    }));
+    return Future.value();
   }
 
   @override
-  Future<void> pause() => _player.pause();
+  Future<void> pause() async {
+    await _player.pause();
+    _emit(status: AudioEngineStatus.paused);
+  }
 
   @override
   Future<void> seek(Duration position) => _player.seek(position);
+
+  @override
+  Future<void> setSpeed(double speed) => _player.setSpeed(speed);
+
+  @override
+  Future<void> setVolume(double volume) => _player.setVolume(volume);
 
   @override
   Future<void> stop() => _player.stop();
