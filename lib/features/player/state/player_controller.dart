@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/app_failure.dart';
@@ -230,8 +231,13 @@ final class PlayerController extends StateNotifier<PlayerState> {
       await _engine.load(track, uri);
       if (request != _playRequest) return;
       await _engine.play();
-    } on Object catch (error) {
+    } on Object catch (error, stackTrace) {
       if (request != _playRequest) return;
+      assert(() {
+        debugPrint('调试音频加载失败：${error.runtimeType}');
+        debugPrintStack(stackTrace: stackTrace);
+        return true;
+      }());
       state = state.copyWith(
         status: AudioEngineStatus.error,
         error: AppFailure(

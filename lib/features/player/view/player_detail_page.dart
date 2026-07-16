@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/app_theme.dart';
 import '../../../domain/music.dart';
 import '../../library/state/library_controller.dart';
 import '../data/audio_engine.dart';
@@ -32,7 +33,6 @@ class _PlayerDetailPageState extends ConsumerState<PlayerDetailPage> {
       playbackQueueProvider.select((queue) => queue.currentTrack),
     );
     final track = player.track ?? queueTrack;
-    final colors = Theme.of(context).colorScheme;
     if (track?.id != _favoriteTrackId) {
       _favoriteTrackId = track?.id;
       _favorite = track == null
@@ -41,9 +41,25 @@ class _PlayerDetailPageState extends ConsumerState<PlayerDetailPage> {
     }
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
-        title: const Text('播放详情'),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _PanelTab(
+              label: '正在播放',
+              selected: _panel == _DetailPanel.player,
+              onTap: () => setState(() => _panel = _DetailPanel.player),
+            ),
+            const SizedBox(width: 18),
+            _PanelTab(
+              label: '歌词',
+              selected: _panel == _DetailPanel.lyrics,
+              onTap: () => setState(() => _panel = _DetailPanel.lyrics),
+            ),
+          ],
+        ),
         actions: [
           if (track != null)
             FutureBuilder<bool>(
@@ -91,13 +107,7 @@ class _PlayerDetailPageState extends ConsumerState<PlayerDetailPage> {
       ),
       endDrawer: const _PlaybackQueueDrawer(),
       body: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [colors.primaryContainer, colors.surface],
-          ),
-        ),
+        decoration: const BoxDecoration(gradient: coralPageGradient),
         child: SafeArea(
           top: false,
           child: track == null
@@ -112,6 +122,51 @@ class _PlayerDetailPageState extends ConsumerState<PlayerDetailPage> {
       ),
     );
   }
+}
+
+class _PanelTab extends StatelessWidget {
+  const _PanelTab({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: selected
+                          ? Theme.of(context).colorScheme.onSurface
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
+                    ),
+              ),
+              const SizedBox(height: 4),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                width: selected ? 16 : 0,
+                height: 2,
+                decoration: const BoxDecoration(
+                  color: CoralPalette.mint,
+                  borderRadius: BorderRadius.all(Radius.circular(2)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
 }
 
 class _PlaybackQueueDrawer extends ConsumerWidget {
@@ -209,9 +264,8 @@ class _PlayerPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final mode = ref.watch(
-      playbackQueueProvider.select((queue) => queue.mode),
-    );
+    final mode = ref.watch(playbackQueueProvider.select((queue) => queue.mode));
+    final queue = ref.watch(playbackQueueProvider);
     final duration = player.track?.id == track.id
         ? player.duration ?? track.duration
         : track.duration;
@@ -226,19 +280,22 @@ class _PlayerPanel extends ConsumerWidget {
 
     return SingleChildScrollView(
       key: const ValueKey('player-panel'),
-      padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+      padding: const EdgeInsets.fromLTRB(24, 98, 24, 36),
       child: Column(
         children: [
           _AlbumArtwork(track: track),
-          const SizedBox(height: 32),
+          const SizedBox(height: 28),
           Text(
             track.title,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.headlineSmall,
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -.6,
+                ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 7),
           Text(
             track.artist.isEmpty ? '未知歌手' : track.artist,
             maxLines: 1,
@@ -247,60 +304,92 @@ class _PlayerPanel extends ConsumerWidget {
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
           ),
-          const SizedBox(height: 28),
-          Row(
-            children: [
-              const Icon(Icons.volume_up_outlined),
-              Expanded(
-                child: Semantics(
-                  label: '播放音量',
-                  value: '${(player.volume * 100).round()}%',
-                  child: Slider(
-                    value: player.volume,
-                    onChanged: ref.read(playerProvider.notifier).setVolume,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          Slider(
-            value: progressMilliseconds,
-            max: maxMilliseconds,
-            onChanged: hasProgress
-                ? (value) => ref
-                    .read(playerProvider.notifier)
-                    .seek(Duration(milliseconds: value.round()))
-                : null,
+          const SizedBox(height: 26),
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 3,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
+              activeTrackColor: CoralPalette.player,
+              inactiveTrackColor: CoralPalette.lilac.withValues(alpha: .45),
+            ),
+            child: Slider(
+              value: progressMilliseconds,
+              max: maxMilliseconds,
+              onChanged: hasProgress
+                  ? (value) => ref
+                      .read(playerProvider.notifier)
+                      .seek(Duration(milliseconds: value.round()))
+                  : null,
+            ),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(_duration(position)),
-                Text(_duration(duration)),
-              ],
+              children: [Text(_duration(position)), Text(_duration(duration))],
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              IconButton.filledTonal(
+              IconButton(
                 tooltip: _playbackModeLabel(mode),
                 onPressed: ref.read(playbackQueueProvider.notifier).cycleMode,
                 icon: Icon(_playbackModeIcon(mode)),
               ),
-              const SizedBox(width: 8),
-              TextButton(
-                onPressed: () => ref
+              const SizedBox(width: 14),
+              IconButton(
+                tooltip: '上一首',
+                onPressed: queue.tracks.length > 1
+                    ? () => _playSibling(ref, previous: true)
+                    : null,
+                icon: const Icon(Icons.skip_previous_rounded, size: 32),
+              ),
+              const SizedBox(width: 18),
+              SizedBox.square(
+                dimension: 70,
+                child: FilledButton(
+                  key: const Key('player-detail-toggle'),
+                  onPressed: () =>
+                      ref.read(playerProvider.notifier).toggle(track),
+                  style: FilledButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    shape: const CircleBorder(),
+                    backgroundColor: CoralPalette.player,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: Icon(
+                    player.isPlaying
+                        ? Icons.pause_rounded
+                        : Icons.play_arrow_rounded,
+                    size: 36,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 18),
+              IconButton(
+                tooltip: '下一首',
+                onPressed:
+                    queue.tracks.length > 1 ? () => _playSibling(ref) : null,
+                icon: const Icon(Icons.skip_next_rounded, size: 32),
+              ),
+            ],
+          ),
+          const SizedBox(height: 22),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 8,
+            children: [
+              _SmallControl(
+                label:
+                    '${player.speed.toStringAsFixed(player.speed % 1 == 0 ? 0 : 2)}x',
+                tooltip: '播放倍速',
+                onTap: () => ref
                     .read(playerProvider.notifier)
                     .setSpeed(_nextPlaybackSpeed(player.speed)),
-                child: Text(
-                    '${player.speed.toStringAsFixed(player.speed % 1 == 0 ? 0 : 2)}x'),
               ),
-              const SizedBox(width: 8),
-              if (track.availableQualities.isNotEmpty) ...[
+              if (track.availableQualities.isNotEmpty)
                 PopupMenuButton<AudioQuality>(
                   tooltip: '播放音质',
                   onSelected: ref.read(playerProvider.notifier).setQuality,
@@ -312,43 +401,18 @@ class _PlayerPanel extends ConsumerWidget {
                         child: Text(_qualityLabel(quality)),
                       ),
                   ],
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Text(_qualityLabel(player.quality)),
-                  ),
+                  child: _SmallControl(
+                      label: _qualityLabel(player.quality), tooltip: '播放音质'),
                 ),
-                const SizedBox(width: 8),
-              ],
-              IconButton.filledTonal(
-                tooltip: '上一首',
-                onPressed: ref.watch(playbackQueueProvider).tracks.length > 1
-                    ? () => _playSibling(ref, previous: true)
-                    : null,
-                icon: const Icon(Icons.skip_previous),
-              ),
-              const SizedBox(width: 20),
-              FilledButton.icon(
-                key: const Key('player-detail-toggle'),
-                onPressed: () =>
-                    ref.read(playerProvider.notifier).toggle(track),
-                icon: Icon(player.isPlaying ? Icons.pause : Icons.play_arrow),
-                label: Text(player.isPlaying ? '暂停播放' : '开始播放'),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(176, 56),
-                  textStyle: Theme.of(context).textTheme.titleMedium,
-                ),
-              ),
-              const SizedBox(width: 20),
-              IconButton.filledTonal(
-                tooltip: '下一首',
-                onPressed: ref.watch(playbackQueueProvider).tracks.length > 1
-                    ? () => _playSibling(ref)
-                    : null,
-                icon: const Icon(Icons.skip_next),
+              _SmallControl(
+                label: '${(player.volume * 100).round()}%',
+                icon: Icons.volume_up_outlined,
+                tooltip: '播放音量',
+                onTap: () => _showVolumeSheet(context, ref, player.volume),
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 14),
           Text(
             player.error?.message ?? _statusText(player.status),
             textAlign: TextAlign.center,
@@ -365,9 +429,72 @@ class _PlayerPanel extends ConsumerWidget {
 
   Future<void> _playSibling(WidgetRef ref, {bool previous = false}) async {
     final queue = ref.read(playbackQueueProvider.notifier);
-    final track = previous ? queue.selectPrevious() : queue.selectNext();
-    if (track != null) await ref.read(playerProvider.notifier).playTrack(track);
+    final sibling = previous ? queue.selectPrevious() : queue.selectNext();
+    if (sibling != null) {
+      await ref.read(playerProvider.notifier).playTrack(sibling);
+    }
   }
+
+  void _showVolumeSheet(BuildContext context, WidgetRef ref, double value) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (context) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 22, 24, 34),
+        child: Row(
+          children: [
+            const Icon(Icons.volume_up_outlined),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Semantics(
+                label: '播放音量',
+                value: '${(value * 100).round()}%',
+                child: Slider(
+                  value: value,
+                  onChanged: ref.read(playerProvider.notifier).setVolume,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SmallControl extends StatelessWidget {
+  const _SmallControl(
+      {required this.label, required this.tooltip, this.icon, this.onTap});
+
+  final String label;
+  final String tooltip;
+  final IconData? icon;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+        message: tooltip,
+        child: Material(
+          color: Theme.of(context).colorScheme.surface.withValues(alpha: .8),
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (icon != null) ...[
+                    Icon(icon, size: 16),
+                    const SizedBox(width: 4)
+                  ],
+                  Text(label, style: Theme.of(context).textTheme.labelMedium),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
 }
 
 class _LyricsPanel extends ConsumerStatefulWidget {
@@ -425,7 +552,7 @@ class _LyricsPanelState extends ConsumerState<_LyricsPanel> {
         return ListView.builder(
           key: const ValueKey('lyrics-panel'),
           controller: _scrollController,
-          padding: const EdgeInsets.fromLTRB(28, 32, 28, 80),
+          padding: const EdgeInsets.fromLTRB(28, 104, 28, 80),
           itemCount: lines.length,
           itemBuilder: (context, index) {
             final line = lines[index];
@@ -453,9 +580,13 @@ class _LyricsPanelState extends ConsumerState<_LyricsPanel> {
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           color: isActive
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.onSurfaceVariant,
-                          fontWeight: isActive ? FontWeight.bold : null,
+                              ? CoralPalette.player
+                              : Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant
+                                  .withValues(alpha: .52),
+                          fontWeight:
+                              isActive ? FontWeight.w800 : FontWeight.w500,
                         ),
                   ),
                   if (line.translation case final translation?)
@@ -542,28 +673,27 @@ class _AlbumArtwork extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 336),
+        constraints: const BoxConstraints(maxWidth: 322),
         child: AspectRatio(
           aspectRatio: 1,
           child: Container(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(40),
-              gradient: LinearGradient(
+              borderRadius: BorderRadius.circular(42),
+              gradient: const LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Theme.of(context).colorScheme.primary,
-                  Theme.of(context).colorScheme.tertiary,
+                  CoralPalette.sky,
+                  CoralPalette.periwinkle,
+                  CoralPalette.pink
                 ],
               ),
+              border: Border.all(color: Colors.white.withValues(alpha: .74)),
               boxShadow: [
                 BoxShadow(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .primary
-                      .withValues(alpha: .28),
-                  blurRadius: 32,
+                  color: CoralPalette.player.withValues(alpha: .2),
+                  blurRadius: 36,
                   offset: const Offset(0, 16),
                 ),
               ],
@@ -574,21 +704,21 @@ class _AlbumArtwork extends StatelessWidget {
                 color: Theme.of(context).colorScheme.surfaceContainerHighest,
               ),
               child: Padding(
-                padding: const EdgeInsets.all(18),
+                padding: const EdgeInsets.all(16),
                 child: ClipOval(
                   child: track.coverUri == null
                       ? Icon(
-                          Icons.music_note,
-                          size: 96,
-                          color: Theme.of(context).colorScheme.primary,
+                          Icons.music_note_rounded,
+                          size: 104,
+                          color: CoralPalette.player,
                         )
                       : Image.network(
                           track.coverUri.toString(),
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Icon(
-                            Icons.music_note,
-                            size: 96,
-                            color: Theme.of(context).colorScheme.primary,
+                            Icons.music_note_rounded,
+                            size: 104,
+                            color: CoralPalette.player,
                           ),
                         ),
                 ),

@@ -1,4 +1,3 @@
-import 'package:coral_music_mobile/domain/music.dart';
 import 'package:coral_music_mobile/features/player/view/mini_player.dart';
 import 'package:coral_music_mobile/main.dart';
 import 'package:flutter/material.dart';
@@ -13,16 +12,16 @@ void main() {
         .pumpWidget(CoralMusicApp(catalogService: FakeCatalogService()));
     await tester.pumpAndSettle();
 
-    expect(find.text('珊瑚音乐 · 排行榜'), findsOneWidget);
+    expect(find.text('首页'), findsOneWidget);
     expect(find.text('测试榜单'), findsOneWidget);
     expect(find.text('未在播放'), findsOneWidget);
 
-    await tester.tap(find.text('更多'));
+    await tester.tap(find.text('我的'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('下载'));
     await tester.pumpAndSettle();
 
-    expect(find.text('珊瑚音乐 · 下载'), findsOneWidget);
+    expect(find.text('下载'), findsOneWidget);
   });
 
   testWidgets('play all replaces queue and updates mini player',
@@ -48,7 +47,7 @@ void main() {
     await tester.tap(find.byType(MiniPlayer));
     await tester.pumpAndSettle();
 
-    expect(find.text('播放详情'), findsOneWidget);
+    expect(find.text('正在播放'), findsOneWidget);
     expect(find.text('测试歌曲'), findsOneWidget);
 
     await tester.tap(find.byTooltip('查看歌词'));
@@ -63,7 +62,7 @@ void main() {
         .pumpWidget(CoralMusicApp(catalogService: FakeCatalogService()));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('搜索'));
+    await tester.tap(find.text('发现'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), '测试');
     await tester.testTextInput.receiveAction(TextInputAction.search);
@@ -79,9 +78,7 @@ void main() {
         .pumpWidget(CoralMusicApp(catalogService: FakeCatalogService()));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byType(DropdownButton<OnlineSource>));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('QQ音乐').last);
+    await tester.tap(find.text('QQ音乐'));
     await tester.pumpAndSettle();
 
     expect(find.text('QQ 测试榜单'), findsOneWidget);

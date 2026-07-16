@@ -45,3 +45,6 @@
 
 - 原生运行时将把“导入替换、切换启用、移除”统一视作旧脚本失效：取消旧的 `musicUrl`/歌词请求，并将 WebView 导航到空白受限文档后仅重建桥接对象。
 - 这样既避免旧结果回流，也避免已移除脚本继续驻留在活动 JavaScript 文档中；不把脚本写入磁盘或日志。
+- 实际修改：`android/app/src/main/kotlin/com/coral/music/mobile/UserApiRunner.kt` 的 `load`、`clear`、`dispose` 共用在途请求取消逻辑；`clear` 重置 WebView 文档。验证通过：`flutter build apk --debug`，产物为 `build/app/outputs/flutter-apk/app-debug.apk`。切换/移除脚本的 Android 真机回归仍待补录。
+- 输入边界：Dart 和 Android 原生运行时均将纯空白脚本视为无效，立即返回既有“音源脚本为空或超过大小限制”错误，不启动 WebView 初始化超时。
+- 验证通过：`test/user_api_runner_test.dart` 使用 mock MethodChannel 确认空白脚本不会调用原生运行时；`flutter test test/user_api_runner_test.dart -r compact` 通过。

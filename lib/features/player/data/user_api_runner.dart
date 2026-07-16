@@ -27,7 +27,7 @@ final class MethodChannelUserApiRunner implements UserApiRunner {
 
   @override
   Future<UserApiManifest> load(String script) async {
-    if (script.isEmpty || script.length > _scriptLimit) {
+    if (script.trim().isEmpty || script.length > _scriptLimit) {
       throw const AppFailure(
         code: AppFailureCode.invalidData,
         message: '音源脚本为空或超过大小限制',
@@ -101,10 +101,13 @@ final class MethodChannelUserApiRunner implements UserApiRunner {
         'musicInfo': _legacyMusicInfo(track),
       });
       final uri = Uri.tryParse(value ?? '');
-      if (uri == null || uri.scheme != 'https' || value!.length > 8192) {
+      if (uri == null ||
+          !{'http', 'https'}.contains(uri.scheme) ||
+          uri.host.isEmpty ||
+          value!.length > 8192) {
         throw const AppFailure(
           code: AppFailureCode.invalidData,
-          message: '音源未返回安全的 HTTPS 播放地址',
+          message: '音源未返回有效的 HTTP 播放地址',
         );
       }
       return uri;
@@ -182,15 +185,48 @@ final class MethodChannelUserApiRunner implements UserApiRunner {
         AudioQuality.master => 'master',
       };
 
-  static Map<String, Object?> _legacyMusicInfo(Track track) => {
-        'source': track.sourceId,
-        'songmid': track.sourceTrackId,
-        'name': track.title,
-        'singer': track.artist,
-        'albumName': track.album ?? '',
-        'albumId': track.extra['albumId'],
-        'albumMid': track.extra['albumMid'],
-        'songId': track.extra['songId'],
-        'strMediaMid': track.extra['mediaMid'],
-      };
+  static Map<String, Object?> _legacyMusicInfo(Track track) {
+    final songId = track.extra['songId'] ?? track.sourceTrackId;
+    final meta = <String, Object?>{
+      'songId': songId,
+      'albumName': track.album ?? '',
+      'picUrl': track.coverUri?.toString(),
+      'albumId': track.extra['albumId'],
+      'albumMid': track.extra['albumMid'],
+      'strMediaMid': track.extra['mediaMid'],
+      'hash': track.extra['hash'],
+      'copyrightId': track.extra['copyrightId'] ?? songId,
+      'qualitys': [
+        for (final quality in track.availableQualities)
+          {'type': _qualityName(quality), 'size': null},
+      ],
+      '_qualitys': {
+        for (final quality in track.availableQualities)
+          _qualityName(quality): {'size': null},
+      },
+    };
+    return {
+      // Desktop User API scripts consume this MusicInfo shape.
+      'id': track.sourceTrackId,
+      'name': track.title,
+      'singer': track.artist,
+      'source': track.sourceId,
+      'interval': _formatInterval(track.duration),
+      'meta': meta,
+      // These fields keep compatibility with older scripts that predate meta.
+      'songmid': track.sourceTrackId,
+      'albumName': track.album ?? '',
+      'albumId': meta['albumId'],
+      'albumMid': meta['albumMid'],
+      'songId': songId,
+      'strMediaMid': meta['strMediaMid'],
+    };
+  }
+
+  static String? _formatInterval(Duration? duration) {
+    if (duration == null) return null;
+    final minutes = duration.inMinutes;
+    final seconds = duration.inSeconds.remainder(60);
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
 }

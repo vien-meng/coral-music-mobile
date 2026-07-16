@@ -20,6 +20,8 @@
 ## 当前进度
 
 - 新增流式 HTTPS 下载器，先检查地址、响应长度并在读取过程中限制 256 KiB，最后严格 UTF-8 解码；Dio 网络错误复用统一脱敏映射。
+- 禁止重定向：避免已校验的 HTTPS 地址在下载时转向 HTTP 或未审计目标；3xx 继续按统一 HTTP 错误返回。
+- 验证通过：`dart format lib/features/player/data/user_api_script_fetcher.dart` 和 `flutter test test/user_api_script_fetcher_test.dart -r compact`；重定向拒绝的真机网络回归待补。
 - 音源管理页支持粘贴脚本或填写 HTTPS 地址，两条路径均进入原有 `importScript` 验证、启用、恢复旧脚本与移除流程。
 - 已新增非 HTTPS 拒绝测试；聚焦 `flutter test`、`flutter analyze --no-fatal-infos` 通过。
 

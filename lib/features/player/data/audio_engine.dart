@@ -55,8 +55,8 @@ final class JustAudioEngine implements AudioEngine {
   Future<_CoralAudioHandler>? _handler;
   final _snapshots = StreamController<AudioEngineSnapshot>.broadcast();
   final _commands = StreamController<AudioEngineCommand>.broadcast();
-  Future<StreamSubscription<AudioEngineSnapshot>>? _snapshotSubscription;
-  Future<StreamSubscription<AudioEngineCommand>>? _commandSubscription;
+  StreamSubscription<AudioEngineSnapshot>? _snapshotSubscription;
+  StreamSubscription<AudioEngineCommand>? _commandSubscription;
 
   @override
   Stream<AudioEngineSnapshot> get snapshots => _snapshots.stream;
@@ -92,31 +92,37 @@ final class JustAudioEngine implements AudioEngine {
 
   @override
   Future<void> dispose() async {
-    await (await _snapshotSubscription)?.cancel();
-    await (await _commandSubscription)?.cancel();
+    await _snapshotSubscription?.cancel();
+    await _commandSubscription?.cancel();
     await _snapshots.close();
     await _commands.close();
   }
 
-  Future<_CoralAudioHandler> _getHandler() {
-    final handler = _handler ??= _createHandler();
-    _snapshotSubscription ??= handler.then(
-      (value) => value.snapshots.listen(
+  Future<_CoralAudioHandler> _getHandler() async {
+    final future = _handler ??= _createHandler();
+    try {
+      final handler = await future;
+      _snapshotSubscription ??= handler.snapshots.listen(
         _snapshots.add,
         onError: (_, __) => _snapshots.add(const AudioEngineSnapshot(
           status: AudioEngineStatus.error,
           error: '音频播放失败',
         )),
-      ),
-    );
-    _commandSubscription ??=
-        handler.then((value) => value.commands.listen(_commands.add));
-    return handler;
+      );
+      _commandSubscription ??= handler.commands.listen(_commands.add);
+      return handler;
+    } on Object {
+      if (identical(_handler, future)) _handler = null;
+      rethrow;
+    }
   }
 }
 
 Future<_CoralAudioHandler> _createHandler() async {
+  var backgroundMediaEnabled = false;
   try {
+    await _setBackgroundMediaEnabled(true);
+    backgroundMediaEnabled = true;
     final handler = await AudioService.init(
       builder: _CoralAudioHandler.new,
       config: const AudioServiceConfig(
@@ -128,8 +134,25 @@ Future<_CoralAudioHandler> _createHandler() async {
         .configure(AudioSessionConfiguration.music());
     return handler;
   } on MissingPluginException {
+    if (backgroundMediaEnabled) await _setBackgroundMediaEnabled(false);
     // ponytail: Harmony falls back to its just_audio implementation until audio_service gains an OHOS backend.
     return _CoralAudioHandler();
+  } on Object {
+    if (backgroundMediaEnabled) await _setBackgroundMediaEnabled(false);
+    rethrow;
+  }
+}
+
+const _backgroundMediaChannel = MethodChannel('coral_music/background_media');
+
+Future<void> _setBackgroundMediaEnabled(bool enabled) async {
+  try {
+    await _backgroundMediaChannel.invokeMethod<void>(
+      'setBackgroundMediaEnabled',
+      {'enabled': enabled},
+    );
+  } on MissingPluginException {
+    // ponytail: only Android needs a manifest receiver; other platforms own their media route.
   }
 }
 
@@ -203,6 +226,7 @@ final class _CoralAudioHandler extends BaseAudioHandler with SeekHandler {
     await _player.stop();
     _emit(status: AudioEngineStatus.idle);
     await super.stop();
+    await _setBackgroundMediaEnabled(false);
   }
 
   void _emit(

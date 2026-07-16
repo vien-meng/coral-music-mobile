@@ -22,7 +22,10 @@ final class UserApiScriptFetcher {
     try {
       final response = await _dio.getUri<ResponseBody>(
         uri,
-        options: Options(responseType: ResponseType.stream),
+        options: Options(
+          responseType: ResponseType.stream,
+          followRedirects: false,
+        ),
       );
       final contentLength =
           int.tryParse(response.headers.value('content-length') ?? '');
