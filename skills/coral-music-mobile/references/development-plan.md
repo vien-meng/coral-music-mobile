@@ -80,6 +80,9 @@
 | B4-05 播放模式与随机历史　　　　　　　　　　　　　　 | DONE　  | `development-history/2026-07-16-024-b4-05-playback-modes.md`　　　　　　　　 |
 | B4-25 在线封面、曲目信息与歌词服务补全　　　　　　　 | DOING  | `development-history/2026-07-17-075-b4-25-online-artwork-and-lyrics.md`      |
 | B4-26 播放音频文件信息探测　　　　　　　　　　　　　 | DOING  | `development-history/2026-07-17-076-b4-26-audio-file-info.md`                 |
+| B4-27 iOS 受限 User API 运行时　　　　　　　　　　　 | DOING  | `development-history/2026-07-17-077-b4-27-ios-user-api-runtime.md`            |
+| B4-28 启动恢复最近播放曲目　　　　　　　　　　　　　 | DOING  | `development-history/2026-07-17-078-b4-28-launch-playback-restore.md`         |
+| B4-29 音频引擎重复错误去重　　　　　　　　　　　　　 | DOING  | `development-history/2026-07-17-079-b4-29-engine-error-deduplication.md`     |
 | B4-06 失效音源自动跳过　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-025-b4-06-error-skip.md`　　　　　　　　　　 |
 | B4-07 播放倍速控制　　　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-026-b4-07-playback-rate.md`　　　　　　　　  |
 | B4-08 播放音量控制　　　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-027-b4-08-volume-control.md`　　　　　　　　 |
@@ -122,7 +125,7 @@
 - `P0-06 [DOING]` B5-01 正在以 OpenHarmony 适配的 `flutter_sqflite` 固定版本验证 SQLite migration；卸载/重装、系统备份边界和安全存储仍待真机验证。
 - `P0-07` 文件选择、目录访问与分享导入小样。
 - `P0-08` 后台下载小样：暂停、恢复、进程终止与系统重启后的状态协调。
-- `P0-09 [DOING]` Android 受限 WebView User API 已真机通过 `kw` 的 `musicUrl` 取链与播放；iOS/鸿蒙运行时和商店门控待后续验证。
+- `P0-09 [DOING]` Android 受限 WebView User API 已真机通过 `kw` 的 `musicUrl` 取链与播放；iOS 已实现同 channel 的非持久 WKWebView/HTTPS-only 运行时并通过无签名编译，仍待 iPhone 导入真实 LX 脚本验收；鸿蒙运行时和商店门控待后续验证。
 - `P0-10` 完成依赖许可和三家商店政策结论。
 
 退出门槛：`P0-03` 至 `P0-09` 在三端真机通过。若动态脚本不满足商店政策，锁定“商店版仅签名内置源”的既定降级，不阻断其它开发。
@@ -154,12 +157,12 @@
 ### Phase 3：播放器核心（5 周）
 
 - `P3-01 [DOING]` B4-01 已实现最小 `AudioEngine`，Android 真机播放/seek 通过；B4-11 已在真实 LX 音源下完成排行榜播放全部、榜单点歌和搜索点播三条入口回归，稳定自动化入口覆盖待补。B4-22 将系统媒体处理器收敛在 `AudioEngine` 内，iOS/鸿蒙真机验收仍待完成。
-- `P3-02 [DOING]` B4-01 已实现在线 `PlaybackResolver` 与 Android 受限 User API `musicUrl`，并通过真机 `kw` 取链；B4-12 已完成会话内音源管理，B4-13 已实现 URL 缓存/刷新，B4-19 已实现已声明质量内的降级重试。本地、下载和 WebDAV 已直连各自地址且不走 User API；来源发现、鉴权 Range 和跨来源换源仍待后续扩展。
-- `P3-03 [DOING]` B4-03 已实现队列首尾循环的上一首/下一首与详情页控制；详情页下一首已在 Android 真机切至《红尘客栈》并立即恢复 `PLAYING`。B4-04/B4-05 已在 Android 真机验证列表循环、单曲循环与随机自动切歌；B4-06 正在补失效音源自动跳过，其余平台回归待补。
-- `P3-04 [DOING]` seek 已在 B4-01 通过 Android 真机；B4-07 已接入 0.5–2.0 倍速控制，B4-16 已实现进度保存和从历史继续播放；应用启动恢复和音频焦点中断待后续。
+- `P3-02 [DOING]` B4-01 已实现在线 `PlaybackResolver` 与 Android 受限 User API `musicUrl`，并通过真机 `kw` 取链；B4-12 已完成会话内音源管理，支持从原 HTTPS 地址刷新并在失败时恢复旧脚本；B4-13 已实现 URL 缓存/刷新，且脚本导入、启用、刷新或清除成功后会清空会话 URL 缓存，避免旧脚本地址复用；User API 返回的实际质量 type 也会随缓存传入播放器，避免降档流仍显示 SQ；B4-19 已实现已声明质量内的降级重试。B4-26 已在真实 SQ/FLAC 流以 Range 总大小和 FLAC 总采样数显示平均 `1643 kbps · 44 kHz · FLAC · SQ`，未探测到的文件参数不再以理论规格伪回退。B4-27 已完成 iOS WKWebView/同步 MD5 的同协议编译校验，真机/真实脚本验证仍待平台 Runtime；本地、下载和 WebDAV 已直连各自地址且不走 User API；来源发现、鉴权 Range 和跨来源换源仍待后续扩展。
+- `P3-03 [DOING]` B4-03 已实现队列首尾循环的上一首/下一首与详情页控制；详情页下一首已在 Android 真机切至《红尘客栈》并立即恢复 `PLAYING`。B4-04/B4-05 已在 Android 真机验证列表循环、单曲循环与随机自动切歌；B4-14/B4-15 已在真实 30 首队列验证非当前删除和拖动排序均不打断当前播放；B4-06 失效音源自动跳过及其余平台回归待补。
+- `P3-04 [DOING]` seek 已在 B4-01 通过 Android 真机；B4-07 已接入 0.5–2.0 倍速控制，B4-16 已在真机验证 seek 至 `02:16` 后从播放历史恢复，恢复后的媒体位置为 `02:24`；B4-28 已在应用启动恢复最近曲目与合法进度但不自动播放，首次点击才重新取链；三端冷启动与音频焦点中断仍待后续集中验收。
 - `P3-05 [DOING]` B4-02 已实现可从迷你播放栏进入的播放详情、专辑卡片、进度和播放控制；B4-09 正在实现共享队列面板，质量选择和收藏待补。
-- `P3-06 [DOING]` B4-02 已实现歌词阅读入口，B4-17 已接通 User API 原文/翻译/罗马音与 LX 逐字 LRC、当前行高亮及 LRC `offset`；缓存和本地优先级待补。
-- `P3-07 [DOING]` B4-22 已接入 `audio_service` 作为系统前台媒体运行时；SM-N986U / Android 13 已用真实 LX 音源验证播放进度、后台持续、系统播放/暂停及后台下一首队列切歌。空闲 `media-session` 策略、通知/锁屏卡、实体耳机、音频焦点中断及 iOS/鸿蒙验收仍待完成。
+- `P3-06 [DOING]` B4-02 已实现歌词阅读入口，B4-17 已接通 User API 原文/翻译/罗马音与 LX 逐字 LRC、当前行高亮及 LRC `offset`；Android 真机逐字填充仅作用于当前行、完成行恢复普通色且无绿色进度条。当前启用音源变更会使同一曲目歌词自动重新获取；iOS/鸿蒙来源优先级待补。
+- `P3-07 [DOING]` B4-22 已接入 `audio_service` 作为系统前台媒体运行时；SM-N986U / Android 13 已用真实 LX 音源验证播放进度、后台持续、系统播放/暂停及后台下一首队列切歌。连续应用内切歌后，后台 `PLAY_PAUSE` 与 `NEXT` 仍可工作，已关闭接收器被曲目切换禁用的风险。通知/锁屏卡、实体耳机、音频焦点中断及 iOS/鸿蒙验收仍待完成。
 - `P3-08` 实现评论入口、可关闭可视化及经 Phase 0 验证的平台音效。
 
 退出门槛：四类来源均可播放/seek；锁屏和耳机控制通过；60 分钟连续播放无阻断错误。

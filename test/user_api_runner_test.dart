@@ -27,7 +27,8 @@ void main() {
     expect(invoked, isFalse);
   });
 
-  test('accepts a legacy HTTP playback URL from an enabled User API', () async {
+  test('preserves the actual quality returned by an enabled User API',
+      () async {
     const channel = MethodChannel('coral_music/user_api');
     Map<Object?, Object?>? request;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -39,7 +40,10 @@ void main() {
       }
       if (call.method == 'resolveMusicUrl') {
         request = call.arguments as Map<Object?, Object?>;
-        return 'http://media.example.com/a.mp3';
+        return <String, Object?>{
+          'url': 'http://media.example.com/a.mp3',
+          'type': '320k',
+        };
       }
       return null;
     });
@@ -50,7 +54,7 @@ void main() {
 
     final runner = MethodChannelUserApiRunner();
     await runner.load('source');
-    final uri = await runner.resolveMusicUrl(
+    final playbackUrl = await runner.resolveMusicUrl(
       const Track(
         sourceKind: TrackSourceKind.online,
         sourceId: 'kw',
@@ -64,7 +68,8 @@ void main() {
       AudioQuality.standard128k,
     );
 
-    expect(uri.scheme, 'http');
+    expect(playbackUrl.uri.scheme, 'http');
+    expect(playbackUrl.quality, AudioQuality.high320k);
     final musicInfo = request!['musicInfo']! as Map<Object?, Object?>;
     final meta = musicInfo['meta']! as Map<Object?, Object?>;
     expect(musicInfo['id'], '1');

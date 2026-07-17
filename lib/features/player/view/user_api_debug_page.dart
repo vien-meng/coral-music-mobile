@@ -110,6 +110,10 @@ class _UserApiDebugPageState extends ConsumerState<UserApiDebugPage> {
               active: source.id == userApi.activeSourceId,
               loading: userApi.isLoading,
               onActivate: () => controller.activate(source.id),
+              onRefresh: source.id == userApi.activeSourceId &&
+                      source.originUrl != null
+                  ? () => controller.refresh(source.id)
+                  : null,
               onRemove: () => controller.remove(source.id),
             ),
             const SizedBox(height: 10),
@@ -199,6 +203,7 @@ class _SourceDetailsCard extends StatelessWidget {
     required this.active,
     required this.loading,
     required this.onActivate,
+    required this.onRefresh,
     required this.onRemove,
   });
 
@@ -206,6 +211,7 @@ class _SourceDetailsCard extends StatelessWidget {
   final bool active;
   final bool loading;
   final VoidCallback onActivate;
+  final VoidCallback? onRefresh;
   final VoidCallback onRemove;
 
   @override
@@ -249,6 +255,12 @@ class _SourceDetailsCard extends StatelessWidget {
                       label: const Text('已启用'),
                       visualDensity: VisualDensity.compact,
                       backgroundColor: CoralPalette.mint.withValues(alpha: .16),
+                    ),
+                  if (onRefresh != null)
+                    IconButton(
+                      tooltip: '从原地址刷新音源',
+                      onPressed: loading ? null : onRefresh,
+                      icon: const Icon(Icons.refresh_rounded),
                     ),
                   IconButton(
                     tooltip: '移除音源',

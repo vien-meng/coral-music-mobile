@@ -2,6 +2,43 @@
 
 All notable changes to 珊瑚音乐移动端 (Coral Music Mobile) will be documented in this file.
 
+## [1.0.0] - 2026-07-17(02)
+
+### 在线封面与歌词服务补全
+
+- 酷我搜索解析补齐 `web_albumpic_short`，生成可访问 CDN 封面地址
+- 播放队列和播放详情复用同一封面
+- 歌词请求移除 manifest `lyricSources` 门控，改为已启用在线音源的受限尝试，失败返回空歌词且不影响播放
+- 播放详情显示当前质量与码率
+
+### 播放音频文件信息探测
+
+- 新增 `audio_file_probe.dart`：64KB Range 请求，解析 MP3 ID3/帧头和 FLAC STREAMINFO
+- 播放详情显示 `kbps · kHz · 容器格式 · 档位`，探测失败仅显示质量标签（不再伪回退规格）
+- SQ 语义修正：SQ = FLAC 无损，HQ = 320 kbps
+- FLAC 实际平均码率：从 `Content-Range` 总字节数与 STREAMINFO 总采样数计算
+- MP3 ID3 跳过偏移修正（`10 + size`）与 MPEG Layer I/II/III 码率表修正
+- 副信息层级调整：副标题为"歌手 · 专辑"，文件信息行仅 `kbps · kHz · 格式 · 档位`
+- 真机验证：《晴天》显示 `1643 kbps · 44 kHz · FLAC · SQ`
+
+### iOS 受限 User API 运行时
+
+- 新增 `ios/Runner/UserApiRunner.swift`，WKWebView 实现 `load`/`clear`/`resolveMusicUrl`/`resolveLyric`
+- 原生 `URLSession` 执行脚本请求（HTTPS only、GET/POST、无重定向、64KB 请求体、1MB 响应）
+- 受限 bridge 加入同步 JS MD5（`lx.utils.crypto.md5`），AES/RSA/zlib 仍拒绝
+- `flutter build ios --no-codesign` 编译通过；iOS Platform Runtime/真机验收待补
+
+### 启动恢复最近播放曲目
+
+- `PlayerController.restoreLastPlayback()` 从历史恢复最近曲目（`idle` 状态，不触碰音频引擎）
+- 用户首次 `toggle()` 才走取链并 seek 到保存位置
+- 在线曲目恢复后无音源时提示"请先导入音源"，播放详情提供"去导入音源"直达入口
+
+### 音频引擎重复错误去重
+
+- 按 `Track.id + AudioQuality` 去重，`load()` Future 异常与 `errorStream` 同次错误只处理一次
+- 引擎加载错误使用 User API 实际返回的质量（而非用户请求的质量）进行降级
+
 ## [1.0.0] - 2026-07-17(01)
 
 ### 音源 URL 导入优先与详情卡

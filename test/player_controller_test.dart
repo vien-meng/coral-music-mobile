@@ -155,6 +155,42 @@ void main() {
     expect(controller.state.quality, AudioQuality.standard128k);
   });
 
+  test('falls back from SQ to HQ when FLAC URL resolution fails', () async {
+    const qualityTrack = Track(
+      sourceKind: TrackSourceKind.online,
+      sourceId: 'kw',
+      sourceTrackId: 'resolver-quality',
+      title: '取链降级测试',
+      artist: '测试歌手',
+      availableQualities: [AudioQuality.flac, AudioQuality.high320k],
+    );
+    final runner = _QualityFallbackRunner();
+    final controller = PlayerController(
+      _FakeAudioEngine(),
+      PlaybackResolver(runner),
+      PlaybackQueueController(),
+    );
+
+    await controller.playTrack(qualityTrack);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(runner.qualities, [AudioQuality.flac, AudioQuality.high320k]);
+    expect(controller.state.quality, AudioQuality.high320k);
+    expect(controller.state.isPlaying, isTrue);
+  });
+
+  test('shows the actual quality returned by the source', () async {
+    final controller = PlayerController(
+      _FakeAudioEngine(),
+      PlaybackResolver(_ActualQualityRunner()),
+      PlaybackQueueController(),
+    );
+
+    await controller.playTrack(track);
+
+    expect(controller.state.quality, AudioQuality.high320k);
+  });
+
   test(
       'keeps a paused track position and player settings when changing quality',
       () async {
@@ -210,6 +246,60 @@ void main() {
       initialPosition: const Duration(seconds: 4),
     );
     expect(engine.seekPosition, isNull);
+  });
+
+  test('restores the latest history item without loading audio at launch',
+      () async {
+    final engine = _FakeAudioEngine();
+    final controller = PlayerController(
+      engine,
+      PlaybackResolver(_FakeUserApiRunner()),
+      PlaybackQueueController(),
+      null,
+      null,
+      () async => [
+        PlayHistoryEntry(
+          track: track,
+          playedAt: DateTime(2026),
+          playCount: 1,
+          lastPosition: const Duration(seconds: 42),
+        ),
+      ],
+    );
+
+    await controller.restoreLastPlayback();
+
+    expect(controller.state.track, track);
+    expect(controller.state.position, const Duration(seconds: 42));
+    expect(controller.state.status, AudioEngineStatus.idle);
+    expect(engine.loadCount, 0);
+
+    await controller.toggle(track);
+    expect(engine.seekPosition, const Duration(seconds: 42));
+    expect(controller.state.isPlaying, isTrue);
+  });
+
+  test('normalizes a near-start history position when restoring at launch',
+      () async {
+    final controller = PlayerController(
+      _FakeAudioEngine(),
+      PlaybackResolver(_FakeUserApiRunner()),
+      PlaybackQueueController(),
+      null,
+      null,
+      () async => [
+        PlayHistoryEntry(
+          track: track,
+          playedAt: DateTime(2026),
+          playCount: 1,
+          lastPosition: const Duration(seconds: 4),
+        ),
+      ],
+    );
+
+    await controller.restoreLastPlayback();
+
+    expect(controller.state.position, Duration.zero);
   });
 
   test('clamps application speed and volume before forwarding to audio',
@@ -360,20 +450,25 @@ final class _FakeUserApiRunner implements UserApiRunner {
   Future<LyricPayload?> resolveLyric(Track track) async => null;
 
   @override
-  Future<Uri> resolveMusicUrl(Track track, AudioQuality quality) async {
+  Future<ResolvedPlaybackUrl> resolveMusicUrl(
+    Track track,
+    AudioQuality quality,
+  ) async {
     resolveCount++;
-    return Uri.parse('https://example.com/$resolveCount.mp3');
+    return ResolvedPlaybackUrl(
+        Uri.parse('https://example.com/$resolveCount.mp3'));
   }
 }
 
 final class _DeferredUserApiRunner implements UserApiRunner {
-  final _responses = <String, Completer<Uri>>{};
+  final _responses = <String, Completer<ResolvedPlaybackUrl>>{};
 
   @override
   Future<void> clear() async {}
 
   void complete(Track track, Uri uri) =>
-      (_responses[track.id] ??= Completer<Uri>()).complete(uri);
+      (_responses[track.id] ??= Completer<ResolvedPlaybackUrl>())
+          .complete(ResolvedPlaybackUrl(uri));
 
   @override
   Future<LyricPayload?> resolveLyric(Track track) async => null;
@@ -383,8 +478,11 @@ final class _DeferredUserApiRunner implements UserApiRunner {
       const UserApiManifest({'kw'});
 
   @override
-  Future<Uri> resolveMusicUrl(Track track, AudioQuality quality) =>
-      (_responses[track.id] ??= Completer<Uri>()).future;
+  Future<ResolvedPlaybackUrl> resolveMusicUrl(
+    Track track,
+    AudioQuality quality,
+  ) =>
+      (_responses[track.id] ??= Completer<ResolvedPlaybackUrl>()).future;
 }
 
 final class _FailingTrackRunner implements UserApiRunner {
@@ -403,13 +501,71 @@ final class _FailingTrackRunner implements UserApiRunner {
   Future<LyricPayload?> resolveLyric(Track track) async => null;
 
   @override
-  Future<Uri> resolveMusicUrl(Track track, AudioQuality quality) async {
+  Future<ResolvedPlaybackUrl> resolveMusicUrl(
+    Track track,
+    AudioQuality quality,
+  ) async {
     if (_failedIds.contains(track.id)) {
       throw const AppFailure(
         code: AppFailureCode.noNetwork,
         message: '测试取链失败',
       );
     }
-    return Uri.parse('https://example.com/${track.sourceTrackId}.mp3');
+    return ResolvedPlaybackUrl(
+      Uri.parse('https://example.com/${track.sourceTrackId}.mp3'),
+    );
   }
+}
+
+final class _QualityFallbackRunner implements UserApiRunner {
+  final qualities = <AudioQuality>[];
+
+  @override
+  Future<void> clear() async {}
+
+  @override
+  Future<UserApiManifest> load(String script) async =>
+      const UserApiManifest({'kw'});
+
+  @override
+  Future<LyricPayload?> resolveLyric(Track track) async => null;
+
+  @override
+  Future<ResolvedPlaybackUrl> resolveMusicUrl(
+    Track track,
+    AudioQuality quality,
+  ) async {
+    qualities.add(quality);
+    if (quality == AudioQuality.flac) {
+      throw const AppFailure(
+        code: AppFailureCode.invalidData,
+        message: 'FLAC 暂不可用',
+      );
+    }
+    return ResolvedPlaybackUrl(
+      Uri.parse('https://example.com/${quality.name}.mp3'),
+    );
+  }
+}
+
+final class _ActualQualityRunner implements UserApiRunner {
+  @override
+  Future<void> clear() async {}
+
+  @override
+  Future<UserApiManifest> load(String script) async =>
+      const UserApiManifest({'kw'});
+
+  @override
+  Future<LyricPayload?> resolveLyric(Track track) async => null;
+
+  @override
+  Future<ResolvedPlaybackUrl> resolveMusicUrl(
+    Track track,
+    AudioQuality quality,
+  ) async =>
+      ResolvedPlaybackUrl(
+        Uri.parse('https://example.com/actual-quality.mp3'),
+        quality: AudioQuality.high320k,
+      );
 }

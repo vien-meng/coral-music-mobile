@@ -10,14 +10,14 @@ final class PlaybackResolver {
 
   static const _urlCacheLifetime = Duration(minutes: 15);
 
-  Future<Uri> resolve(
+  Future<ResolvedPlaybackUrl> resolve(
     Track track, {
     AudioQuality? quality,
     bool forceRefresh = false,
   }) async {
     if (track.sourceKind != TrackSourceKind.online) {
       final uri = track.localUri;
-      if (uri != null) return uri;
+      if (uri != null) return ResolvedPlaybackUrl(uri);
       throw const AppFailure(
         code: AppFailureCode.invalidData,
         message: '该来源缺少播放地址',
@@ -30,29 +30,40 @@ final class PlaybackResolver {
     if (!forceRefresh &&
         cached != null &&
         cached.expiresAt.isAfter(DateTime.now())) {
-      return cached.uri;
+      return cached.playbackUrl;
     }
-    final uri = await _userApiRunner.resolveMusicUrl(track, resolvedQuality);
+    final playbackUrl =
+        await _userApiRunner.resolveMusicUrl(track, resolvedQuality);
     _cachedUrls[key] = _CachedPlaybackUrl(
-      uri: uri,
+      playbackUrl: playbackUrl,
       expiresAt: DateTime.now().add(_urlCacheLifetime),
     );
-    return uri;
+    return playbackUrl;
   }
 
   void invalidate(Track track, {AudioQuality? quality}) {
     final resolvedQuality =
         quality ?? defaultPlaybackQuality(track.availableQualities);
     _cachedUrls.remove(_cacheKey(track, resolvedQuality));
+    _cachedUrls.removeWhere(
+      (key, cached) =>
+          key.startsWith('${track.id}:') &&
+          cached.playbackUrl.quality == resolvedQuality,
+    );
   }
+
+  void clear() => _cachedUrls.clear();
 
   String _cacheKey(Track track, AudioQuality quality) =>
       '${track.id}:${quality.name}';
 }
 
 final class _CachedPlaybackUrl {
-  const _CachedPlaybackUrl({required this.uri, required this.expiresAt});
+  const _CachedPlaybackUrl({
+    required this.playbackUrl,
+    required this.expiresAt,
+  });
 
-  final Uri uri;
+  final ResolvedPlaybackUrl playbackUrl;
   final DateTime expiresAt;
 }

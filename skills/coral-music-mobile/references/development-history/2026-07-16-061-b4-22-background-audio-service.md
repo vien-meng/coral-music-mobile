@@ -112,3 +112,39 @@
 - Samsung SM-N986U / Android 13 正在播放《红尘客栈》时按 HOME。4 秒后系统会话仍为 `PLAYING`，位置推进至 `63.549s`，证明播放未因进入后台中断。
 - 后台发送系统 `KEYCODE_MEDIA_NEXT` 后，媒体会话仍为 `PLAYING`，位置重新从 `6.941s` 计时，元数据切换为《青花瓷》/ 周杰伦 /《我很忙》。
 - 结论：Android 的前台媒体服务和 `audio_service` 下一首命令已路由到共享播放队列。锁屏卡视觉、实体耳机、音频焦点中断及 iOS/鸿蒙仍为未完成项，任务继续 `DOING`。
+
+## 2026-07-17 连续切歌媒体接收器生命周期修订（DOING）
+
+- 代码审计确认 `PlayerController.playTrack()` 在曲目切换时调用 `AudioEngine.stop()`；该调用不是用户显式“停止播放”。现有 `_CoralAudioHandler.stop()` 在此路径禁用 Android `MediaButtonReceiver`，而后续 `load()` 复用已初始化 handler，不会重新启用接收器。
+- 风险：首曲后连续切歌可能继续播放，却丢失耳机或系统媒体按键。修订目标是：冷启动仍不注册 receiver；首次实际播放成功后，在同一应用进程的曲目切换中保持 receiver 启用。
+- 不改变 `audio_service` 处理器、队列路由或跨平台逻辑；Android 真机将以真实 LX 音源的连续切歌后 `KEYCODE_MEDIA_PLAY_PAUSE`/`KEYCODE_MEDIA_NEXT` 回归。
+
+## 2026-07-17 连续切歌媒体接收器生命周期修订（DONE for Android）
+
+- 已移除 `_CoralAudioHandler.stop()` 中的 receiver 禁用。当前 `stop()` 在代码库中仅由曲目切换调用；冷启动仍保持 receiver disabled，首次实际 `AudioService.init` 才启用它。
+- 验证：`flutter analyze --no-fatal-infos`、Android Debug APK 构建通过。Samsung SM-N986U / Android 13 重新导入用户指定 LX URL：真实播放《晴天》后 HOME，系统 `NEXT` 切至《青花瓷》；随后回到应用内点播《红尘客栈》（覆盖 `stop()` 再加载路径）并再次 HOME，`PLAY_PAUSE` 显示 `PAUSED` /《红尘客栈》，恢复后 `NEXT` 显示 `PLAYING` /《七里香》。
+- 结论：应用内连续切歌后 Android 系统媒体键仍被接收并正确路由至共享队列。实体耳机、来电中断、通知/锁屏卡人工视觉及 iOS/鸿蒙真机仍未验收，B4-22 总状态保持 `DOING`。
+
+## 2026-07-17 音频中断实现复核
+
+- 核对锁定的 `just_audio 0.10.6` 源码：`AudioPlayer` 的 `handleInterruptions` 和 `handleAudioSessionActivation` 默认均为 `true`，内部已订阅 `AudioSession.interruptionEventStream` 与 `becomingNoisyEventStream`。本项目没有关闭该默认行为。
+- 因此来电/导航/其他音频焦点抢占和耳机拔出由同一 `AudioPlayer` 暂停/恢复处理；额外在应用层重复订阅会造成双重暂停或错误自动恢复，故不增加冗余监听。
+- 这是一项实现证据，不代替 Android 实体耳机、来电以及 iOS/鸿蒙的真机验收，任务仍为 `DOING`。
+
+## 2026-07-17 最新 APK Android 后台回归
+
+- Samsung SM-N986U / Android 13 使用最新 Debug APK、用户指定真实 LX 音源与酷我《晴天》播放会话验证。按 HOME 5 秒后 `dumpsys media_session` 仍显示 `PLAYING`，有持续推进的位置；后台 `KEYCODE_MEDIA_PLAY_PAUSE` 先变为 `PAUSED`，再次触发恢复 `PLAYING`。
+- 后台 `KEYCODE_MEDIA_NEXT` 后会话仍为 `PLAYING`，系统元数据更新为《夜曲》/ 周杰伦 /《十一月的萧邦》，位置重新计时，证明系统下一首通过 `AudioEngineCommand` 进入共享队列，不是仅更新通知 UI。
+- 当前 Android 的真实音源、后台持续、播放暂停和下一首均完成最新 APK 回归。实体耳机、来电中断与 iOS/鸿蒙真机仍为平台矩阵未完成项，B4-22 继续 `DOING`。
+
+## 2026-07-17 处理器释放与媒体接收器清理（DOING）
+
+- 复核 `JustAudioEngine.dispose()` 发现它此前仅关闭 Dart 转发流，没有释放已创建的 `_CoralAudioHandler`、其 `AudioPlayer` 和订阅，也没有在 Flutter 引擎退出时将 Android `MediaButtonReceiver` 恢复为 disabled。
+- 这会在开发热重启或应用容器释放后留下后台媒体资源与媒体键接收器，且与“首次真实播放才启用 receiver”的既有生命周期规则冲突。
+- 本次只补充资源释放路径：先停用媒体状态、取消处理器订阅并 dispose `AudioPlayer`，最后关闭桥接流和禁用 Android receiver；不改变播放中连续切歌的 receiver 保持规则，也不自行实现 audio focus 监听。`just_audio` 默认已处理来电、导航、其他音频及耳机拔出的 pause/duck/resume 行为。
+
+## 2026-07-17 处理器释放与媒体接收器清理（DONE for shared implementation）
+
+- `JustAudioEngine.dispose()` 现在取消转发订阅、释放已创建的 `_CoralAudioHandler`，并在 finally 中禁用 Android `MediaButtonReceiver`；初始化失败时仍沿用既有 `_createHandler()` 的清理路径。
+- `_CoralAudioHandler.dispose()` 先调用既有 `stop()` 使系统媒体状态回到 idle，再取消底层播放器流、释放 `AudioPlayer` 和关闭内部广播流。不会影响正常曲目切换期间 `stop()` 后继续复用 handler 的行为。
+- 验证：`dart format lib/features/player/data/audio_engine.dart` 无变更；在含 DevEco 工具链 PATH 的环境执行 `flutter analyze --no-fatal-infos` 通过（0 issues）；`git diff --check` 通过。Android 真机后台播放已在上一次最新 APK 回归通过，本次只改变应用/引擎释放路径，留待下一次安装包回归热重启后 receiver 清理。

@@ -92,10 +92,17 @@ final class JustAudioEngine implements AudioEngine {
 
   @override
   Future<void> dispose() async {
+    final handler = _handler;
+    _handler = null;
     await _snapshotSubscription?.cancel();
     await _commandSubscription?.cancel();
-    await _snapshots.close();
-    await _commands.close();
+    try {
+      if (handler != null) await (await handler).dispose();
+    } finally {
+      await _setBackgroundMediaEnabled(false);
+      await _snapshots.close();
+      await _commands.close();
+    }
   }
 
   Future<_CoralAudioHandler> _getHandler() async {
@@ -226,7 +233,17 @@ final class _CoralAudioHandler extends BaseAudioHandler with SeekHandler {
     await _player.stop();
     _emit(status: AudioEngineStatus.idle);
     await super.stop();
-    await _setBackgroundMediaEnabled(false);
+  }
+
+  Future<void> dispose() async {
+    try {
+      await stop();
+    } finally {
+      await Future.wait(_subscriptions.map((item) => item.cancel()));
+      await _player.dispose();
+      await _snapshots.close();
+      await _commands.close();
+    }
   }
 
   void _emit(

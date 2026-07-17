@@ -64,7 +64,7 @@ void main() {
           localUri: Uri.parse('https://example.com/${source.name}.mp3'),
         ),
       );
-      expect(uri.host, 'example.com');
+      expect(uri.uri.host, 'example.com');
     }
 
     expect(runner.resolveCount, 0);
@@ -86,9 +86,14 @@ final class _Runner implements UserApiRunner {
       const UserApiManifest({'kw'});
 
   @override
-  Future<Uri> resolveMusicUrl(Track track, AudioQuality quality) async {
+  Future<ResolvedPlaybackUrl> resolveMusicUrl(
+    Track track,
+    AudioQuality quality,
+  ) async {
     resolveCount++;
     lastQuality = quality;
-    return Uri.parse('https://example.com/$resolveCount.mp3');
+    return ResolvedPlaybackUrl(
+      Uri.parse('https://example.com/$resolveCount.mp3'),
+    );
   }
 }

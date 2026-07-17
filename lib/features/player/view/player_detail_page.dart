@@ -2,8 +2,10 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../app/app_theme.dart';
+import '../../../core/app_failure.dart';
 import '../../../domain/music.dart';
 import '../../library/state/library_controller.dart';
 import '../data/audio_engine.dart';
@@ -297,7 +299,12 @@ class _PlayerPanel extends ConsumerWidget {
           ),
           const SizedBox(height: 7),
           Text(
-            track.artist.isEmpty ? '未知歌手' : track.artist,
+            [
+              track.artist.isEmpty ? '未知歌手' : track.artist,
+              if (track.album?.trim().isNotEmpty == true &&
+                  track.album!.trim() != track.title.trim())
+                track.album!.trim(),
+            ].join(' · '),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -306,10 +313,7 @@ class _PlayerPanel extends ConsumerWidget {
           ),
           const SizedBox(height: 5),
           Text(
-            [
-              if (track.album?.isNotEmpty == true) track.album!,
-              _fileInfoText(player.fileInfo, player.quality),
-            ].join(' · '),
+            _fileInfoText(player.fileInfo, player.quality),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
@@ -439,6 +443,25 @@ class _PlayerPanel extends ConsumerWidget {
                       : Theme.of(context).colorScheme.error,
                 ),
           ),
+          if (player.error != null)
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 4,
+              children: [
+                TextButton.icon(
+                  onPressed: () =>
+                      ref.read(playerProvider.notifier).playTrack(track),
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('重试播放'),
+                ),
+                if (player.error!.message.startsWith('请先在音源管理'))
+                  TextButton.icon(
+                    onPressed: () => context.push('/setting'),
+                    icon: const Icon(Icons.settings_input_component_outlined),
+                    label: const Text('去导入音源'),
+                  ),
+              ],
+            ),
         ],
       ),
     );
@@ -525,6 +548,7 @@ class _LyricsPanel extends ConsumerStatefulWidget {
 
 class _LyricsPanelState extends ConsumerState<_LyricsPanel> {
   final _scrollController = ScrollController();
+  final _lineKeys = <int, GlobalKey>{};
   var _activeLine = -1;
 
   @override
@@ -541,7 +565,7 @@ class _LyricsPanelState extends ConsumerState<_LyricsPanel> {
         ref.watch(playerProvider.select((state) => state.position));
     return lyric.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (_, __) => const Center(child: Text('歌词加载失败')),
+      error: (error, _) => _LyricError(message: _lyricErrorMessage(error)),
       data: (payload) {
         final lines =
             payload == null ? const <LyricLine>[] : parseLyricTimeline(payload);
@@ -554,13 +578,22 @@ class _LyricsPanelState extends ConsumerState<_LyricsPanel> {
           _activeLine = active;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!_scrollController.hasClients) return;
-            // ponytail: estimated line height; switch to measured keys only if lyric layouts drift visibly.
-            final target = (active * 82.0).clamp(
-              0.0,
-              _scrollController.position.maxScrollExtent,
-            );
+            final targetContext = _lineKeys[active]?.currentContext;
+            if (targetContext != null) {
+              Scrollable.ensureVisible(
+                targetContext,
+                alignment: .42,
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeOut,
+              );
+              return;
+            }
+            // ponytail: only used until ListView builds an off-screen active line.
             _scrollController.animateTo(
-              target,
+              (active * 56.0).clamp(
+                0.0,
+                _scrollController.position.maxScrollExtent,
+              ),
               duration: const Duration(milliseconds: 260),
               curve: Curves.easeOut,
             );
@@ -574,65 +607,68 @@ class _LyricsPanelState extends ConsumerState<_LyricsPanel> {
           itemBuilder: (context, index) {
             final line = lines[index];
             final isActive = index == active;
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Column(
-                children: [
-                  Text.rich(
-                    line.words.isEmpty
-                        ? TextSpan(text: line.text)
-                        : TextSpan(
-                            children: line.words.map((word) {
-                              final wordActive = position >= word.start &&
-                                  position < word.start + word.duration;
-                              return TextSpan(
-                                text: word.text,
-                                style: wordActive
-                                    ? const TextStyle(
-                                        fontWeight: FontWeight.bold)
-                                    : null,
-                              );
-                            }).toList(growable: false),
+            return KeyedSubtree(
+              key: _lineKeys.putIfAbsent(index, GlobalKey.new),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Column(
+                  children: [
+                    Text.rich(
+                      line.words.isEmpty || !isActive
+                          ? TextSpan(text: line.text)
+                          : TextSpan(
+                              children: line.words
+                                  .expand(
+                                    (word) => _karaokeWordSpans(
+                                      context,
+                                      word,
+                                      position,
+                                    ),
+                                  )
+                                  .toList(growable: false),
+                            ),
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            color: isActive
+                                ? CoralPalette.player
+                                : Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant
+                                    .withValues(alpha: .52),
+                            fontWeight:
+                                isActive ? FontWeight.w800 : FontWeight.w500,
                           ),
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: isActive
-                              ? CoralPalette.player
-                              : Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant
-                                  .withValues(alpha: .52),
-                          fontWeight:
-                              isActive ? FontWeight.w800 : FontWeight.w500,
+                    ),
+                    if (line.translation case final translation?)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(
+                          translation,
+                          textAlign: TextAlign.center,
+                          style:
+                              Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
                         ),
-                  ),
-                  if (line.translation case final translation?)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Text(
-                        translation,
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant,
-                            ),
                       ),
-                    ),
-                  if (line.romanization case final romanization?)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        romanization,
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant,
-                            ),
+                    if (line.romanization case final romanization?)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          romanization,
+                          textAlign: TextAlign.center,
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                        ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             );
           },
@@ -640,6 +676,34 @@ class _LyricsPanelState extends ConsumerState<_LyricsPanel> {
       },
     );
   }
+}
+
+List<TextSpan> _karaokeWordSpans(
+  BuildContext context,
+  LyricWord word,
+  Duration position,
+) {
+  final elapsed = position - word.start;
+  final duration = word.duration.inMilliseconds;
+  final progress = elapsed.inMilliseconds <= 0
+      ? 0.0
+      : (elapsed.inMilliseconds / (duration == 0 ? 1 : duration))
+          .clamp(0.0, 1.0);
+  final characters = word.text.runes.map(String.fromCharCode).toList();
+  if (characters.isEmpty) return const [];
+  final filled = progress * characters.length;
+  final muted =
+      Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: .62);
+  return List.generate(characters.length, (index) {
+    final characterProgress = (filled - index).clamp(0.0, 1.0);
+    return TextSpan(
+      text: characters[index],
+      style: TextStyle(
+        color: Color.lerp(muted, CoralPalette.player, characterProgress),
+        fontWeight: characterProgress > 0 ? FontWeight.w800 : FontWeight.w600,
+      ),
+    );
+  });
 }
 
 class _LyricEmpty extends StatelessWidget {
@@ -658,6 +722,33 @@ class _LyricEmpty extends StatelessWidget {
             const SizedBox(height: 6),
             const Text('当前音源未提供可用歌词'),
           ],
+        ),
+      );
+}
+
+class _LyricError extends StatelessWidget {
+  const _LyricError({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.lyrics_outlined, size: 44),
+              const SizedBox(height: 12),
+              const Text('歌词加载失败'),
+              const SizedBox(height: 6),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
         ),
       );
 }
@@ -831,25 +922,14 @@ String _qualityLabel(AudioQuality quality) => switch (quality) {
     };
 
 String _fileInfoText(AudioFileInfo? info, AudioQuality quality) {
-  final spec = switch (quality) {
-    AudioQuality.master => (2304, 96000, true),
-    AudioQuality.atmosPlus || AudioQuality.atmos => (768, 48000, false),
-    AudioQuality.hires => (3000, 192000, true),
-    AudioQuality.flac24bit => (2000, 96000, true),
-    AudioQuality.flac => (900, 44100, true),
-    AudioQuality.high320k => (320, 44100, false),
-    AudioQuality.high192k => (192, 44100, false),
-    AudioQuality.standard128k => (128, 44100, false),
-  };
-  final bitrate =
-      info?.bitrate == null ? spec.$1 : (info!.bitrate! / 1000).round();
-  final sampleRate = info?.sampleRate == null
-      ? (spec.$2 / 1000).round()
-      : (info!.sampleRate! / 1000).round();
   return [
-    '$bitrate kbps',
-    '$sampleRate kHz',
-    info?.format?.toUpperCase() ?? (spec.$3 ? 'Lossless' : ''),
+    if (info?.bitrate case final bitrate?) '${(bitrate / 1000).round()} kbps',
+    if (info?.sampleRate case final sampleRate?)
+      '${(sampleRate / 1000).round()} kHz',
+    if (info?.format case final format?) format.toUpperCase(),
     _qualityLabel(quality),
   ].where((part) => part.isNotEmpty).join(' · ');
 }
+
+String _lyricErrorMessage(Object error) =>
+    error is AppFailure ? error.message : '音源未返回可用歌词';

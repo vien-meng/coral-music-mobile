@@ -51,7 +51,10 @@ final class HttpAudioFileProbe implements AudioFileProbe {
       } finally {
         await iterator.cancel();
       }
-      return parseAudioFileHeader(bytes.takeBytes());
+      return parseAudioFileHeader(
+        bytes.takeBytes(),
+        totalBytes: _totalAudioBytes(response),
+      );
     } on Object {
       return const AudioFileInfo();
     } finally {
@@ -60,9 +63,22 @@ final class HttpAudioFileProbe implements AudioFileProbe {
   }
 }
 
-AudioFileInfo parseAudioFileHeader(List<int> raw) {
+int? _totalAudioBytes(HttpClientResponse response) {
+  final contentRange = response.headers.value(HttpHeaders.contentRangeHeader);
+  final rangeMatch =
+      contentRange == null ? null : RegExp(r'/(\d+)$').firstMatch(contentRange);
+  final rangedTotal = rangeMatch == null ? null : int.tryParse(rangeMatch[1]!);
+  if (rangedTotal != null && rangedTotal > 0) return rangedTotal;
+  return response.statusCode == HttpStatus.ok && response.contentLength > 0
+      ? response.contentLength
+      : null;
+}
+
+AudioFileInfo parseAudioFileHeader(List<int> raw, {int? totalBytes}) {
   final bytes = Uint8List.fromList(raw);
-  if (_matches(bytes, const [0x66, 0x4c, 0x61, 0x43])) return _parseFlac(bytes);
+  if (_matches(bytes, const [0x66, 0x4c, 0x61, 0x43])) {
+    return _parseFlac(bytes, totalBytes: totalBytes);
+  }
   if (_matches(bytes, const [0x4f, 0x67, 0x67, 0x53])) {
     return const AudioFileInfo(format: 'ogg');
   }
@@ -82,18 +98,24 @@ bool _matches(List<int> bytes, List<int> marker) =>
     List.generate(marker.length, (index) => bytes[index] == marker[index])
         .every((matches) => matches);
 
-AudioFileInfo _parseFlac(Uint8List bytes) {
+AudioFileInfo _parseFlac(Uint8List bytes, {int? totalBytes}) {
   if (bytes.length < 38 || (bytes[4] & 0x7f) != 0) {
     return const AudioFileInfo(format: 'flac');
   }
   final sampleRate =
       (bytes[18] << 12) | (bytes[19] << 4) | ((bytes[20] >> 4) & 0x0f);
-  final bitsPerSample = ((bytes[20] & 1) << 4) | ((bytes[21] >> 4) & 0x0f);
-  final channels = ((bytes[20] >> 1) & 7) + 1;
+  final totalSamples = ((bytes[21] & 0x0f) << 32) |
+      (bytes[22] << 24) |
+      (bytes[23] << 16) |
+      (bytes[24] << 8) |
+      bytes[25];
+  final averageBitrate =
+      totalBytes != null && totalBytes > 0 && totalSamples > 0
+          ? (totalBytes * 8 * sampleRate / totalSamples).round()
+          : null;
   return AudioFileInfo(
     sampleRate: sampleRate == 0 ? null : sampleRate,
-    bitrate:
-        sampleRate == 0 ? null : sampleRate * (bitsPerSample + 1) * channels,
+    bitrate: averageBitrate,
     format: 'flac',
   );
 }
@@ -101,15 +123,23 @@ AudioFileInfo _parseFlac(Uint8List bytes) {
 AudioFileInfo _parseMp3(Uint8List bytes) {
   var offset = 0;
   if (_matches(bytes, const [0x49, 0x44, 0x33]) && bytes.length >= 10) {
-    offset = 10 |
-        ((bytes[6] & 0x7f) << 21) |
-        ((bytes[7] & 0x7f) << 14) |
-        ((bytes[8] & 0x7f) << 7) |
-        (bytes[9] & 0x7f);
+    offset = 10 +
+        (((bytes[6] & 0x7f) << 21) |
+            ((bytes[7] & 0x7f) << 14) |
+            ((bytes[8] & 0x7f) << 7) |
+            (bytes[9] & 0x7f));
   }
-  const bitrates = [
+  const mpeg1Bitrates = [
+    [0],
     [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320],
+    [0, 32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384],
+    [0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448],
+  ];
+  const mpeg2Bitrates = [
+    [0],
     [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160],
+    [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160],
+    [0, 32, 48, 56, 64, 80, 96, 112, 128, 144, 160, 176, 192, 224, 256],
   ];
   const rates = [
     [11025, 12000, 8000],
@@ -129,7 +159,8 @@ AudioFileInfo _parseMp3(Uint8List bytes) {
     }
     final sampleRate = rates[version][rateIndex];
     if (sampleRate == 0) continue;
-    final bitrate = bitrates[version == 3 ? 0 : 1][bitrateIndex];
+    final bitrate =
+        (version == 3 ? mpeg1Bitrates : mpeg2Bitrates)[layer][bitrateIndex];
     if (bitrate == 0) continue;
     return AudioFileInfo(
       bitrate: bitrate * 1000,

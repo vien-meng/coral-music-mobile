@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/app_failure.dart';
 import '../../../core/http_client.dart';
+import '../data/playback_resolver.dart';
 import '../data/user_api_runner.dart';
 import '../data/user_api_script_fetcher.dart';
 import 'player_controller.dart';
@@ -11,6 +12,7 @@ final userApiDebugProvider =
   (ref) => UserApiDebugController(
     ref.watch(userApiRunnerProvider),
     UserApiScriptFetcher(createHttpClient()),
+    ref.watch(playbackResolverProvider),
   ),
 );
 
@@ -18,12 +20,14 @@ final class UserApiDebugState {
   const UserApiDebugState({
     this.sources = const [],
     this.activeSourceId,
+    this.runtimeRevision = 0,
     this.isLoading = false,
     this.error,
   });
 
   final List<UserApiSource> sources;
   final String? activeSourceId;
+  final int runtimeRevision;
   final bool isLoading;
   final AppFailure? error;
 
@@ -34,6 +38,7 @@ final class UserApiDebugState {
     List<UserApiSource>? sources,
     String? activeSourceId,
     bool clearActiveSource = false,
+    int? runtimeRevision,
     bool? isLoading,
     AppFailure? error,
     bool clearError = false,
@@ -42,6 +47,7 @@ final class UserApiDebugState {
         sources: sources ?? this.sources,
         activeSourceId:
             clearActiveSource ? null : activeSourceId ?? this.activeSourceId,
+        runtimeRevision: runtimeRevision ?? this.runtimeRevision,
         isLoading: isLoading ?? this.isLoading,
         error: clearError ? null : error ?? this.error,
       );
@@ -105,12 +111,17 @@ final class UserApiSourceInfo {
 }
 
 final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
-  UserApiDebugController(this._runner, [UserApiScriptFetcher? fetcher])
-      : _fetcher = fetcher ?? UserApiScriptFetcher(createHttpClient()),
+  UserApiDebugController(
+    this._runner, [
+    UserApiScriptFetcher? fetcher,
+    PlaybackResolver? playbackResolver,
+  ])  : _fetcher = fetcher ?? UserApiScriptFetcher(createHttpClient()),
+        _playbackResolver = playbackResolver,
         super(const UserApiDebugState());
 
   final UserApiRunner _runner;
   final UserApiScriptFetcher _fetcher;
+  final PlaybackResolver? _playbackResolver;
 
   Future<void> importUrl(String name, String rawUrl) async {
     final uri = Uri.tryParse(rawUrl.trim());
@@ -162,10 +173,12 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
         lyricSources: manifest.lyricSources,
         originUrl: originUrl,
       );
+      _playbackResolver?.clear();
       state = state.copyWith(
         isLoading: false,
         sources: [...state.sources, source],
         activeSourceId: source.id,
+        runtimeRevision: state.runtimeRevision + 1,
         clearError: true,
       );
     } on AppFailure catch (error) {
@@ -200,6 +213,7 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
         lyricSources: manifest.lyricSources,
         originUrl: target.originUrl,
       );
+      _playbackResolver?.clear();
       state = state.copyWith(
         isLoading: false,
         sources: [
@@ -207,6 +221,7 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
             source.id == id ? updated : source,
         ],
         activeSourceId: id,
+        runtimeRevision: state.runtimeRevision + 1,
         clearError: true,
       );
     } on AppFailure catch (error) {
@@ -225,6 +240,54 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
     }
   }
 
+  Future<void> refresh(String id) async {
+    final target = state.sources.where((source) => source.id == id).firstOrNull;
+    if (target == null ||
+        target.id != state.activeSourceId ||
+        target.originUrl == null) {
+      return;
+    }
+    final previous = target;
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final script = await _fetcher.fetch(target.originUrl!);
+      final manifest = await _runner.load(script);
+      final info = UserApiSourceInfo.fromScript(script);
+      final updated = UserApiSource(
+        id: target.id,
+        name: target.name,
+        script: script,
+        info: info,
+        musicUrlSources: manifest.musicUrlSources,
+        lyricSources: manifest.lyricSources,
+        originUrl: target.originUrl,
+      );
+      _playbackResolver?.clear();
+      state = state.copyWith(
+        isLoading: false,
+        sources: [
+          for (final source in state.sources)
+            source.id == target.id ? updated : source,
+        ],
+        runtimeRevision: state.runtimeRevision + 1,
+        clearError: true,
+      );
+    } on AppFailure catch (error) {
+      await _restore(previous);
+      state = state.copyWith(isLoading: false, error: error);
+    } on Object catch (error) {
+      await _restore(previous);
+      state = state.copyWith(
+        isLoading: false,
+        error: AppFailure(
+          code: AppFailureCode.unknown,
+          message: '音源刷新失败',
+          diagnostic: error.runtimeType.toString(),
+        ),
+      );
+    }
+  }
+
   Future<void> remove(String id) async {
     final source = state.sources.where((item) => item.id == id).firstOrNull;
     if (source == null) return;
@@ -237,10 +300,12 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       await _runner.clear();
+      _playbackResolver?.clear();
       state = state.copyWith(
         isLoading: false,
         sources: state.sources.where((item) => item.id != id).toList(),
         clearActiveSource: true,
+        runtimeRevision: state.runtimeRevision + 1,
         clearError: true,
       );
     } on AppFailure catch (error) {

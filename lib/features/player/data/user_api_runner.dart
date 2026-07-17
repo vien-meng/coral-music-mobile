@@ -12,10 +12,18 @@ final class UserApiManifest {
   final Set<String> lyricSources;
 }
 
+final class ResolvedPlaybackUrl {
+  const ResolvedPlaybackUrl(this.uri, {this.quality});
+
+  final Uri uri;
+  final AudioQuality? quality;
+}
+
 abstract interface class UserApiRunner {
   Future<UserApiManifest> load(String script);
   Future<void> clear();
-  Future<Uri> resolveMusicUrl(Track track, AudioQuality quality);
+  Future<ResolvedPlaybackUrl> resolveMusicUrl(
+      Track track, AudioQuality quality);
   Future<LyricPayload?> resolveLyric(Track track);
 }
 
@@ -85,32 +93,46 @@ final class MethodChannelUserApiRunner implements UserApiRunner {
   }
 
   @override
-  Future<Uri> resolveMusicUrl(Track track, AudioQuality quality) async {
+  Future<ResolvedPlaybackUrl> resolveMusicUrl(
+    Track track,
+    AudioQuality quality,
+  ) async {
     final manifest = _manifest;
-    if (manifest == null ||
-        !manifest.musicUrlSources.contains(track.sourceId)) {
+    if (manifest == null) {
+      throw const AppFailure(
+        code: AppFailureCode.invalidData,
+        message: '请先在音源管理导入并启用音源，再播放在线歌曲',
+      );
+    }
+    if (!manifest.musicUrlSources.contains(track.sourceId)) {
       throw const AppFailure(
         code: AppFailureCode.invalidData,
         message: '当前音源未支持该歌曲来源',
       );
     }
     try {
-      final value = await _channel.invokeMethod<String>('resolveMusicUrl', {
+      final value = await _channel.invokeMethod<Object?>('resolveMusicUrl', {
         'source': track.sourceId,
         'quality': _qualityName(quality),
         'musicInfo': _legacyMusicInfo(track),
       });
-      final uri = Uri.tryParse(value ?? '');
+      final map = value is Map ? value : null;
+      final url = value is String ? value : map?['url'] as String?;
+      final uri = Uri.tryParse(url ?? '');
       if (uri == null ||
           !{'http', 'https'}.contains(uri.scheme) ||
           uri.host.isEmpty ||
-          value!.length > 8192) {
+          url == null ||
+          url.length > 8192) {
         throw const AppFailure(
           code: AppFailureCode.invalidData,
           message: '音源未返回有效的 HTTP 播放地址',
         );
       }
-      return uri;
+      return ResolvedPlaybackUrl(
+        uri,
+        quality: _qualityFromName(map?['type'] as String?),
+      );
     } on PlatformException catch (error) {
       throw AppFailure(
         code: AppFailureCode.invalidData,
@@ -186,6 +208,19 @@ final class MethodChannelUserApiRunner implements UserApiRunner {
         AudioQuality.atmos => 'atmos',
         AudioQuality.atmosPlus => 'atmos_plus',
         AudioQuality.master => 'master',
+      };
+
+  static AudioQuality? _qualityFromName(String? value) => switch (value) {
+        'flac24bit' => AudioQuality.flac24bit,
+        'flac' => AudioQuality.flac,
+        '320k' => AudioQuality.high320k,
+        '192k' => AudioQuality.high192k,
+        '128k' => AudioQuality.standard128k,
+        'hires' => AudioQuality.hires,
+        'atmos' => AudioQuality.atmos,
+        'atmos_plus' => AudioQuality.atmosPlus,
+        'master' => AudioQuality.master,
+        _ => null,
       };
 
   static Map<String, Object?> _legacyMusicInfo(Track track) {

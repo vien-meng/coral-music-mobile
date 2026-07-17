@@ -1,4 +1,5 @@
 import 'package:coral_music_mobile/domain/music.dart';
+import 'package:coral_music_mobile/features/player/data/playback_resolver.dart';
 import 'package:coral_music_mobile/features/player/data/user_api_runner.dart';
 import 'package:coral_music_mobile/features/player/state/user_api_debug_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -49,11 +50,32 @@ kw-script
     expect(source.info.homepage,
         'https://github.com/lxmusics/lx-music-api-server');
   });
+
+  test('clears cached URLs after the active source changes', () async {
+    final runner = _Runner();
+    final resolver = PlaybackResolver(runner);
+    final controller = UserApiDebugController(runner, null, resolver);
+    const track = Track(
+      sourceKind: TrackSourceKind.online,
+      sourceId: 'kw',
+      sourceTrackId: 'cache-test',
+      title: '缓存测试',
+      artist: '珊瑚音乐',
+    );
+
+    await controller.importScript('版本一', 'kw-v1');
+    await resolver.resolve(track);
+    await controller.importScript('版本二', 'kw-v2');
+    await resolver.resolve(track);
+
+    expect(runner.resolveCount, 2);
+  });
 }
 
 final class _Runner implements UserApiRunner {
   String? loadedScript;
   bool wasCleared = false;
+  var resolveCount = 0;
 
   @override
   Future<void> clear() async {
@@ -74,6 +96,11 @@ final class _Runner implements UserApiRunner {
   Future<LyricPayload?> resolveLyric(Track track) async => null;
 
   @override
-  Future<Uri> resolveMusicUrl(Track track, AudioQuality quality) async =>
-      Uri.parse('https://example.com/audio.mp3');
+  Future<ResolvedPlaybackUrl> resolveMusicUrl(
+    Track track,
+    AudioQuality quality,
+  ) async =>
+      ResolvedPlaybackUrl(
+        Uri.parse('https://example.com/audio-${++resolveCount}.mp3'),
+      );
 }

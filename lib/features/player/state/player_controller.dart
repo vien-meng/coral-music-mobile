@@ -96,9 +96,11 @@ final class PlayerController extends StateNotifier<PlayerState> {
     this._queue, [
     LibraryStore? library,
     AudioFileProbe? fileProbe,
+    Future<List<PlayHistoryEntry>> Function()? loadHistory,
   ])  : _library = library ?? LibraryStore(),
         _fileProbe = fileProbe ?? const NoopAudioFileProbe(),
         super(const PlayerState()) {
+    _loadHistory = loadHistory ?? _library.listHistory;
     _subscription = _engine.snapshots.listen(_onSnapshot);
     _engineCommandSubscription = _engine.commands.listen(_onEngineCommand);
   }
@@ -108,8 +110,10 @@ final class PlayerController extends StateNotifier<PlayerState> {
   final PlaybackQueueController _queue;
   final LibraryStore _library;
   final AudioFileProbe _fileProbe;
+  late final Future<List<PlayHistoryEntry>> Function() _loadHistory;
   final _failedTrackIds = <String>{};
   final _refreshedTrackQualities = <String>{};
+  final _handledEngineFailures = <String>{};
   var _playRequest = 0;
   String? _recordedHistoryTrackId;
   String? _lastPersistedTrackId;
@@ -127,7 +131,29 @@ final class PlayerController extends StateNotifier<PlayerState> {
             state.status == AudioEngineStatus.paused)) {
       return _engine.play();
     }
-    return playTrack(track);
+    return playTrack(
+      track,
+      initialPosition: state.track?.id == track.id ? state.position : null,
+    );
+  }
+
+  Future<void> restoreLastPlayback() async {
+    if (state.track != null) return;
+    try {
+      final history = await _loadHistory();
+      if (state.track != null || history.isEmpty) return;
+      final latest = history.first;
+      state = PlayerState(
+        track: latest.track,
+        position: _validResumePosition(latest.track, latest.lastPosition) ??
+            Duration.zero,
+        speed: state.speed,
+        volume: state.volume,
+        quality: _defaultQuality(latest.track),
+      );
+    } on Object {
+      // ponytail: history is optional startup context; a storage failure must not block the app shell.
+    }
   }
 
   Future<void> playTrack(
@@ -149,8 +175,13 @@ final class PlayerController extends StateNotifier<PlayerState> {
       _failedTrackIds.remove(track.id);
       _refreshedTrackQualities
           .removeWhere((key) => key.startsWith('${track.id}:'));
+      _handledEngineFailures
+          .removeWhere((key) => key.startsWith('${track.id}:'));
     }
     final resolvedQuality = quality ?? _defaultQuality(track);
+    if (refreshUrl) {
+      _handledEngineFailures.remove(_engineFailureKey(track, resolvedQuality));
+    }
     state = PlayerState(
       track: track,
       status: AudioEngineStatus.loading,
@@ -159,33 +190,44 @@ final class PlayerController extends StateNotifier<PlayerState> {
       quality: resolvedQuality,
       fileInfo: null,
     );
-    Uri uri;
+    ResolvedPlaybackUrl playbackUrl;
     try {
-      uri = await _resolver.resolve(
+      playbackUrl = await _resolver.resolve(
         track,
         quality: resolvedQuality,
         forceRefresh: refreshUrl,
       );
     } on AppFailure catch (error) {
       if (request != _playRequest) return;
-      _handleFailure(track, error);
+      _handleResolveFailure(
+        track,
+        resolvedQuality,
+        error,
+        initialPosition: initialPosition,
+        autoPlay: autoPlay,
+      );
       return;
     } on Object catch (error) {
       if (request != _playRequest) return;
-      _handleFailure(
+      _handleResolveFailure(
         track,
+        resolvedQuality,
         AppFailure(
           code: AppFailureCode.unknown,
           message: '播放地址解析失败',
           diagnostic: error.runtimeType.toString(),
         ),
+        initialPosition: initialPosition,
+        autoPlay: autoPlay,
       );
       return;
     }
     if (request != _playRequest) return;
-    unawaited(_probeFileInfo(request, uri));
+    final actualQuality = playbackUrl.quality ?? resolvedQuality;
+    state = state.copyWith(quality: actualQuality);
+    unawaited(_probeFileInfo(request, playbackUrl.uri));
     try {
-      await _engine.load(track, uri);
+      await _engine.load(track, playbackUrl.uri);
       if (request != _playRequest) return;
       final resumePosition = _validResumePosition(track, initialPosition);
       if (resumePosition != null) await _engine.seek(resumePosition);
@@ -195,7 +237,7 @@ final class PlayerController extends StateNotifier<PlayerState> {
       if (request != _playRequest) return;
       _handleEngineFailure(
         track,
-        resolvedQuality,
+        actualQuality,
         error,
         initialPosition: initialPosition,
         autoPlay: autoPlay,
@@ -204,7 +246,7 @@ final class PlayerController extends StateNotifier<PlayerState> {
       if (request != _playRequest) return;
       _handleEngineFailure(
         track,
-        resolvedQuality,
+        actualQuality,
         AppFailure(
           code: AppFailureCode.unknown,
           message: '播放加载失败',
@@ -414,6 +456,7 @@ final class PlayerController extends StateNotifier<PlayerState> {
     Duration? initialPosition,
     bool autoPlay = true,
   }) {
+    if (!_handledEngineFailures.add(_engineFailureKey(track, quality))) return;
     if (_refreshedTrackQualities.add('${track.id}:${quality.name}')) {
       _resolver.invalidate(track, quality: quality);
       unawaited(
@@ -428,6 +471,32 @@ final class PlayerController extends StateNotifier<PlayerState> {
       );
       return;
     }
+    final fallback = _lowerQuality(track, quality);
+    if (fallback != null) {
+      unawaited(
+        playTrack(
+          track,
+          quality: fallback,
+          retryFailed: false,
+          initialPosition: initialPosition,
+          autoPlay: autoPlay,
+        ),
+      );
+      return;
+    }
+    _handleFailure(track, error);
+  }
+
+  String _engineFailureKey(Track track, AudioQuality quality) =>
+      '${track.id}:${quality.name}';
+
+  void _handleResolveFailure(
+    Track track,
+    AudioQuality quality,
+    AppFailure error, {
+    Duration? initialPosition,
+    bool autoPlay = true,
+  }) {
     final fallback = _lowerQuality(track, quality);
     if (fallback != null) {
       unawaited(

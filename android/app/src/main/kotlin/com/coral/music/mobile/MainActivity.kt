@@ -33,6 +33,7 @@ class MainActivity: AudioServiceActivity() {
                     "clear" -> userApiRunner.clear(result)
                     "resolveMusicUrl" -> userApiRunner.resolveMusicUrl(call.arguments as? Map<*, *>, result)
                     "resolveLyric" -> userApiRunner.resolveLyric(call.arguments as? Map<*, *>, result)
+                    "resolveKuwoLyric" -> userApiRunner.resolveKuwoLyric(call.argument<String>("songId") ?: "", result)
                     else -> result.notImplemented()
                 }
             }
