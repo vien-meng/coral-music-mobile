@@ -128,7 +128,10 @@ final class MethodChannelUserApiRunner implements UserApiRunner {
   @override
   Future<LyricPayload?> resolveLyric(Track track) async {
     final manifest = _manifest;
-    if (manifest == null || !manifest.lyricSources.contains(track.sourceId)) {
+    // Desktop dispatches lyric by source action. Some current LX scripts only
+    // advertise a local lyric capability, while still handling online actions.
+    if (manifest == null ||
+        !manifest.musicUrlSources.contains(track.sourceId)) {
       return null;
     }
     try {

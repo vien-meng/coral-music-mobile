@@ -48,3 +48,10 @@
 - 实际修改：`android/app/src/main/kotlin/com/coral/music/mobile/UserApiRunner.kt` 的 `load`、`clear`、`dispose` 共用在途请求取消逻辑；`clear` 重置 WebView 文档。验证通过：`flutter build apk --debug`，产物为 `build/app/outputs/flutter-apk/app-debug.apk`。切换/移除脚本的 Android 真机回归仍待补录。
 - 输入边界：Dart 和 Android 原生运行时均将纯空白脚本视为无效，立即返回既有“音源脚本为空或超过大小限制”错误，不启动 WebView 初始化超时。
 - 验证通过：`test/user_api_runner_test.dart` 使用 mock MethodChannel 确认空白脚本不会调用原生运行时；`flutter test test/user_api_runner_test.dart -r compact` 通过。
+
+## 2026-07-17 会话内音源管理导航修复
+
+- 真机发现“我的 → 设置/音源管理”此前使用 `context.go('/setting')` 替换了路由，系统返回会结束 Activity；由于脚本刻意只驻留会话内存，重新启动后音源会被正确清除，却使同一会话导入后返回搜索不符合移动端预期。
+- `MorePage` 的三个设置入口改为 `context.push('/setting')`；底栏主页面及其它“我的”快捷入口仍保持 `go`，不改变 Tab 的替换导航行为。
+- 新增 `test/more_page_test.dart` 覆盖“打开设置 → router.pop → 返回我的”；测试、相关 Dart 分析和 diff 检查通过。
+- Samsung SM-N986U / Android 13 覆盖安装后，真实执行“我的 → 设置 → 系统返回”，前台仍为 `com.coral.music.mobile.MainActivity`，界面回到“我的”。随后同一会话重新导入用户指定 LX URL，能力卡正确显示 `kw、kg、tx、wy、mg、local`，证明返回不会清空会话内运行时。

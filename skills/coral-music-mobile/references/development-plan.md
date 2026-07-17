@@ -75,9 +75,11 @@
 | B5-10 列表歌曲批量置顶　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-051-b5-10-playlist-pin-top.md`　　　　　　　 |
 | B4-01 最小可播放闭环：音频引擎、取链与受限 User API  | DOING　  | `development-history/2026-07-15-020-b4-01-minimum-playback-and-user-api.md`  |
 | B4-02 播放详情与歌词阅读界面　　　　　　　　　　　　 | DONE　　 | `development-history/2026-07-15-021-b4-02-player-detail-and-lyrics-ui.md`　  |
-| B4-03 队列前后切歌基础　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-15-022-b4-03-queue-navigation.md`　　　　　　　 |
-| B4-04 播放完成自动下一首　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-023-b4-04-auto-next.md`　　　　　　　　　　  |
-| B4-05 播放模式与随机历史　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-024-b4-05-playback-modes.md`　　　　　　　　 |
+| B4-03 队列前后切歌基础　　　　　　　　　　　　　　　 | DONE　  | `development-history/2026-07-15-022-b4-03-queue-navigation.md`　　　　　　　 |
+| B4-04 播放完成自动下一首　　　　　　　　　　　　　　 | DONE　  | `development-history/2026-07-16-023-b4-04-auto-next.md`　　　　　　　　　　  |
+| B4-05 播放模式与随机历史　　　　　　　　　　　　　　 | DONE　  | `development-history/2026-07-16-024-b4-05-playback-modes.md`　　　　　　　　 |
+| B4-25 在线封面、曲目信息与歌词服务补全　　　　　　　 | DOING  | `development-history/2026-07-17-075-b4-25-online-artwork-and-lyrics.md`      |
+| B4-26 播放音频文件信息探测　　　　　　　　　　　　　 | DOING  | `development-history/2026-07-17-076-b4-26-audio-file-info.md`                 |
 | B4-06 失效音源自动跳过　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-025-b4-06-error-skip.md`　　　　　　　　　　 |
 | B4-07 播放倍速控制　　　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-026-b4-07-playback-rate.md`　　　　　　　　  |
 | B4-08 播放音量控制　　　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-027-b4-08-volume-control.md`　　　　　　　　 |
@@ -94,6 +96,7 @@
 | B4-21 同目录本地 LRC 优先读取　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-060-b4-21-local-lrc-priority.md`　　　　 |
 | B4-22 三端后台播放运行时与系统媒体服务　　　　　　　 | DOING　  | `development-history/2026-07-16-061-b4-22-background-audio-service.md`　 |
 | B4-23 快速切歌旧请求隔离　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-063-b4-23-play-request-isolation.md`　 |
+| B4-24 LX 音源运行时兼容与真机闭环　　　　　　　　　 | DONE　  | `development-history/2026-07-16-071-b4-24-lx-runtime-compatibility.md`　 |
 
 ### 2026-07-16 开发顺序修订
 
@@ -105,7 +108,7 @@
 
 - 以用户提供的 Coral Music 设计稿作为移动端视觉基线，新增 UI-01 至 UI-06：设计系统/应用壳 → 首页/发现 → 搜索/详情 → 播放/歌词 → 我的/设置/音源管理 → 三端视觉回归。
 - 本修订只改变表现层与导航信息架构；既有排行榜、搜索、音源、队列、播放器和数据库业务状态继续复用，不能用演示数据替代。
-- 当前任务为 `UI-01 [DOING]`，记录：`development-history/2026-07-16-065-ui-01-design-system-and-shell.md`；完整计划：`development-history/2026-07-16-064-plan-high-fidelity-ui.md`。
+- `UI-01 [DOING]` 继续收口应用壳整体高保真；`UI-02 [DONE]` 已修复迷你播放栏被手机底部 Navbar 遮挡，记录：`development-history/2026-07-16-072-ui-02-mini-player-navbar-layout.md`；`UI-07 [DONE]` 已将 URL 音源导入前置并补齐真实脚本详情卡，记录：`development-history/2026-07-17-073-ui-07-source-import-details.md`；`UI-08 [DONE]` 已重排播放详情主控制区，记录：`development-history/2026-07-17-074-ui-08-player-control-layout.md`。完整计划：`development-history/2026-07-16-064-plan-high-fidelity-ui.md`。
 
 ## 里程碑
 
@@ -150,13 +153,13 @@
 
 ### Phase 3：播放器核心（5 周）
 
-- `P3-01 [DOING]` B4-01 已实现最小 `AudioEngine`，Android 真机播放/seek 通过；B4-11 正在把排行榜的点歌/播放全部接入统一播放控制器。B4-22 将系统媒体处理器收敛在 `AudioEngine` 内，iOS/鸿蒙真机验收仍待完成。
+- `P3-01 [DOING]` B4-01 已实现最小 `AudioEngine`，Android 真机播放/seek 通过；B4-11 已在真实 LX 音源下完成排行榜播放全部、榜单点歌和搜索点播三条入口回归，稳定自动化入口覆盖待补。B4-22 将系统媒体处理器收敛在 `AudioEngine` 内，iOS/鸿蒙真机验收仍待完成。
 - `P3-02 [DOING]` B4-01 已实现在线 `PlaybackResolver` 与 Android 受限 User API `musicUrl`，并通过真机 `kw` 取链；B4-12 已完成会话内音源管理，B4-13 已实现 URL 缓存/刷新，B4-19 已实现已声明质量内的降级重试。本地、下载和 WebDAV 已直连各自地址且不走 User API；来源发现、鉴权 Range 和跨来源换源仍待后续扩展。
-- `P3-03 [DOING]` B4-03 已实现队列首尾循环的上一首/下一首与详情页控制；B4-04 已接入完成事件自动切歌，B4-05 正在扩展三种模式与随机历史，B4-06 正在补失效音源自动跳过。切歌后即时恢复播放仍待 Android 回归。
+- `P3-03 [DOING]` B4-03 已实现队列首尾循环的上一首/下一首与详情页控制；详情页下一首已在 Android 真机切至《红尘客栈》并立即恢复 `PLAYING`。B4-04/B4-05 已在 Android 真机验证列表循环、单曲循环与随机自动切歌；B4-06 正在补失效音源自动跳过，其余平台回归待补。
 - `P3-04 [DOING]` seek 已在 B4-01 通过 Android 真机；B4-07 已接入 0.5–2.0 倍速控制，B4-16 已实现进度保存和从历史继续播放；应用启动恢复和音频焦点中断待后续。
 - `P3-05 [DOING]` B4-02 已实现可从迷你播放栏进入的播放详情、专辑卡片、进度和播放控制；B4-09 正在实现共享队列面板，质量选择和收藏待补。
 - `P3-06 [DOING]` B4-02 已实现歌词阅读入口，B4-17 已接通 User API 原文/翻译/罗马音与 LX 逐字 LRC、当前行高亮及 LRC `offset`；缓存和本地优先级待补。
-- `P3-07 [DOING]` B4-22 已接入 `audio_service` 作为系统前台媒体运行时，Android Debug 构建通过；播放/暂停/seek 与上一首/下一首已进入统一处理器。SM-N986U 冷启动已验证不再产生空闲 `media-session`；首次播放、锁屏、耳机、音频焦点中断及三端验收仍待完成。
+- `P3-07 [DOING]` B4-22 已接入 `audio_service` 作为系统前台媒体运行时；SM-N986U / Android 13 已用真实 LX 音源验证播放进度、后台持续、系统播放/暂停及后台下一首队列切歌。空闲 `media-session` 策略、通知/锁屏卡、实体耳机、音频焦点中断及 iOS/鸿蒙验收仍待完成。
 - `P3-08` 实现评论入口、可关闭可视化及经 Phase 0 验证的平台音效。
 
 退出门槛：四类来源均可播放/seek；锁屏和耳机控制通过；60 分钟连续播放无阻断错误。

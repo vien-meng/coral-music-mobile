@@ -44,4 +44,30 @@ void main() {
     expect(controller.selectPrevious()?.sourceTrackId, '2');
     expect(controller.selectNext()?.sourceTrackId, '1');
   });
+
+  test('completion follows the selected playback mode', () {
+    const third = Track(
+      sourceKind: TrackSourceKind.online,
+      sourceId: 'kw',
+      sourceTrackId: '3',
+      title: '三',
+      artist: '歌手',
+    );
+    final controller = PlaybackQueueController()
+      ..replaceQueue([...tracks, third]);
+
+    controller.setMode(PlaybackMode.singleLoop);
+    expect(controller.selectAfterCompletion()?.sourceTrackId, '1');
+
+    controller.setMode(PlaybackMode.shuffle);
+    final played = <String>{controller.state.currentTrack!.sourceTrackId};
+    for (var index = 0; index < 2; index++) {
+      played.add(controller.selectAfterCompletion()!.sourceTrackId);
+    }
+    expect(played, hasLength(3));
+
+    controller.setMode(PlaybackMode.listLoop);
+    controller.select(2);
+    expect(controller.selectAfterCompletion()?.sourceTrackId, '1');
+  });
 }

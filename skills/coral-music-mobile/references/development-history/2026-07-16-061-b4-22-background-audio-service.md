@@ -100,3 +100,15 @@
 - 使用真实 LX 音源点播时，SM-N986U / Android 13 日志显示 `AudioService.init` 失败：`Unable to bind to AudioService`。排除 User API 后确认原因是 `AudioServiceActivity` 在 Flutter 插件附着时就连接 `AudioService`；此前 manifest 默认 disabled，首次播放才启用已晚于连接生命周期。
 - 修复：`AudioService` 恢复 manifest 默认可用，并在 `MainActivity.onCreate` 于 `super.onCreate` 前恢复已被旧版本持久化的 disabled 状态；背景通道只按需开关 `MediaButtonReceiver`。这优先保证可播放闭环，但会恢复空闲 service/session 现象，原“冷启动 0 session”验收从通过改回待收口，不能据此把 B4-22 标记完成。
 - 后续验收入口：重新安装 Debug APK 后，先确认 LX 导入和取链，再检查首次 `AudioService.init`、播放态通知/锁屏、暂停、停止后的 receiver 与冷启动会话状态。
+
+## 2026-07-16 Android 播放态媒体服务验收
+
+- 采用用户指定的真实 LX 音源完成播放态回归：Samsung SM-N986U / Android 13 的媒体会话为 `PLAYING`，真实歌曲元数据已发布，5 秒内播放位置从 `98.451s` 推进至 `103.450s`。
+- 按 HOME 后会话仍为 `PLAYING`，播放位置继续推进，确认后台服务实际承载播放。系统 `KEYCODE_MEDIA_PLAY_PAUSE` 首次使会话变为 `PAUSED`，再次触发恢复 `PLAYING`，证明系统媒体控制已连接到统一 `AudioEngine`。
+- 该结果仅关闭 Android 的播放态、后台和通用媒体键风险；空闲 session 行为、通知/锁屏卡的人工视觉验收、实体耳机与 iOS/鸿蒙真机仍未完成，任务保持 `DOING`。
+
+## 2026-07-17 Android 真机：后台下一首路由通过
+
+- Samsung SM-N986U / Android 13 正在播放《红尘客栈》时按 HOME。4 秒后系统会话仍为 `PLAYING`，位置推进至 `63.549s`，证明播放未因进入后台中断。
+- 后台发送系统 `KEYCODE_MEDIA_NEXT` 后，媒体会话仍为 `PLAYING`，位置重新从 `6.941s` 计时，元数据切换为《青花瓷》/ 周杰伦 /《我很忙》。
+- 结论：Android 的前台媒体服务和 `audio_service` 下一首命令已路由到共享播放队列。锁屏卡视觉、实体耳机、音频焦点中断及 iOS/鸿蒙仍为未完成项，任务继续 `DOING`。

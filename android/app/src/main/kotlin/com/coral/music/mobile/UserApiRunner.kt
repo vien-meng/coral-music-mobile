@@ -85,7 +85,7 @@ class UserApiRunner(private val activity: Activity) {
     fun resolveLyric(arguments: Map<*, *>?, result: MethodChannel.Result) {
         val requestArguments = arguments ?: emptyMap<String, Any?>()
         val source = requestArguments["source"] as? String ?: ""
-        if (!loaded || source !in lyricSources) {
+        if (!loaded || source !in sources) {
             result.error("not_ready", "当前音源未支持该歌曲来源的歌词", null)
             return
         }

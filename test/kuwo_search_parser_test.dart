@@ -22,6 +22,10 @@ void main() {
     expect(result.items.first.artist, '周杰伦、测试歌手');
     expect(result.items.first.duration, const Duration(seconds: 269));
     expect(
+      result.items.first.coverUri.toString(),
+      'https://img3.kuwo.cn/star/albumcover/500/s3s94/93/211513640.jpg',
+    );
+    expect(
       result.items.first.availableQualities,
       [AudioQuality.flac, AudioQuality.high320k, AudioQuality.standard128k],
     );

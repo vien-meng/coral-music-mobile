@@ -40,6 +40,7 @@ final class KuwoSearchParser {
           album: KuwoLeaderboardParser.decodeText('${value['ALBUM'] ?? ''}')
               .trim(),
           duration: duration == null ? null : Duration(seconds: duration),
+          coverUri: _cover(value['web_albumpic_short']),
           availableQualities: KuwoLeaderboardParser.parseQualities(
             '${value['N_MINFO'] ?? value['MINFO'] ?? ''}',
           ),
@@ -64,5 +65,16 @@ final class KuwoSearchParser {
     return musicRid.isNotEmpty
         ? musicRid
         : '${value['DC_TARGETID'] ?? ''}'.trim();
+  }
+
+  static Uri? _cover(Object? value) {
+    final parts = '$value'.trim().split('/');
+    if (parts.length < 2 || parts.skip(1).any((part) => part.isEmpty)) {
+      return null;
+    }
+    return Uri.https(
+      'img3.kuwo.cn',
+      '/star/albumcover/500/${parts.skip(1).join('/')}',
+    );
   }
 }

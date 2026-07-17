@@ -24,6 +24,27 @@ void main() {
     expect(runner.resolveCount, 2);
   });
 
+  test('defaults online playback to SQ FLAC when it is declared', () async {
+    final runner = _Runner();
+    final resolver = PlaybackResolver(runner);
+    const multiQualityTrack = Track(
+      sourceKind: TrackSourceKind.online,
+      sourceId: 'kw',
+      sourceTrackId: 'sq',
+      title: 'SQ 测试歌曲',
+      artist: '测试歌手',
+      availableQualities: [
+        AudioQuality.flac,
+        AudioQuality.high320k,
+        AudioQuality.standard128k,
+      ],
+    );
+
+    await resolver.resolve(multiQualityTrack);
+
+    expect(runner.lastQuality, AudioQuality.flac);
+  });
+
   test('uses non-online URIs without invoking User API', () async {
     final runner = _Runner();
     final resolver = PlaybackResolver(runner);
@@ -52,6 +73,7 @@ void main() {
 
 final class _Runner implements UserApiRunner {
   var resolveCount = 0;
+  AudioQuality? lastQuality;
 
   @override
   Future<void> clear() async {}
@@ -66,6 +88,7 @@ final class _Runner implements UserApiRunner {
   @override
   Future<Uri> resolveMusicUrl(Track track, AudioQuality quality) async {
     resolveCount++;
+    lastQuality = quality;
     return Uri.parse('https://example.com/$resolveCount.mp3');
   }
 }

@@ -52,15 +52,56 @@ final class UserApiSource {
     required this.id,
     required this.name,
     required this.script,
+    required this.info,
     required this.musicUrlSources,
     required this.lyricSources,
+    this.originUrl,
   });
 
   final String id;
   final String name;
   final String script;
+  final UserApiSourceInfo info;
   final Set<String> musicUrlSources;
   final Set<String> lyricSources;
+  final Uri? originUrl;
+}
+
+/// Public, comment-header metadata only. It is never executed or persisted.
+final class UserApiSourceInfo {
+  const UserApiSourceInfo({
+    this.name,
+    this.description,
+    this.version,
+    this.author,
+    this.homepage,
+  });
+
+  final String? name;
+  final String? description;
+  final String? version;
+  final String? author;
+  final String? homepage;
+
+  factory UserApiSourceInfo.fromScript(String script) {
+    final fields = <String, String>{};
+    final tag = RegExp(
+      r'^\s*(?:/\*+|\*+|//)\s*@([a-zA-Z]+)\s+(.+?)\s*(?:\*/)?\s*$',
+      multiLine: true,
+    );
+    for (final match in tag.allMatches(script)) {
+      final key = match.group(1)!.toLowerCase();
+      final value = match.group(2)!.trim();
+      if (value.isNotEmpty) fields.putIfAbsent(key, () => value);
+    }
+    return UserApiSourceInfo(
+      name: fields['name'],
+      description: fields['description'],
+      version: fields['version'],
+      author: fields['author'],
+      homepage: fields['homepage'] ?? fields['repository'],
+    );
+  }
 }
 
 final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
@@ -85,7 +126,7 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final script = await _fetcher.fetch(uri);
-      await importScript(name, script);
+      await importScript(name, script, originUrl: uri);
     } on AppFailure catch (error) {
       state = state.copyWith(isLoading: false, error: error);
     } on Object catch (error) {
@@ -100,9 +141,14 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
     }
   }
 
-  Future<void> importScript(String name, String script) async {
+  Future<void> importScript(
+    String name,
+    String script, {
+    Uri? originUrl,
+  }) async {
+    final info = UserApiSourceInfo.fromScript(script);
     final normalizedName =
-        name.trim().isEmpty ? '音源 ${state.sources.length + 1}' : name.trim();
+        name.trim().isNotEmpty ? name.trim() : info.name ?? '未命名音源';
     final previous = state.activeSource;
     state = state.copyWith(isLoading: true, clearError: true);
     try {
@@ -111,8 +157,10 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
         id: DateTime.now().microsecondsSinceEpoch.toString(),
         name: normalizedName,
         script: script,
+        info: info,
         musicUrlSources: manifest.musicUrlSources,
         lyricSources: manifest.lyricSources,
+        originUrl: originUrl,
       );
       state = state.copyWith(
         isLoading: false,
@@ -147,8 +195,10 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
         id: target.id,
         name: target.name,
         script: target.script,
+        info: target.info,
         musicUrlSources: manifest.musicUrlSources,
         lyricSources: manifest.lyricSources,
+        originUrl: target.originUrl,
       );
       state = state.copyWith(
         isLoading: false,

@@ -7,6 +7,7 @@ import '../../../core/app_failure.dart';
 import '../../../domain/music.dart';
 import '../../library/data/library_store.dart';
 import '../data/audio_engine.dart';
+import '../data/audio_file_probe.dart';
 import '../data/playback_resolver.dart';
 import '../data/user_api_runner.dart';
 import 'playback_queue_controller.dart';
@@ -24,12 +25,16 @@ final audioEngineProvider = Provider<AudioEngine>((ref) {
   return engine;
 });
 
+final audioFileProbeProvider =
+    Provider<AudioFileProbe>((_) => HttpAudioFileProbe());
+
 final playerProvider = StateNotifierProvider<PlayerController, PlayerState>(
   (ref) => PlayerController(
     ref.watch(audioEngineProvider),
     ref.watch(playbackResolverProvider),
     ref.watch(playbackQueueProvider.notifier),
     ref.watch(libraryStoreProvider),
+    ref.watch(audioFileProbeProvider),
   ),
 );
 
@@ -41,7 +46,8 @@ final class PlayerState {
     this.status = AudioEngineStatus.idle,
     this.speed = 1,
     this.volume = 1,
-    this.quality = AudioQuality.standard128k,
+    this.quality = AudioQuality.flac,
+    this.fileInfo,
     this.error,
   });
 
@@ -52,6 +58,7 @@ final class PlayerState {
   final double speed;
   final double volume;
   final AudioQuality quality;
+  final AudioFileInfo? fileInfo;
   final AppFailure? error;
 
   bool get isPlaying => status == AudioEngineStatus.playing;
@@ -64,8 +71,10 @@ final class PlayerState {
     double? speed,
     double? volume,
     AudioQuality? quality,
+    AudioFileInfo? fileInfo,
     AppFailure? error,
     bool clearError = false,
+    bool clearFileInfo = false,
   }) =>
       PlayerState(
         track: track ?? this.track,
@@ -75,6 +84,7 @@ final class PlayerState {
         speed: speed ?? this.speed,
         volume: volume ?? this.volume,
         quality: quality ?? this.quality,
+        fileInfo: clearFileInfo ? null : fileInfo ?? this.fileInfo,
         error: clearError ? null : error ?? this.error,
       );
 }
@@ -85,7 +95,9 @@ final class PlayerController extends StateNotifier<PlayerState> {
     this._resolver,
     this._queue, [
     LibraryStore? library,
+    AudioFileProbe? fileProbe,
   ])  : _library = library ?? LibraryStore(),
+        _fileProbe = fileProbe ?? const NoopAudioFileProbe(),
         super(const PlayerState()) {
     _subscription = _engine.snapshots.listen(_onSnapshot);
     _engineCommandSubscription = _engine.commands.listen(_onEngineCommand);
@@ -95,6 +107,7 @@ final class PlayerController extends StateNotifier<PlayerState> {
   final PlaybackResolver _resolver;
   final PlaybackQueueController _queue;
   final LibraryStore _library;
+  final AudioFileProbe _fileProbe;
   final _failedTrackIds = <String>{};
   final _refreshedTrackQualities = <String>{};
   var _playRequest = 0;
@@ -144,6 +157,7 @@ final class PlayerController extends StateNotifier<PlayerState> {
       speed: state.speed,
       volume: state.volume,
       quality: resolvedQuality,
+      fileInfo: null,
     );
     Uri uri;
     try {
@@ -169,6 +183,7 @@ final class PlayerController extends StateNotifier<PlayerState> {
       return;
     }
     if (request != _playRequest) return;
+    unawaited(_probeFileInfo(request, uri));
     try {
       await _engine.load(track, uri);
       if (request != _playRequest) return;
@@ -226,6 +241,7 @@ final class PlayerController extends StateNotifier<PlayerState> {
       status: AudioEngineStatus.loading,
       speed: state.speed,
       volume: state.volume,
+      fileInfo: null,
     );
     try {
       await _engine.load(track, uri);
@@ -331,6 +347,7 @@ final class PlayerController extends StateNotifier<PlayerState> {
       speed: state.speed,
       volume: state.volume,
       quality: state.quality,
+      fileInfo: state.fileInfo,
       error: snapshot.error == null
           ? null
           : AppFailure(code: AppFailureCode.unknown, message: snapshot.error!),
@@ -346,6 +363,12 @@ final class PlayerController extends StateNotifier<PlayerState> {
         final previous = _queue.selectPrevious();
         if (previous != null) unawaited(playTrack(previous));
     }
+  }
+
+  Future<void> _probeFileInfo(int request, Uri uri) async {
+    final info = await _fileProbe.probe(uri);
+    if (request != _playRequest) return;
+    state = state.copyWith(fileInfo: info);
   }
 
   void _recordHistory(Track track, Duration position) => _queueHistoryWrite(
@@ -430,9 +453,8 @@ final class PlayerController extends StateNotifier<PlayerState> {
     return null;
   }
 
-  AudioQuality _defaultQuality(Track track) => track.availableQualities.isEmpty
-      ? AudioQuality.standard128k
-      : track.availableQualities.last;
+  AudioQuality _defaultQuality(Track track) =>
+      defaultPlaybackQuality(track.availableQualities);
 
   AudioQuality? _lowerQuality(Track track, AudioQuality quality) {
     final candidates = track.availableQualities

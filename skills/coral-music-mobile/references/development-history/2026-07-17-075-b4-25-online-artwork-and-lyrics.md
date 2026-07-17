@@ -1,0 +1,41 @@
+# B4-25 在线封面、曲目信息与歌词服务补全
+
+- 阶段：Batch 4 / Phase 3
+- 状态：DOING
+- 负责人：Codex
+- 开始时间：2026-07-17
+- 完成时间：未完成
+
+## 目标与范围
+
+补齐在线搜索列表、播放队列和播放详情的曲目封面；在播放详情明确显示当前选定质量对应的比特率；让已启用的 User API 音源即使未在 manifest 中单独标注 `lyric`，也可尝试桌面同协议的 `lyric` 动作。
+
+不做：自建第三方歌词聚合服务、歌词持久化缓存、跨来源匹配、封面文件落盘或变更桌面音源协议。
+
+## 桌面端对照
+
+- `coral-music-desktop/src/renderer-react/services/onlineMediaService.ts`：在线播放后补齐 `getOnlinePicUrl`、`getOnlineLyricInfo`；User API 使用同一来源的 `{ action: 'lyric', info: { musicInfo, isGetLyricx: true } }`。
+- `coral-music-desktop/src/renderer-react/services/musicSdkRuntime.ts`：User API 的 `lyric` 与 `pic` 都是动作请求，不依赖 UI 的静态占位封面。
+
+## 当前发现与实施方案
+
+- 根因一：酷我搜索解析仅带了专辑名和 ID，遗漏真实响应的 `web_albumpic_short`；排行榜已有封面，因此搜索、由搜索创建的队列和详情会回退到占位图。
+- 根因二：移动端原生桥把歌词请求限制为 manifest 的 `lyricSources`。用户指定的 LX 脚本实际只宣告 `local` 歌词能力，导致已可播放的 `kw` 曲目从未把 `lyric` 请求送入脚本，与桌面按来源动作调用的行为不一致。
+- 计划：用酷我响应中的短封面路径生成其确认可访问的 CDN 地址；队列复用同一缩略图组件；播放详情显示质量与码率；歌词请求改为已启用在线音源的受限尝试，失败只返回空歌词且不影响播放。
+
+## 验收
+
+- 搜索的酷我曲目带真实 `coverUri`，队列和播放详情复用该地址。
+- 播放详情显示例如 `SQ · 320 kbps`。
+- Android 真机对真实 LX 脚本的在线歌曲实际发起 lyric 动作；若脚本返回歌词则显示时间轴，若脚本拒绝则清晰空态且播放仍持续。
+
+## 关联
+
+- 计划：`2026-07-15-000-plan-business-development.md`
+- 关联任务：B3-01、B4-02、B4-17、UI-08。
+
+## 2026-07-17 真机记录
+
+- Samsung SM-N986U / Android 13：真实酷我搜索“周杰伦”已显示《晴天》《红尘客栈》《青花瓷》等封面；播放详情和 30 首播放队列均显示对应封面。
+- 真实 LX 脚本已重新 URL 导入并启用。尝试在线 `kw` 歌词后页面返回“歌词加载失败”，说明此前 manifest 门控已移除、请求已进入受限运行时，但该脚本未能返回此来源歌词；歌词服务不能标记完成。
+- 发现原先 SQ 档位定义错误，已转入 B4-10 修订：SQ 应为 FLAC，HQ 才是 320k。详情页 `SQ · 320 kbps` 截图仅为错误实现的验证证据，不作为交付结果。

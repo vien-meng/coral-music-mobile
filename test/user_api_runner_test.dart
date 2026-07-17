@@ -72,4 +72,79 @@ void main() {
     expect(meta['songId'], '1');
     expect(meta['albumId'], '2');
   });
+
+  test('normalizes a desktop-shaped User API lyric payload', () async {
+    const channel = MethodChannel('coral_music/user_api');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'load') {
+        return <String, Object?>{
+          'musicUrlSources': ['kw'],
+          'lyricSources': ['kw'],
+        };
+      }
+      if (call.method == 'resolveLyric') {
+        return '''
+          {"data":{"lyric":"[00:01.00]原文","lxlyric":"[00:01.00]<1000,200>原文","tlyric":"[00:01.00]Translation","rlyric":"[00:01.00]yuan wen"}}
+        ''';
+      }
+      return null;
+    });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null),
+    );
+
+    final runner = MethodChannelUserApiRunner();
+    await runner.load('source');
+    final lyric = await runner.resolveLyric(
+      const Track(
+        sourceKind: TrackSourceKind.online,
+        sourceId: 'kw',
+        sourceTrackId: '1',
+        title: '测试歌曲',
+        artist: '测试歌手',
+      ),
+    );
+
+    expect(lyric?.lyric, '[00:01.00]原文');
+    expect(lyric?.lxlyric, '[00:01.00]<1000,200>原文');
+    expect(lyric?.tlyric, '[00:01.00]Translation');
+    expect(lyric?.rlyric, '[00:01.00]yuan wen');
+  });
+
+  test('tries online lyrics when a source only advertises musicUrl', () async {
+    const channel = MethodChannel('coral_music/user_api');
+    var lyricRequested = false;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'load') {
+        return <String, Object?>{
+          'musicUrlSources': ['kw']
+        };
+      }
+      if (call.method == 'resolveLyric') {
+        lyricRequested = true;
+        return '{"lyric":"[00:01.00]原文"}';
+      }
+      return null;
+    });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null),
+    );
+
+    final runner = MethodChannelUserApiRunner();
+    await runner.load('source');
+    final lyric = await runner.resolveLyric(const Track(
+      sourceKind: TrackSourceKind.online,
+      sourceId: 'kw',
+      sourceTrackId: '1',
+      title: '测试歌曲',
+      artist: '测试歌手',
+    ));
+
+    expect(lyricRequested, isTrue);
+    expect(lyric?.lyric, '[00:01.00]原文');
+  });
 }

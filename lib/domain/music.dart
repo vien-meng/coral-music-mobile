@@ -25,6 +25,16 @@ enum AudioQuality {
   standard128k,
 }
 
+/// SQ is lossless FLAC. When unavailable, use the best quality the source
+/// declares instead of advertising a quality it cannot serve.
+AudioQuality defaultPlaybackQuality(Iterable<AudioQuality> qualities) {
+  final values = qualities.toSet();
+  if (values.contains(AudioQuality.flac)) return AudioQuality.flac;
+  if (values.isEmpty) return AudioQuality.flac;
+  return values.reduce(
+      (best, candidate) => candidate.index < best.index ? candidate : best);
+}
+
 enum PlaybackMode { listLoop, singleLoop, shuffle }
 
 final class LyricPayload {

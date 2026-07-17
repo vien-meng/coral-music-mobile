@@ -28,3 +28,10 @@
 ## 风险与后续
 
 - 未实现系统文件选择器与脚本安全持久化；地址导入只在当前会话保留脚本。真实 HTTPS 地址的 Android/iOS/鸿蒙真机回归待补录，任务保持 `DOING`。
+
+## 2026-07-16 至 2026-07-17 Android 真机地址导入
+
+- Samsung SM-N986U / Android 13 已多次使用用户指定的 `https://raw.githubusercontent.com/pdone/lx-music-source/main/lx/latest.js` 走“从地址导入并启用”路径；脚本实际下载、初始化并显示能力卡 `取链：kw、kg、tx、wy、mg、local · 歌词：local`。
+- 同一导入运行时已用于 B4-24 的真实 `musicUrl` 取链、播放、后台与媒体键回归，证明 URL 下载并非仅 UI 状态。
+- 在 B4-12 设置返回栈修复后，系统返回“我的”不会结束 MainActivity；同一会话重新导入后能力卡仍可见。脚本本身仍不写入数据库或日志，进程结束后按设计清除。
+- Android HTTPS 地址导入验收通过；iOS/鸿蒙运行时、重定向/超大响应的真机网络回归仍待平台设备，任务保持 `DOING`。
