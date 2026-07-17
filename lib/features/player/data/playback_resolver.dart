@@ -23,10 +23,8 @@ final class PlaybackResolver {
         message: '该来源缺少播放地址',
       );
     }
-    final resolvedQuality = quality ??
-        (track.availableQualities.isEmpty
-            ? AudioQuality.standard128k
-            : track.availableQualities.last);
+    final resolvedQuality =
+        quality ?? defaultPlaybackQuality(track.availableQualities);
     final key = _cacheKey(track, resolvedQuality);
     final cached = _cachedUrls[key];
     if (!forceRefresh &&
@@ -43,10 +41,8 @@ final class PlaybackResolver {
   }
 
   void invalidate(Track track, {AudioQuality? quality}) {
-    final resolvedQuality = quality ??
-        (track.availableQualities.isEmpty
-            ? AudioQuality.standard128k
-            : track.availableQualities.last);
+    final resolvedQuality =
+        quality ?? defaultPlaybackQuality(track.availableQualities);
     _cachedUrls.remove(_cacheKey(track, resolvedQuality));
   }
 

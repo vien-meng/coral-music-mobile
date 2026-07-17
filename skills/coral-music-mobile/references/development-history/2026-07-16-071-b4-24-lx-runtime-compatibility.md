@@ -1,10 +1,10 @@
 # B4-24 LX 音源运行时兼容与真机闭环
 
 - 阶段：Batch 4 / Phase 3
-- 状态：DOING
+- 状态：DONE
 - 负责人：Codex
 - 开始时间：2026-07-16
-- 完成时间：未完成
+- 完成时间：2026-07-16
 
 ## 目标与范围
 
@@ -53,8 +53,22 @@
 - 完整 MusicInfo 映射后仍有 200/404 混合结果。继续逐行对照桌面预加载桥：桌面会把 JSON 响应解析后同时放入 `response.body` 与第三个回调参数，并将 `currentScriptInfo.rawScript` 暴露给脚本；移动端此前分别传原始字符串和空对象。现补齐这两个无权限扩张的协议差异，再进行下一轮相同真机验证。
 - 继续对照桌面 `normalizeUserApiMusicUrlResult`：桌面允许音源返回字符串、`{url}` 或 `{data:{url}}`。移动端此前仅接受字符串，因此补齐这两种已经被桌面接受的返回形状；仍对最终地址执行主机名、长度和 `http/https` 校验。
 
+## 2026-07-16 真机取链通过，播放清晰文本策略
+
+- 最后一轮真机日志已不再出现 404：LX 取链请求均返回 200，Android media session 已显示真实歌曲元数据；说明音源导入、协议、取链与后台服务初始化均已越过。
+- UI 仍显示“播放加载失败”。该失败在 `just_audio.setUrl` 之后而非音源解析阶段；LX 返回 HTTP（非 HTTPS）音频地址，Android 9+ 默认拒绝明文流量。
+- 为保持桌面与该真实源的播放行为，Android application 开启 `usesCleartextTraffic`，仅作用于最终媒体地址；User API 脚本下载和脚本发起的受限请求仍维持 HTTPS 限制。发布前需要在安全/商店审查中评估商店版是否仅允许 HTTPS 签名源。
+
+## 2026-07-16 Android 真机播放闭环通过
+
+- 使用最新 Debug APK 在 Samsung SM-N986U / Android 13 重新导入同一 HTTPS LX 地址并点播真实在线曲目。`dumpsys media_session` 显示 `com.coral.music.mobile/media-session` 处于 `PLAYING`，元数据为《樱花草》/ Sweety /《花言乔语 (精装版)》；这不是调试样本地址。
+- 连续两次读取的播放位置从 `98.451s` 到 `103.450s`（约 5 秒），说明真实音频已持续解码，而非仅成功取链或发布了伪媒体状态。随后发送 HOME 返回桌面，状态仍为 `PLAYING`，位置继续到 `105.851s`，后台播放通过本机回归。
+- 通过系统 `KEYCODE_MEDIA_PLAY_PAUSE` 验证媒体按键：首次从播放变为 `PAUSED`（位置 `137.627s`），再次按键恢复为 `PLAYING`（位置 `140.229s`）。锁屏和耳机按键复用该 audio_service 路径，但仍需人工实体耳机/锁屏通知卡验收。
+- 验证命令：`flutter build apk --debug`、`dart analyze lib test`、`adb install -r`、`adb shell dumpsys media_session`、`adb shell input keyevent 85`。构建与分析通过；真机为 Samsung SM-N986U / Android 13。
+
 ## 当前风险与恢复入口
 
 - Android 原生桥接变更需要完整 Debug APK 安装，不能仅靠 Dart 热重载验证。
 - 如果该脚本依赖桌面 Node 加密或压缩接口，必须根据真机报出的实际调用补齐受限等价能力，不能执行脚本于宿主 macOS。
 - 后续记录真实 UI、logcat、`dumpsys media_session` 和播放结果；失败时保留精确错误文本（不记录脚本正文）。
+- B4-24 的 Android 导入、取链、实际播放、后台持续与系统播放/暂停闭环均已通过。空闲会话策略、iOS/鸿蒙和实体耳机/锁屏验收由 B4-22 独立继续跟踪，不阻塞本专项结项。

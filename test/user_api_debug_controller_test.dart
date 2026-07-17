@@ -25,6 +25,30 @@ void main() {
     expect(controller.state.activeSource, isNull);
     expect(runner.wasCleared, isTrue);
   });
+
+  test('uses public script header details instead of a generated source name',
+      () async {
+    final controller = UserApiDebugController(_Runner());
+
+    await controller.importScript('', '''
+/*!
+ * @name [独家音源]
+ * @description 音源更新，关注微信公众号：洛雪科技
+ * @version 4
+ * @author 洛雪科技
+ * @repository https://github.com/lxmusics/lx-music-api-server
+ */
+kw-script
+''');
+
+    final source = controller.state.activeSource!;
+    expect(source.name, '[独家音源]');
+    expect(source.info.description, '音源更新，关注微信公众号：洛雪科技');
+    expect(source.info.version, '4');
+    expect(source.info.author, '洛雪科技');
+    expect(source.info.homepage,
+        'https://github.com/lxmusics/lx-music-api-server');
+  });
 }
 
 final class _Runner implements UserApiRunner {

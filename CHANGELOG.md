@@ -2,7 +2,105 @@
 
 All notable changes to 珊瑚音乐移动端 (Coral Music Mobile) will be documented in this file.
 
-## [0.1.0] - 2026-07-16(03)
+## [1.0.0] - 2026-07-17(01)
+
+### 音源 URL 导入优先与详情卡
+
+- HTTPS URL 导入提升为页面首要操作，手动脚本粘贴收入"高级导入"折叠区
+- 导入成功后展示音源详情卡：名称、描述、版本、作者、主页、来源地址及中文能力标签
+- 解析脚本顶部公开 JSDoc 声明（`@name`/`@description`/`@version`/`@author`/`@homepage`），不扩展平台桥接
+
+### 播放详情主控布局
+
+- 上一曲/播放/下一曲固定为视觉居中的主控行，模式按钮移至独立次级行
+- 窄屏下主播放键不再因模式按钮偏移
+
+### 会话内音源管理导航修复
+
+- "我的 → 设置/音源管理"改为 `context.push`，系统返回不再结束 Activity
+- 同一会话重新导入后能力卡仍可见，新增 `test/more_page_test.dart` 覆盖返回栈
+
+### User API 歌词契约回归
+
+- 新增桌面兼容 `{ data: { lyric, lxlyric, tlyric, rlyric } }` 包装对象的归一化契约测试
+
+## [1.0.0] - 2026-07-16(04)
+
+### 列表歌曲批量操作
+
+- 长按进入选择模式，支持批量删除（SQLite 事务）、复制/移动到另一列表（目标按 Track ID 去重）、批量置顶
+- 列表歌曲拖动排序（`ReorderableListView`），全量 `position` 回写；筛选/批量模式下禁用拖拽
+
+### User API 音源管理
+
+- `UserApiDebugController` 维护会话内脚本、名称、声明能力和当前启用项；一次只激活一个脚本
+- `UserApiRunner` 新增 `clear` 平台边界，移除当前音源时取消在途请求并清空原生运行时
+- 设置页改为"音源管理"：粘贴/HTTPS 地址导入、启用切换、能力展示、移除
+- 空白脚本立即返回错误，不启动 WebView 初始化
+
+### 在线取链缓存与降级
+
+- `PlaybackResolver` 以歌曲 ID + 音质为键缓存 15 分钟 HTTPS URL，提供 `forceRefresh`/`invalidate`
+- 引擎失败清缓存并仅重试一次取链，第二次失败才进入跳过逻辑
+- 高音质刷新失败后按 `AudioQuality` 枚举顺序降级到下一已声明质量
+- 非在线来源（本地/下载/WebDAV）直接返回 `localUri`，不查询 User API
+
+### 播放进度恢复
+
+- 每 15 秒/暂停/seek 保存位置到 `play_history.last_position_ms`，播放完成清零
+- 播放历史点击从有效位置继续播放，少于 5 秒或接近结尾从头开始
+- 串行执行同一播放器的历史写入，修复首次播放后立即 seek 的竞态
+
+### User API 歌词
+
+- Android `UserApiRunner` 增加独立 `resolveLyric` 回调，与 `musicUrl` 隔离
+- 标准 LRC 时间轴解析，当前行高亮、翻译、罗马音对齐
+- LX 逐字歌词（`<start,duration>` 标签）优先，保留词间空格
+- 支持 `[offset:±ms]` 标签，原文行与 LX 词片段使用同一偏移
+- 歌词自动滚动到当前行
+
+### 本地 LRC 优先
+
+- 本地 `file://` 曲目先读取同目录 LRC（四种命名候选），未命中才走 User API
+- 本地/下载/WebDAV 在 LRC 未命中时返回空歌词，不调用 User API
+
+### User API HTTPS 地址导入
+
+- 流式 HTTPS 下载器，响应长度限制 256 KiB，严格 UTF-8 解码
+- 禁止重定向，HTTP/超大脚本拒绝
+
+### 后台播放运行时
+
+- 引入 `audio_service 0.18.19`，`JustAudioEngine` 将 `just_audio` 实例放入 `AudioService` 统一处理器
+- Android 声明前台媒体服务与媒体按钮接收器，iOS 声明 `UIBackgroundModes/audio`
+- `AudioEngineCommand` 将系统上一首/下一首路由到 `PlaybackQueueController`
+- 旧 Android `MediaSessionBridge` 已删除，避免重复会话
+- Android 真机（SM-N986U）播放态验收：会话 `PLAYING`、元数据发布、HOME 后后台持续播放、`KEYCODE_MEDIA_PLAY_PAUSE` 控制
+- 空闲会话策略：service/receiver 默认 disabled，首次真实 load 前才启用
+
+### 快速切歌旧请求隔离
+
+- `PlayerController` 持有单调请求序号，新请求使旧请求失效
+- 取链、加载、seek、播放和失败映射前均校验当前请求
+
+### LX 音源运行时兼容
+
+- 对齐桌面 `preload.js` 协议：`lx.utils.crypto`（MD5/随机字节）、`currentScriptInfo.rawScript`、JSON 响应同时放入 `response.body` 与回调参数
+- 播放结果接受 `http/https`（有主机名、≤8192），脚本下载仍仅 HTTPS
+- Android `usesCleartextTraffic` 开启，仅作用于最终媒体地址
+- 真机闭环通过：LX URL 导入 → 取链 → 实际播放 → 后台持续 → 媒体键控制
+
+### 高保真 UI 重构
+
+- **UI-01**：主题扩展（薄荷/天空蓝/薰衣草/粉色/紫色），四项主导航（首页/发现/播放/我的），迷你播放栏圆角半透明卡片
+- **UI-02**：首页改为推荐布局——渐变主推荐卡、横向榜单卡、真实歌曲圆角行
+- **UI-03**：搜索页圆角搜索框、热搜排名、歌手建议卡、圆角结果列表
+- **UI-04**：播放详情渐变唱片封面、紫色圆形主按钮、居中渐隐歌词
+- **UI-05**：我的页面用户卡片、快捷功能网格、分组设置卡
+- **UI-06**：桌面端图标迁移到三端（Android/iOS/鸿蒙）
+- **UI-02 补**：关闭 `extendBody` 修复迷你播放栏与 Navbar 重叠（真机 UI Automator 验证通过）
+
+## [1.0.0] - 2026-07-16(03)
 
 ### 酷我歌单搜索
 
@@ -53,7 +151,7 @@ All notable changes to 珊瑚音乐移动端 (Coral Music Mobile) will be docume
 - 按 online / local / download / webdav 四类来源筛选
 - 内存过滤，不新增数据库索引与网络请求
 
-## [0.1.0] - 2026-07-16(02)
+## [1.0.0] - 2026-07-16(02)
 
 ### 咪咕排行榜
 
@@ -82,7 +180,7 @@ All notable changes to 珊瑚音乐移动端 (Coral Music Mobile) will be docume
 - 歌单广场增加 `hot` / `new` 排序参数与下拉选择
 - 切换排序或标签均从第一页重新加载
 
-## [0.1.0] - 2026-07-16(01)
+## [1.0.0] - 2026-07-16(01)
 
 ### QQ 音乐排行榜
 
@@ -129,7 +227,7 @@ All notable changes to 珊瑚音乐移动端 (Coral Music Mobile) will be docume
 - Android 真机（SM-N986U / Android 13）验证通过：`musicUrl` 取链 → 播放 → seek
 - 三端 Debug 构建通过（APK / IPA / unsigned HAP）
 
-## [0.1.0] - 2026-07-15
+## [1.0.0] - 2026-07-15
 
 ### 项目初始化
 

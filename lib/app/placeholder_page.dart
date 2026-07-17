@@ -62,7 +62,7 @@ class MorePage extends StatelessWidget {
             const Spacer(),
             IconButton(
               tooltip: '设置',
-              onPressed: () => context.go('/setting'),
+              onPressed: () => context.push('/setting'),
               icon: const Icon(Icons.settings_outlined),
             ),
           ],
@@ -79,7 +79,9 @@ class MorePage extends StatelessWidget {
                   Expanded(
                     child: _QuickEntry(
                       destination: item,
-                      onTap: () => context.go(item.path),
+                      onTap: () => item.path == '/setting'
+                          ? context.push(item.path)
+                          : context.go(item.path),
                     ),
                   ),
               ],
@@ -112,7 +114,7 @@ class MorePage extends StatelessWidget {
                   label: '主题与设置',
                   icon: Icons.tune_rounded,
                 ),
-                onTap: () => context.go('/setting'),
+                onTap: () => context.push('/setting'),
               ),
             ],
           ),

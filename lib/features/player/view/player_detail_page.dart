@@ -7,6 +7,7 @@ import '../../../app/app_theme.dart';
 import '../../../domain/music.dart';
 import '../../library/state/library_controller.dart';
 import '../data/audio_engine.dart';
+import '../data/audio_file_probe.dart';
 import '../data/lyric_timeline.dart';
 import '../state/lyric_controller.dart';
 import '../state/playback_queue_controller.dart';
@@ -202,10 +203,9 @@ class _PlaybackQueueDrawer extends ConsumerWidget {
                         return ListTile(
                           key: ValueKey(track.id),
                           selected: isCurrent,
-                          leading: Icon(
-                            isCurrent
-                                ? Icons.graphic_eq
-                                : Icons.music_note_outlined,
+                          leading: _QueueArtwork(
+                            track: track,
+                            isCurrent: isCurrent,
                           ),
                           title: Text(
                             track.title,
@@ -304,6 +304,22 @@ class _PlayerPanel extends ConsumerWidget {
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
           ),
+          const SizedBox(height: 5),
+          Text(
+            [
+              if (track.album?.isNotEmpty == true) track.album!,
+              _fileInfoText(player.fileInfo, player.quality),
+            ].join(' · '),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurfaceVariant
+                      .withValues(alpha: .78),
+                ),
+          ),
           const SizedBox(height: 26),
           SliderTheme(
             data: SliderTheme.of(context).copyWith(
@@ -331,14 +347,9 @@ class _PlayerPanel extends ConsumerWidget {
           ),
           const SizedBox(height: 12),
           Row(
+            mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              IconButton(
-                tooltip: _playbackModeLabel(mode),
-                onPressed: ref.read(playbackQueueProvider.notifier).cycleMode,
-                icon: Icon(_playbackModeIcon(mode)),
-              ),
-              const SizedBox(width: 14),
               IconButton(
                 tooltip: '上一首',
                 onPressed: queue.tracks.length > 1
@@ -376,7 +387,13 @@ class _PlayerPanel extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 22),
+          const SizedBox(height: 6),
+          TextButton.icon(
+            onPressed: ref.read(playbackQueueProvider.notifier).cycleMode,
+            icon: Icon(_playbackModeIcon(mode), size: 18),
+            label: Text(_playbackModeLabel(mode)),
+          ),
+          const SizedBox(height: 14),
           Wrap(
             alignment: WrapAlignment.center,
             spacing: 8,
@@ -729,6 +746,43 @@ class _AlbumArtwork extends StatelessWidget {
       );
 }
 
+class _QueueArtwork extends StatelessWidget {
+  const _QueueArtwork({required this.track, required this.isCurrent});
+
+  final Track track;
+  final bool isCurrent;
+
+  @override
+  Widget build(BuildContext context) {
+    final fallback = DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        gradient: const LinearGradient(
+          colors: [CoralPalette.sky, CoralPalette.lilac],
+        ),
+      ),
+      child: Icon(
+        isCurrent ? Icons.graphic_eq : Icons.music_note_rounded,
+        size: 22,
+        color: Colors.white,
+      ),
+    );
+    return SizedBox.square(
+      dimension: 44,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: track.coverUri == null
+            ? fallback
+            : Image.network(
+                track.coverUri.toString(),
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => fallback,
+              ),
+      ),
+    );
+  }
+}
+
 String _duration(Duration? value) {
   if (value == null) return '--:--';
   final minutes = value.inMinutes;
@@ -769,9 +823,33 @@ String _qualityLabel(AudioQuality quality) => switch (quality) {
       AudioQuality.atmosPlus => '臻品全景声',
       AudioQuality.atmos => '全景声',
       AudioQuality.hires => 'Hi-Res',
-      AudioQuality.flac24bit => '24bit FLAC',
-      AudioQuality.flac => 'FLAC',
-      AudioQuality.high320k => '320k',
+      AudioQuality.flac24bit => 'Hi-Res 24bit',
+      AudioQuality.flac => 'SQ',
+      AudioQuality.high320k => 'HQ',
       AudioQuality.high192k => '192k',
       AudioQuality.standard128k => '128k',
     };
+
+String _fileInfoText(AudioFileInfo? info, AudioQuality quality) {
+  final spec = switch (quality) {
+    AudioQuality.master => (2304, 96000, true),
+    AudioQuality.atmosPlus || AudioQuality.atmos => (768, 48000, false),
+    AudioQuality.hires => (3000, 192000, true),
+    AudioQuality.flac24bit => (2000, 96000, true),
+    AudioQuality.flac => (900, 44100, true),
+    AudioQuality.high320k => (320, 44100, false),
+    AudioQuality.high192k => (192, 44100, false),
+    AudioQuality.standard128k => (128, 44100, false),
+  };
+  final bitrate =
+      info?.bitrate == null ? spec.$1 : (info!.bitrate! / 1000).round();
+  final sampleRate = info?.sampleRate == null
+      ? (spec.$2 / 1000).round()
+      : (info!.sampleRate! / 1000).round();
+  return [
+    '$bitrate kbps',
+    '$sampleRate kHz',
+    info?.format?.toUpperCase() ?? (spec.$3 ? 'Lossless' : ''),
+    _qualityLabel(quality),
+  ].where((part) => part.isNotEmpty).join(' · ');
+}

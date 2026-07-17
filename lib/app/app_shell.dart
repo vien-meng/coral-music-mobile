@@ -40,7 +40,8 @@ class AppShell extends StatelessWidget {
         : child;
 
     return Scaffold(
-      extendBody: true,
+      // Keep the live mini player above the bottom navigation on phones.
+      extendBody: false,
       body: DecoratedBox(
         decoration: const BoxDecoration(gradient: coralPageGradient),
         child: SafeArea(

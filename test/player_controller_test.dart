@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:coral_music_mobile/core/app_failure.dart';
 import 'package:coral_music_mobile/domain/music.dart';
 import 'package:coral_music_mobile/features/player/data/audio_engine.dart';
 import 'package:coral_music_mobile/features/player/data/playback_resolver.dart';
@@ -211,6 +212,57 @@ void main() {
     expect(engine.seekPosition, isNull);
   });
 
+  test('clamps application speed and volume before forwarding to audio',
+      () async {
+    final engine = _FakeAudioEngine();
+    final controller = PlayerController(
+      engine,
+      PlaybackResolver(_FakeUserApiRunner()),
+      PlaybackQueueController(),
+    );
+
+    await controller.setSpeed(9);
+    await controller.setVolume(-1);
+
+    expect(engine.speed, 2);
+    expect(engine.volume, 0);
+    expect(controller.state.speed, 2);
+    expect(controller.state.volume, 0);
+  });
+
+  test('skips a track whose URL cannot be resolved', () async {
+    final engine = _FakeAudioEngine();
+    final queue = PlaybackQueueController()
+      ..replaceQueue(const [track, secondTrack]);
+    final controller = PlayerController(
+      engine,
+      PlaybackResolver(_FailingTrackRunner({track.id})),
+      queue,
+    );
+
+    await controller.playTrack(track);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(queue.state.currentTrack?.id, secondTrack.id);
+    expect(controller.state.track?.id, secondTrack.id);
+    expect(controller.state.isPlaying, isTrue);
+  });
+
+  test('keeps an error when every queued track fails', () async {
+    final engine = _FakeAudioEngine();
+    final queue = PlaybackQueueController()..replaceQueue(const [track]);
+    final controller = PlayerController(
+      engine,
+      PlaybackResolver(_FailingTrackRunner({track.id})),
+      queue,
+    );
+
+    await controller.playTrack(track);
+
+    expect(controller.state.status, AudioEngineStatus.error);
+    expect(controller.state.error?.message, '测试取链失败');
+  });
+
   test('routes background next commands through the playback queue', () async {
     final engine = _FakeAudioEngine();
     final queue = PlaybackQueueController()
@@ -241,6 +293,8 @@ final class _FakeAudioEngine implements AudioEngine {
   Track? _track;
   var loadCount = 0;
   Duration? seekPosition;
+  double? speed;
+  double? volume;
 
   @override
   Stream<AudioEngineSnapshot> get snapshots => _snapshots.stream;
@@ -278,10 +332,10 @@ final class _FakeAudioEngine implements AudioEngine {
   Future<void> seek(Duration position) async => seekPosition = position;
 
   @override
-  Future<void> setSpeed(double speed) async {}
+  Future<void> setSpeed(double speed) async => this.speed = speed;
 
   @override
-  Future<void> setVolume(double volume) async {}
+  Future<void> setVolume(double volume) async => this.volume = volume;
 
   @override
   Future<void> stop() async {}
@@ -331,4 +385,31 @@ final class _DeferredUserApiRunner implements UserApiRunner {
   @override
   Future<Uri> resolveMusicUrl(Track track, AudioQuality quality) =>
       (_responses[track.id] ??= Completer<Uri>()).future;
+}
+
+final class _FailingTrackRunner implements UserApiRunner {
+  _FailingTrackRunner(this._failedIds);
+
+  final Set<String> _failedIds;
+
+  @override
+  Future<void> clear() async {}
+
+  @override
+  Future<UserApiManifest> load(String script) async =>
+      const UserApiManifest({'kw'});
+
+  @override
+  Future<LyricPayload?> resolveLyric(Track track) async => null;
+
+  @override
+  Future<Uri> resolveMusicUrl(Track track, AudioQuality quality) async {
+    if (_failedIds.contains(track.id)) {
+      throw const AppFailure(
+        code: AppFailureCode.noNetwork,
+        message: '测试取链失败',
+      );
+    }
+    return Uri.parse('https://example.com/${track.sourceTrackId}.mp3');
+  }
 }

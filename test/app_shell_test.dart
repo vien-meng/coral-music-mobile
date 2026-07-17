@@ -36,6 +36,18 @@ void main() {
     expect(find.text('测试歌曲'), findsNWidgets(2));
   });
 
+  testWidgets('keeps the mini player above the bottom navigation',
+      (tester) async {
+    await tester
+        .pumpWidget(CoralMusicApp(catalogService: FakeCatalogService()));
+    await tester.pumpAndSettle();
+
+    final miniPlayer = tester.getRect(find.byType(MiniPlayer));
+    final navigationBar = tester.getRect(find.byType(NavigationBar));
+
+    expect(miniPlayer.bottom, lessThanOrEqualTo(navigationBar.top));
+  });
+
   testWidgets('opens the player detail and its lyrics empty state',
       (tester) async {
     await tester
