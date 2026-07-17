@@ -66,3 +66,14 @@
 - `PlaybackResolver.invalidate()` 现在先移除正常的“歌曲 + 请求质量”键，再移除同一稳定曲目下实际返回质量匹配的缓存条目。只有音源明确返回 `type` 时才存在别名，正常同质 URL 的行为不变。
 - 这样当请求 SQ 实际得到 HQ 且 HQ 流失败时，刷新/降级不会留下 SQ 键下的旧 HQ 地址；不跨曲目删除，不持久化 URL。
 - 按当前业务优先节奏未单独运行缓存用例；将在下一次播放器聚合测试加入“SQ 请求返回 HQ 后按 HQ 失效”的断言。
+
+## 2026-07-17 手动播放重试强制刷新地址（DOING）
+
+- 播放详情当前“重试播放”直接调用 `playTrack(track)`，在 15 分钟缓存仍有效时会再次取用同一失效临时地址，不能满足用户主动重试的预期。
+- 将只增加控制器的当前曲目重试入口，沿用既有 `forceRefresh`、进度恢复与质量降级；不改变列表点播的正常缓存命中。
+
+## 2026-07-17 手动播放重试强制刷新地址（DONE for shared player）
+
+- 新增 `PlayerController.retryCurrent()`：以当前曲目、当前进度并开启 `refreshUrl` 再次播放。播放详情“重试播放”已改用该入口，因此用户主动恢复时一定绕开内存 URL 缓存。
+- 列表点播和自动重播仍按正常缓存策略执行；本地、下载、WebDAV 继续直连 `localUri`。新增最小控制器断言，确认两次调用取得不同 URL。
+- 验证记录：`dart format` 与 `git diff --check` 通过；聚焦的 `flutter test test/player_controller_test.dart -r compact` 因当前受控 Flutter 执行额度被拒绝，未执行，保留为待补项而非标记已通过。

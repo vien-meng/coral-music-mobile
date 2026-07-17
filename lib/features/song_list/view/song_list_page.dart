@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/app_theme.dart';
 import '../../../domain/music.dart';
 import '../../library/view/playlist_picker.dart';
 import '../../player/state/playback_queue_controller.dart';
@@ -270,7 +271,19 @@ class _PlaylistDetail extends ConsumerWidget {
               itemBuilder: (context, index) {
                 final track = detail.tracks[index];
                 return ListTile(
-                  leading: Text('${index + 1}'.padLeft(2, '0')),
+                  leading: SizedBox(
+                    width: 64,
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 20,
+                          child: Text('${index + 1}'.padLeft(2, '0')),
+                        ),
+                        const SizedBox(width: 5),
+                        _PlaylistTrackArtwork(uri: track.coverUri),
+                      ],
+                    ),
+                  ),
                   title: Text(track.title,
                       maxLines: 1, overflow: TextOverflow.ellipsis),
                   subtitle: Text(
@@ -319,6 +332,38 @@ class _PlaylistCover extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       child: Image.network(
         playlist.coverUri.toString(),
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => fallback,
+      ),
+    );
+  }
+}
+
+class _PlaylistTrackArtwork extends StatelessWidget {
+  const _PlaylistTrackArtwork({required this.uri});
+
+  final Uri? uri;
+
+  @override
+  Widget build(BuildContext context) {
+    final fallback = Container(
+      width: 38,
+      height: 38,
+      decoration: const BoxDecoration(
+        borderRadius: BorderRadius.all(Radius.circular(10)),
+        gradient: LinearGradient(
+          colors: [CoralPalette.sky, CoralPalette.lilac],
+        ),
+      ),
+      child: const Icon(Icons.music_note_rounded, color: Colors.white),
+    );
+    if (uri == null) return fallback;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: Image.network(
+        uri.toString(),
+        width: 38,
+        height: 38,
         fit: BoxFit.cover,
         errorBuilder: (_, __, ___) => fallback,
       ),

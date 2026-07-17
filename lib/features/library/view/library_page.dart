@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/app_theme.dart';
 import '../../../domain/music.dart';
 import '../../player/state/playback_queue_controller.dart';
 import '../../player/state/player_controller.dart';
@@ -479,13 +480,16 @@ class _PlaylistTracksState extends ConsumerState<_PlaylistTracks> {
     bool canReorder,
   ) {
     final selected = _selectedTrackIds.contains(track.id);
+    final selectionMode = _selectedTrackIds.isNotEmpty;
     return ListTile(
       key: ValueKey(track.id),
       selected: selected,
-      leading: Checkbox(
-        value: selected,
-        onChanged: isLoading ? null : (_) => _toggleSelected(track.id),
-      ),
+      leading: selectionMode
+          ? Checkbox(
+              value: selected,
+              onChanged: isLoading ? null : (_) => _toggleSelected(track.id),
+            )
+          : _LibraryTrackArtwork(uri: track.coverUri),
       title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(
         track.artist.isEmpty ? '未知歌手' : track.artist,
@@ -545,4 +549,36 @@ class _EmptyLibrary extends StatelessWidget {
   Widget build(BuildContext context) => Center(
         child: Text(message),
       );
+}
+
+class _LibraryTrackArtwork extends StatelessWidget {
+  const _LibraryTrackArtwork({required this.uri});
+
+  final Uri? uri;
+
+  @override
+  Widget build(BuildContext context) {
+    final fallback = Container(
+      width: 44,
+      height: 44,
+      decoration: const BoxDecoration(
+        borderRadius: BorderRadius.all(Radius.circular(12)),
+        gradient: LinearGradient(
+          colors: [CoralPalette.periwinkle, CoralPalette.lilac],
+        ),
+      ),
+      child: const Icon(Icons.music_note_rounded, color: Colors.white),
+    );
+    if (uri == null) return fallback;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Image.network(
+        uri.toString(),
+        width: 44,
+        height: 44,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => fallback,
+      ),
+    );
+  }
 }

@@ -137,6 +137,16 @@ final class PlayerController extends StateNotifier<PlayerState> {
     );
   }
 
+  Future<void> retryCurrent() {
+    final track = state.track;
+    if (track == null) return Future.value();
+    return playTrack(
+      track,
+      refreshUrl: true,
+      initialPosition: state.position,
+    );
+  }
+
   Future<void> restoreLastPlayback() async {
     if (state.track != null) return;
     try {

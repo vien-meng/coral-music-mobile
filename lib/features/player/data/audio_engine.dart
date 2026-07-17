@@ -202,9 +202,12 @@ final class _CoralAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   @override
-  Future<void> play() async {
+  Future<void> play() {
     _emit(status: AudioEngineStatus.playing, error: null);
-    await _player.play();
+    unawaited(_player.play().catchError((Object _, StackTrace __) {
+      _emit(status: AudioEngineStatus.error, error: '音频播放失败');
+    }));
+    return Future.value();
   }
 
   @override

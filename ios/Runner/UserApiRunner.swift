@@ -295,6 +295,7 @@ final class UserApiRunner: NSObject, WKNavigationDelegate, WKScriptMessageHandle
     let options = body["options"] as? [String: Any] ?? [:]
     let method = (options["method"] as? String ?? "get").uppercased()
     guard method == "GET" || method == "POST" else { sendRequestResult(id: id, error: "只允许 GET 或 POST 请求"); return }
+    guard options["formData"] == nil else { sendRequestResult(id: id, error: "当前受限运行时不支持 multipart 表单"); return }
     var request = URLRequest(url: url)
     request.httpMethod = method
     request.timeoutInterval = min(max(options["timeout"] as? TimeInterval ?? 15, 1), 20)
@@ -304,14 +305,35 @@ final class UserApiRunner: NSObject, WKNavigationDelegate, WKScriptMessageHandle
         if !["host", "connection", "content-length"].contains(name.lowercased()) { request.setValue(value, forHTTPHeaderField: name) }
       }
     }
-    if let text = options["body"] as? String, !text.isEmpty {
-      let data = Data(text.utf8)
+    let form = options["form"] as? [String: Any]
+    let explicitBody = requestBody(options["body"])
+    let data = explicitBody?.isEmpty == false
+      ? explicitBody
+      : form.flatMap { formBody($0) }
+    if let data, !data.isEmpty {
       guard method == "POST", data.count <= Self.requestLimit else { sendRequestResult(id: id, error: "请求体超过大小限制"); return }
+      if form != nil && request.value(forHTTPHeaderField: "Content-Type") == nil {
+        request.setValue("application/x-www-form-urlencoded; charset=UTF-8", forHTTPHeaderField: "Content-Type")
+      }
       request.httpBody = data
     }
     let task = session.dataTask(with: request)
     httpRequests[task.taskIdentifier] = HttpRequest(id: id)
     task.resume()
+  }
+
+  private func requestBody(_ raw: Any?) -> Data? {
+    if let text = raw as? String { return Data(text.utf8) }
+    guard let raw, JSONSerialization.isValidJSONObject(raw) else { return nil }
+    return try? JSONSerialization.data(withJSONObject: raw)
+  }
+
+  private func formBody(_ form: [String: Any]) -> Data? {
+    var components = URLComponents()
+    components.queryItems = form.keys.sorted().map { key in
+      URLQueryItem(name: key, value: String(describing: form[key] ?? ""))
+    }
+    return components.percentEncodedQuery.map { Data($0.utf8) }
   }
 
   func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {

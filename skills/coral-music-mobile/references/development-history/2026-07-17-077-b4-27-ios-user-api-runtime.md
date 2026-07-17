@@ -51,3 +51,30 @@
 - 已在受限 bridge 内加入字符串 MD5；它使用 `TextEncoder`、固定 MD5 轮函数和 UTF-8 字节，不经 `WKScriptMessageHandler` 进入原生层，因此保留桌面/Android `lx.utils.crypto.md5()` 的同步返回语义。
 - `randomBytes` 继续只使用 WebKit 的 `crypto.getRandomValues`，AES/RSA/zlib 仍明确拒绝，网络、导航、存储与 Cookie 限制不变。
 - 统一 `flutter build ios --no-codesign` 已通过，仍需 iPhone 使用指定 LX URL 的真实签名请求来确认脚本侧兼容性；B4-27 保持 `DOING`。
+
+## 2026-07-17 User API JSON 请求体兼容（DOING）
+
+- 桌面 `lx.request` 协议允许 POST `body` 为对象；Android 当前 `JSONObject.optString` 会把对象降为空体，iOS 仅接受 `String`。这会让部分真实来源的签名 POST 失败，尽管其 URL/请求头正确。
+- 将在两端受限网络桥内只增加 JSON 对象/数组到 UTF-8 body 的序列化；不开放 PUT/DELETE、HTTP、重定向、Cookie 或更大请求体。
+
+## 2026-07-17 User API JSON 请求体兼容（实现完成）
+
+- Android `JSONObject`/`JSONArray` body 现使用原 JSON 文本写入 POST；iOS 对 `String` 直接 UTF-8 写入，对可序列化对象/数组使用 `JSONSerialization`。其它 body 类型继续按空体处理，和原 bridge 的最小兼容策略一致。
+- 两端均仍只在 POST 中写入非空 body，并在写入前执行既有 64 KiB 限制；请求方法、HTTPS-only、无 Cookie、无重定向、响应限制均未变化。
+- 后续使用真实 LX 的非酷我来源 POST 取链集中验收；本轮先继续主任务开发，不拆分反复真机测试。
+
+## 2026-07-17 URL 编码表单请求（DOING）
+
+- 进一步对照桌面 `src/main/modules/userApi/renderer/preload.js`：其 `lx.request` 允许 `body`、`form` 与 `formData`。常规 `form` 由桌面 request 库按 URL 编码发送；移动端若忽略它仍会使部分来源取链失败。
+- 将支持平面对象 `form` 的 `application/x-www-form-urlencoded`，并只在脚本未声明 Content-Type 时补默认头。复杂 `formData`/multipart 涉及二进制与文件面，保持受限运行时明确拒绝。
+
+## 2026-07-17 URL 编码表单请求（实现完成）
+
+- Android 与 iOS 都会优先发送非空 `body`；否则对平面 `form` 以稳定键顺序编码为 URL form，并仅在缺少脚本自定义 Content-Type 时设置 `application/x-www-form-urlencoded; charset=UTF-8`。
+- 非空 body、form 均只允许 POST 且统一应用 64 KiB 上限。`formData` 明确返回受限运行时错误，避免把文件/二进制请求静默丢弃或意外放开。
+- 现进入 Android/iOS 编译验证；真实 LX 的多来源 POST 取链留待后续统一真机回归。
+
+## 2026-07-17 表单桥编译验证
+
+- `flutter build apk --debug` 与 `flutter build ios --no-codesign` 完成，`build/app/outputs/flutter-apk/app-debug.apk`、`build/ios/iphoneos/Runner.app` 均存在；没有安装 APK，因此不影响当前 Android 真机的会话内音源。
+- `git diff --check` 发现并已清除一处 Kotlin 行尾空白；未展开完整单元/真机矩阵，符合当前以主业务实现优先的节奏。

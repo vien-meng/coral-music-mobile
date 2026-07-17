@@ -449,8 +449,7 @@ class _PlayerPanel extends ConsumerWidget {
               spacing: 4,
               children: [
                 TextButton.icon(
-                  onPressed: () =>
-                      ref.read(playerProvider.notifier).playTrack(track),
+                  onPressed: ref.read(playerProvider.notifier).retryCurrent,
                   icon: const Icon(Icons.refresh_rounded),
                   label: const Text('重试播放'),
                 ),
@@ -565,11 +564,19 @@ class _LyricsPanelState extends ConsumerState<_LyricsPanel> {
         ref.watch(playerProvider.select((state) => state.position));
     return lyric.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, _) => _LyricError(message: _lyricErrorMessage(error)),
+      error: (error, _) => _LyricError(
+        message: _lyricErrorMessage(error),
+        onRetry: () => ref.invalidate(lyricProvider(track)),
+      ),
       data: (payload) {
         final lines =
             payload == null ? const <LyricLine>[] : parseLyricTimeline(payload);
-        if (lines.isEmpty) return _LyricEmpty(track: track);
+        if (lines.isEmpty) {
+          return _LyricEmpty(
+            track: track,
+            onRetry: () => ref.invalidate(lyricProvider(track)),
+          );
+        }
         var active = 0;
         for (var index = 0; index < lines.length; index++) {
           if (lines[index].at <= position) active = index;
@@ -707,9 +714,10 @@ List<TextSpan> _karaokeWordSpans(
 }
 
 class _LyricEmpty extends StatelessWidget {
-  const _LyricEmpty({required this.track});
+  const _LyricEmpty({required this.track, required this.onRetry});
 
   final Track track;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) => Center(
@@ -721,15 +729,22 @@ class _LyricEmpty extends StatelessWidget {
             const Text('暂无可用歌词'),
             const SizedBox(height: 6),
             const Text('当前音源未提供可用歌词'),
+            const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('重新加载歌词'),
+            ),
           ],
         ),
       );
 }
 
 class _LyricError extends StatelessWidget {
-  const _LyricError({required this.message});
+  const _LyricError({required this.message, required this.onRetry});
 
   final String message;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) => Center(
@@ -746,6 +761,12 @@ class _LyricError extends StatelessWidget {
                 message,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              TextButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('重新加载歌词'),
               ),
             ],
           ),

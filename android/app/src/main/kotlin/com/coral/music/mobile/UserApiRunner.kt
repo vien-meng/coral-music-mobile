@@ -4,6 +4,7 @@ import android.app.Activity
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.util.Base64
 import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
@@ -150,7 +151,7 @@ class UserApiRunner(private val activity: Activity) {
             (raw[index].toInt() xor key[index % key.size].toInt()).toByte()
         }
         return URLEncoder.encode(
-            android.util.Base64.encodeToString(output, android.util.Base64.NO_WRAP),
+            Base64.encodeToString(output, Base64.NO_WRAP),
             "UTF-8",
         )
     }
@@ -163,7 +164,7 @@ class UserApiRunner(private val activity: Activity) {
         val inflated = InflaterInputStream(
             ByteArrayInputStream(payload.copyOfRange(start + marker.size, payload.size)),
         ).use { it.readBytes() }
-        val encoded = android.util.Base64.decode(String(inflated), android.util.Base64.DEFAULT)
+        val encoded = Base64.decode(String(inflated), Base64.DEFAULT)
         val key = "yeelion".toByteArray()
         val decoded = ByteArray(encoded.size) { index -> (encoded[index].toInt() xor key[index % key.size].toInt()).toByte() }
         return decoded.toString(Charset.forName("GB18030"))
@@ -299,9 +300,9 @@ class UserApiRunner(private val activity: Activity) {
         @JavascriptInterface
         fun randomBytes(size: Int): String {
             require(size in 1..4096) { "随机字节长度超出限制" }
-            return android.util.Base64.encodeToString(
+            return Base64.encodeToString(
                 ByteArray(size).also(SecureRandom()::nextBytes),
-                android.util.Base64.NO_WRAP,
+                Base64.NO_WRAP,
             )
         }
 
@@ -318,19 +319,37 @@ class UserApiRunner(private val activity: Activity) {
                     val options = JSONObject(rawOptions)
                     val method = options.optString("method", "get").uppercase()
                     if (method != "GET" && method != "POST") throw IllegalArgumentException("只允许 GET 或 POST 请求")
+                    if (options.has("formData")) throw IllegalArgumentException("当前受限运行时不支持 multipart 表单")
                     val connection = (URL(rawUrl).openConnection() as HttpURLConnection).apply {
                         requestMethod = method
                         connectTimeout = options.optInt("timeout", 15_000).coerceIn(1_000, 20_000)
                         readTimeout = connectTimeout
                         instanceFollowRedirects = false
+                        var hasContentType = false
                         options.optJSONObject("headers")?.keys()?.forEach { name ->
                             if (name.lowercase() !in setOf("host", "connection", "content-length")) {
                                 setRequestProperty(name, options.optJSONObject("headers")?.optString(name))
+                                if (name.equals("content-type", ignoreCase = true)) hasContentType = true
                             }
                         }
-                        val body = options.optString("body", "")
+                        val form = options.optJSONObject("form")
+                        val explicitBody = if (options.has("body")) {
+                            when (val rawBody = options.opt("body")) {
+                                is String -> rawBody
+                                is JSONObject, is org.json.JSONArray -> rawBody.toString()
+                                else -> ""
+                            }
+                        } else ""
+                        val body = if (explicitBody.isNotEmpty()) explicitBody
+                        else form?.keys()?.asSequence()?.joinToString("&") { key ->
+                                "${URLEncoder.encode(key, "UTF-8")}" +
+                                    "=${URLEncoder.encode(form?.optString(key) ?: "", "UTF-8")}"
+                            } ?: ""
                         if (method == "POST" && body.isNotEmpty()) {
                             require(body.toByteArray().size <= 64 * 1024) { "请求体超过大小限制" }
+                            if (form != null && !hasContentType) {
+                                setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+                            }
                             doOutput = true
                             outputStream.use { it.write(body.toByteArray()) }
                         }

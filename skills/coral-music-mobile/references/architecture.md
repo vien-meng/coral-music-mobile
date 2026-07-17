@@ -109,6 +109,7 @@ final class Track {
 ### Lists and library
 
 - `UserPlaylist`：ID、名称、类型、排序位置和更新时间。
+- `FavoritePlaylist`：来源、稳定歌单 ID、名称、封面、作者、描述和最近导入的曲目快照；仅存本地，不与服务端同步。
 - `PlayHistoryEntry`：Track 快照、最近播放时间、次数和最后位置。
 - `FavoriteSongList`、`FavoriteAlbum`：保留在线实体快照，来源不可用时仍能显示。
 - `DownloadTask`：状态、进度、目标 URI、临时 URI、错误、重试次数和 Track 快照。
@@ -126,7 +127,7 @@ final class Track {
 SQLite 使用显式版本迁移，至少包含：
 
 - `user_playlists`、`playlist_tracks`、`playlist_order`
-- `play_history`、`favorite_songlists`、`favorite_albums`
+- `play_history`、`favorite_songlists`、`favorite_playlists`、`favorite_albums`
 - `lyric_cache`、`edited_lyrics`、`music_url_cache`、`other_source_cache`
 - `download_tasks`、`dislike_rules`
 - `webdav_accounts`，仅保存非敏感字段和安全凭据引用
@@ -139,9 +140,8 @@ SQLite 使用显式版本迁移，至少包含：
 - `PlaybackResolver`：按来源解析可播放 URI。
 - `LyricService`：本地候选、缓存、在线获取、解析和时间轴。
 - `LibraryService`：列表、历史、收藏、分类和不感兴趣规则。
-- `DownloadCoordinator`：持久任务状态与平台后台执行的协调。
-- `WebDavService`：鉴权、PROPFIND、Range GET 和路径归一化。
-- `SyncService`：兼容桌面列表/规则同步协议。
+- `DownloadCoordinator`：以 Track 快照和选定音质创建本地下载任务，协调持久状态与平台后台执行；歌单下载全部只展开当前歌单快照，不追踪远端更新。
+- `WebDavService`：用户配置的鉴权、PROPFIND、Range GET 和路径归一化。
 
 ## 平台能力
 
@@ -189,11 +189,13 @@ abstract interface class BackgroundDownloadService {
 
 - 不调用在线取链或 User API 歌词；只读取受支持的本地歌词来源。
 - 目录访问权限失效时提示重新授权，不删除列表记录。
+- B5-11 必须完成“文件/分享导入或用户授权目录递归扫描 -> SQLite 去重 -> 列表/队列 -> 前后台播放与 seek -> 历史/恢复”的同一纵向链路；不做静默全盘扫描。
 
 ### WebDAV
 
-`账号安全凭据 -> PROPFIND -> Track(webdav) -> 带鉴权 Range GET -> AudioEngine`
+`用户配置账号安全凭据 -> PROPFIND -> Track(webdav) -> 带鉴权 Range GET -> AudioEngine`
 
+- 不提供项目服务器、同步或账号服务；仅直连用户配置的 WebDAV 文件源。
 - 日志只记录账号 ID、主机和状态码，不记录用户名之外的凭据。
 - 401/403 立即停止重试并请求用户重新验证。
 
@@ -210,7 +212,7 @@ abstract interface class BackgroundDownloadService {
 - 网络请求只能通过受控代理消息发起，校验 URL scheme、超时、响应大小和重定向次数。
 - 公共商店构建只允许政策审核通过的动态导入方式；否则隐藏导入入口，仅保留签名内置源。
 - 所有凭据日志字段使用固定掩码；备份默认不导出凭据。
-- OpenAPI 默认关闭，仅绑定用户选择的接口；显示局域网暴露警告和运行状态。
+- 不建设项目自有的服务器存储、跨设备同步和局域网服务；WebDAV 只连接用户自行配置的文件源，备份仅导入/导出本地文件。
 - 权限按使用时请求；拒绝后仍能使用不依赖该权限的功能。
 
 ## 质量边界

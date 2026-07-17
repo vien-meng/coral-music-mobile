@@ -128,6 +128,22 @@ void main() {
     expect(controller.state.isPlaying, isTrue);
   });
 
+  test('forces a fresh URL when retrying the current track', () async {
+    final engine = _FakeAudioEngine();
+    final runner = _FakeUserApiRunner();
+    final controller = PlayerController(
+      engine,
+      PlaybackResolver(runner),
+      PlaybackQueueController(),
+    );
+
+    await controller.playTrack(track);
+    await controller.retryCurrent();
+
+    expect(runner.resolveCount, 2);
+    expect(engine.loadedUri, Uri.parse('https://example.com/2.mp3'));
+  });
+
   test('falls back to the next declared quality after a refreshed URL fails',
       () async {
     const qualityTrack = Track(

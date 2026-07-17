@@ -1,6 +1,6 @@
 ---
 name: coral-music-mobile
-description: Project-specific architecture, feature-parity map, and phased delivery workflow for 珊瑚音乐/coral-music-mobile. Use when planning, implementing, testing, or reviewing the Flutter app for iOS, Android, and HarmonyOS, especially for desktop feature parity, playback, online sources, local music, lists, downloads, WebDAV, User API, sync, settings, platform bridges, or store release readiness.
+description: Project-specific architecture, feature-parity map, and phased delivery workflow for 珊瑚音乐/coral-music-mobile. Use when planning, implementing, testing, or reviewing the Flutter app for iOS, Android, and HarmonyOS, especially for desktop feature parity, playback, online sources, local music, lists, downloads, WebDAV, User API, settings, platform bridges, or store release readiness.
 ---
 
 # 珊瑚音乐移动端
@@ -34,7 +34,7 @@ description: Project-specific architecture, feature-parity map, and phased deliv
 - 优先 Flutter、Dart 标准能力和系统媒体能力；只有验证缺口后才引入插件。
 - 不使用代码生成框架，不创建只有一个实现且没有测试价值的接口。
 - 只为音频、媒体会话、后台下载、动态脚本和安全存储保留平台边界。
-- 不建设首发云端账号或中心服务器；复用局域网同步、WebDAV 和本地备份。
+- 不建设项目自有的服务器存储、跨设备同步或局域网服务；WebDAV 仅连接用户自行配置的远程文件源，备份仅为本地文件导入/导出。
 - 不复制 Electron IPC、窗口、托盘、WASAPI 或 React 组件；实现其移动端用户目标。
 
 ## 验证顺序
