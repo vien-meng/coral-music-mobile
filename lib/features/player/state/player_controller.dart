@@ -421,6 +421,12 @@ final class PlayerController extends StateNotifier<PlayerState> {
     }
     if (snapshot.status == AudioEngineStatus.completed &&
         snapshot.track?.id == state.track?.id) {
+      if (state.status != AudioEngineStatus.playing) return;
+      state = state.copyWith(
+        position: snapshot.position,
+        duration: snapshot.duration,
+        status: AudioEngineStatus.completed,
+      );
       _persistPosition(snapshot.track!, Duration.zero, force: true);
       if (state.stopAfterCurrent) {
         state = state.copyWith(
@@ -438,9 +444,15 @@ final class PlayerController extends StateNotifier<PlayerState> {
     }
     final cueEnd = snapshot.track == null ? null : _cueEnd(snapshot.track!);
     if (snapshot.status == AudioEngineStatus.playing &&
+        state.status == AudioEngineStatus.playing &&
         snapshot.track?.id == state.track?.id &&
         cueEnd != null &&
         snapshot.position >= cueEnd) {
+      state = state.copyWith(
+        position: snapshot.position,
+        duration: snapshot.duration,
+        status: AudioEngineStatus.completed,
+      );
       final nextTrack = _queue.selectAfterCompletion();
       if (nextTrack != null) {
         unawaited(playTrack(nextTrack));

@@ -163,6 +163,18 @@ final class LeaderboardController extends StateNotifier<LeaderboardState> {
     return selectBoard(board, page: state.page);
   }
 
+  Future<LeaderboardBoard?> loadDailyRecommendation({DateTime? date}) async {
+    if (state.isLoading) return null;
+    if (state.boards.isEmpty) await loadInitial();
+    final board = dailyRecommendationBoard(
+      state.boards,
+      date ?? DateTime.now(),
+    );
+    if (board == null) return null;
+    await selectBoard(board);
+    return state.error == null ? board : null;
+  }
+
   Future<void> selectSource(OnlineSource source) async {
     if (source == state.source || state.isLoading) return;
     ++_requestId;
@@ -207,4 +219,15 @@ final class LeaderboardController extends StateNotifier<LeaderboardState> {
     if (board == null || !state.hasNext || state.isLoading) return;
     await selectBoard(board, page: state.page + 1);
   }
+}
+
+LeaderboardBoard? dailyRecommendationBoard(
+  List<LeaderboardBoard> boards,
+  DateTime date,
+) {
+  if (boards.isEmpty) return null;
+  final day =
+      DateTime.utc(date.year, date.month, date.day).millisecondsSinceEpoch ~/
+          Duration.millisecondsPerDay;
+  return boards[day % boards.length];
 }

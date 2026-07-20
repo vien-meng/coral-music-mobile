@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 
+import '../../../app/app_back_navigation.dart';
 import '../../../app/cover_image.dart';
 import '../../../app/app_theme.dart';
 import '../../../domain/music.dart';
@@ -60,6 +61,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
             padding: const EdgeInsets.fromLTRB(20, 12, 12, 8),
             child: Row(
               children: [
+                const AppBackButton(),
                 Text('我的列表',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                           fontWeight: FontWeight.w700,
@@ -325,7 +327,9 @@ class _PlaylistTracksState extends ConsumerState<_PlaylistTracks> {
                   tooltip: '返回我的列表',
                   onPressed: ref.read(libraryProvider.notifier).close,
                   icon: const Icon(Icons.arrow_back),
-                ),
+                )
+              else
+                const AppBackButton(),
               Expanded(
                 child: Text(
                   _selectedTrackIds.isEmpty

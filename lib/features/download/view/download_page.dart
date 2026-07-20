@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/app_back_navigation.dart';
 import '../../../app/app_theme.dart';
 import '../../../app/audio_quality_labels.dart';
 import '../../../app/cover_image.dart';
@@ -25,6 +26,7 @@ class DownloadPage extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 12, 10),
               child: Row(children: [
+                const AppBackButton(),
                 Text('下载管理',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                           fontWeight: FontWeight.w800,

@@ -6,6 +6,7 @@ import '../../../app/app_theme.dart';
 import '../../../app/audio_quality_labels.dart';
 import '../../../app/cover_image.dart';
 import '../../../domain/music.dart';
+import '../../download/view/download_track_button.dart';
 import '../../library/data/library_store.dart';
 import '../../library/view/favorite_track_button.dart';
 import '../data/audio_engine.dart';
@@ -121,11 +122,7 @@ class PlayerControlsPanel extends ConsumerWidget {
               ),
               if (track.sourceKind == TrackSourceKind.online ||
                   track.sourceKind == TrackSourceKind.webdav)
-                _PlayerAction(
-                  icon: Icons.download_outlined,
-                  label: '下载',
-                  onTap: () => enqueuePlayerDownload(context, ref, track),
-                ),
+                DownloadTrackButton(track: track, showLabel: true),
               _PlayerAction(
                 icon: Icons.timer_outlined,
                 label: player.stopAfterCurrent ? '播完停止' : '定时停止',

@@ -103,7 +103,7 @@ final class SongListController extends StateNotifier<SongListState> {
     await loadPage(1);
   }
 
-  Future<void> loadPage(int page) async {
+  Future<void> loadPage(int page, {bool append = false}) async {
     if (page < 1 || state.isLoading) return;
     final requestId = ++_requestId;
     state =
@@ -116,7 +116,9 @@ final class SongListController extends StateNotifier<SongListState> {
           : await service.searchPlaylists(state.query, page);
       if (requestId != _requestId) return;
       state = state.copyWith(
-        playlists: result.items,
+        playlists: append
+            ? mergePlaylistPages(state.playlists, result.items)
+            : result.items,
         page: result.page,
         pageSize: result.pageSize,
         total: result.total,
@@ -168,18 +170,16 @@ final class SongListController extends StateNotifier<SongListState> {
     }
   }
 
-  Future<void> refresh() => state.detail == null
-      ? loadPage(state.page)
-      : open(state.detail!.playlist);
+  Future<void> refresh() =>
+      state.detail == null ? loadPage(1) : open(state.detail!.playlist);
 
   void closeDetail() {
     ++_requestId;
     state = state.copyWith(clearDetail: true, clearError: true);
   }
 
-  Future<void> previousPage() => loadPage(state.page - 1);
-  Future<void> nextPage() =>
-      state.hasNext ? loadPage(state.page + 1) : Future.value();
+  Future<void> loadMore() =>
+      state.hasNext ? loadPage(state.page + 1, append: true) : Future.value();
 
   Future<void> selectTag(String? tagId) {
     if (tagId == state.selectedTagId || state.isLoading) return Future.value();
@@ -215,4 +215,16 @@ final class SongListController extends StateNotifier<SongListState> {
       message: '${source.label}暂未接入歌单广场',
     );
   }
+}
+
+List<OnlinePlaylist> mergePlaylistPages(
+  Iterable<OnlinePlaylist> current,
+  Iterable<OnlinePlaylist> next,
+) {
+  final merged = current.toList();
+  final ids = merged.map((item) => '${item.source.id}:${item.id}').toSet();
+  for (final item in next) {
+    if (ids.add('${item.source.id}:${item.id}')) merged.add(item);
+  }
+  return merged;
 }

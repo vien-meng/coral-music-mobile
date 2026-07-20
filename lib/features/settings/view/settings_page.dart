@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/app_back_navigation.dart';
 import '../../../app/app_theme.dart';
 import '../../../app/theme_mode_controller.dart';
 import '../../../domain/music.dart';
@@ -15,12 +16,15 @@ class SettingsPage extends ConsumerWidget {
     final themeMode = ref.watch(appThemeModeProvider);
     final quality = ref.watch(defaultPlaybackQualityProvider);
     return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+      padding: const EdgeInsets.fromLTRB(12, 12, 20, 24),
       children: [
-        Text('设置',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                )),
+        Row(children: [
+          const AppBackButton(),
+          Text('设置',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  )),
+        ]),
         const SizedBox(height: 8),
         Text('只显示当前可实际生效的管理项。', style: Theme.of(context).textTheme.bodySmall),
         const SizedBox(height: 18),
@@ -104,7 +108,7 @@ class SettingsPage extends ConsumerWidget {
             icon: Icons.library_music_outlined,
             title: '我的列表',
             subtitle: '管理本地导入、收藏和播放列表',
-            onTap: () => context.go('/list'),
+            onTap: () => context.push('/list'),
           ),
           _SettingsItem(
             icon: Icons.block_outlined,

@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/app_theme.dart';
 import '../../../domain/music.dart';
-import '../../download/state/download_controller.dart';
+import '../../download/view/download_track_button.dart';
 import '../../library/view/favorite_track_button.dart';
 import '../../library/view/playlist_picker.dart';
 import '../../player/state/playback_queue_controller.dart';
@@ -266,12 +266,7 @@ class _SearchTrackTile extends ConsumerWidget {
                     ),
                   ),
                   FavoriteTrackButton(track: track),
-                  IconButton(
-                    tooltip: '下载歌曲',
-                    onPressed: () =>
-                        ref.read(downloadProvider.notifier).enqueue(track),
-                    icon: const Icon(Icons.download_outlined),
-                  ),
+                  DownloadTrackButton(track: track),
                   IconButton(
                     tooltip: '添加到我的列表',
                     onPressed: () => addTrackToPlaylist(context, ref, track),

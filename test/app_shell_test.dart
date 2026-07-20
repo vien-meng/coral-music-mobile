@@ -1,12 +1,27 @@
 import 'package:coral_music_mobile/domain/music.dart';
+import 'package:coral_music_mobile/features/player/state/user_api_debug_controller.dart';
+import 'package:coral_music_mobile/features/player/state/playback_queue_controller.dart';
 import 'package:coral_music_mobile/features/player/view/mini_player.dart';
 import 'package:coral_music_mobile/main.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/fake_catalog_service.dart';
 
 void main() {
+  testWidgets('initializes the persisted User API source at app startup',
+      (tester) async {
+    await tester
+        .pumpWidget(CoralMusicApp(catalogService: FakeCatalogService()));
+    await tester.pump();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(MaterialApp)),
+    );
+    expect(container.exists(userApiDebugProvider), isTrue);
+  });
+
   testWidgets('opens leaderboard and exposes every mobile route',
       (tester) async {
     await tester
@@ -23,6 +38,25 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('下载'), findsOneWidget);
+  });
+
+  testWidgets('loads daily recommendation and starts the music radio',
+      (tester) async {
+    await tester
+        .pumpWidget(CoralMusicApp(catalogService: FakeCatalogService()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('每日推荐'));
+    await tester.pumpAndSettle();
+    expect(find.text('今日推荐：测试榜单'), findsOneWidget);
+
+    await tester.tap(find.text('音乐电台'));
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(MaterialApp)),
+    );
+    expect(container.read(playbackQueueProvider).mode, PlaybackMode.shuffle);
+    expect(container.read(playbackQueueProvider).currentTrack?.title, '测试歌曲');
   });
 
   testWidgets('play all replaces queue and updates mini player',
@@ -130,12 +164,19 @@ void main() {
     );
 
     await tester.tap(find.text('下载'));
+    await tester.pump();
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
     await tester.pumpAndSettle();
     await tester.tap(find.text('查看'));
     await tester.pumpAndSettle();
 
     expect(find.text('下载管理'), findsOneWidget);
     expect(tester.takeException(), isNull);
+
+    expect(find.byTooltip('返回'), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('我的'), findsOneWidget);
   });
 
   testWidgets('search result replaces queue and updates mini player',
@@ -162,16 +203,25 @@ void main() {
 
     await tester.tap(find.byTooltip('切换音乐来源'));
     await tester.pumpAndSettle();
-    await tester.tap(
-      find.ancestor(
-        of: find.text('QQ音乐'),
-        matching: find.byType(CheckedPopupMenuItem<OnlineSource>),
-      ),
-    );
+    expect(find.text('音乐平台'), findsOneWidget);
+    await tester.tap(find.text('QQ音乐'));
     await tester.pumpAndSettle();
 
     expect(find.text('QQ 测试榜单'), findsWidgets);
     expect(find.text('QQ 测试歌曲'), findsOneWidget);
+  });
+
+  testWidgets('opens the empty notification menu', (tester) async {
+    await tester
+        .pumpWidget(CoralMusicApp(catalogService: FakeCatalogService()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('通知'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('消息通知'), findsOneWidget);
+    expect(find.text('暂无新消息'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('uses a navigation rail on a wide screen without overflow',

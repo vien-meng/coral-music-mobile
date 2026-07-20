@@ -17,6 +17,7 @@ class FavoriteTrackButton extends ConsumerStatefulWidget {
 class _FavoriteTrackButtonState extends ConsumerState<FavoriteTrackButton> {
   late Future<bool> _favorite;
   late final ProviderSubscription<int> _favoriteSubscription;
+  var _isToggling = false;
 
   @override
   void initState() {
@@ -52,18 +53,37 @@ class _FavoriteTrackButtonState extends ConsumerState<FavoriteTrackButton> {
         future: _favorite,
         builder: (context, snapshot) => IconButton(
           tooltip: snapshot.data == true ? '取消收藏' : '收藏歌曲',
-          onPressed: snapshot.connectionState != ConnectionState.done
-              ? null
-              : () async {
-                  final favorite = await ref
-                      .read(libraryProvider.notifier)
-                      .toggleFavorite(widget.track);
-                  if (mounted) {
-                    setState(() => _favorite = Future.value(favorite));
-                  }
-                },
+          onPressed:
+              snapshot.connectionState != ConnectionState.done || _isToggling
+                  ? null
+                  : () async {
+                      final previous = snapshot.data == true;
+                      setState(() {
+                        _isToggling = true;
+                        _favorite = Future.value(!previous);
+                      });
+                      final favorite = await ref
+                          .read(libraryProvider.notifier)
+                          .toggleFavorite(widget.track);
+                      if (!mounted || !context.mounted) return;
+                      final error = ref.read(libraryProvider).error;
+                      setState(() {
+                        _isToggling = false;
+                        _favorite = error == null
+                            ? Future.value(favorite)
+                            : _loadFavorite();
+                      });
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                              error?.message ?? (favorite ? '已收藏歌曲' : '已取消收藏')),
+                        ),
+                      );
+                    },
           icon: Icon(
-            Icons.favorite_border,
+            snapshot.data == true
+                ? Icons.favorite_rounded
+                : Icons.favorite_border,
             color: snapshot.data == true
                 ? Theme.of(context).colorScheme.primary
                 : null,

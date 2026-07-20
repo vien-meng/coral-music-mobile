@@ -86,7 +86,7 @@ final class PlaybackQueueController extends StateNotifier<PlaybackQueueState> {
   }) {
     if (tracks.isEmpty) {
       _shuffleHistory.clear();
-      state = const PlaybackQueueState();
+      state = PlaybackQueueState(mode: state.mode);
       return;
     }
     if (startIndex < 0 || startIndex >= tracks.length) {
@@ -96,6 +96,7 @@ final class PlaybackQueueController extends StateNotifier<PlaybackQueueState> {
       tracks: List.unmodifiable(tracks),
       currentIndex: startIndex,
       contextId: contextId,
+      mode: state.mode,
     );
     _shuffleHistory
       ..clear()
@@ -203,9 +204,11 @@ final class PlaybackQueueController extends StateNotifier<PlaybackQueueState> {
     );
   }
 
-  Track? selectNext() => _selectOffset(1);
+  Track? selectNext() =>
+      state.mode == PlaybackMode.shuffle ? _selectShuffle() : _selectOffset(1);
 
-  Track? selectPrevious() => _selectOffset(-1);
+  Track? selectPrevious() =>
+      state.mode == PlaybackMode.shuffle ? _selectShuffle() : _selectOffset(-1);
 
   void setMode(PlaybackMode mode) {
     if (state.mode == mode) return;

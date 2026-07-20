@@ -22,7 +22,30 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('音源管理'), findsOneWidget);
 
-    router.pop();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('我的'), findsOneWidget);
+  });
+
+  testWidgets('keeps a back stack for quick child pages', (tester) async {
+    final router = GoRouter(
+      initialLocation: '/more',
+      routes: [
+        GoRoute(path: '/more', builder: (_, __) => const MorePage()),
+        GoRoute(
+          path: '/download',
+          builder: (_, __) => const Scaffold(body: Text('下载管理')),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.tap(find.text('下载'));
+    await tester.pumpAndSettle();
+    expect(find.text('下载管理'), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
     expect(find.text('我的'), findsOneWidget);
   });

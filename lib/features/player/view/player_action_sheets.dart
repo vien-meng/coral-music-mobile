@@ -1,31 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../app/audio_quality_labels.dart';
 import '../../../domain/music.dart';
-import '../../download/state/download_controller.dart';
 import '../state/player_controller.dart';
-
-Future<void> enqueuePlayerDownload(
-  BuildContext context,
-  WidgetRef ref,
-  Track track,
-) async {
-  final added = await ref.read(downloadProvider.notifier).enqueue(track);
-  if (!context.mounted) return;
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(added ? '已加入下载任务' : '这首歌已在下载列表中'),
-      action: added
-          ? SnackBarAction(
-              label: '查看',
-              onPressed: () => context.go('/download'),
-            )
-          : null,
-    ),
-  );
-}
 
 Future<void> showPlayerQualitySheet(
   BuildContext context,
