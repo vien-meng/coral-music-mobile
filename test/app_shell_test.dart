@@ -56,27 +56,86 @@ void main() {
 
   testWidgets('opens the player detail and its lyrics empty state',
       (tester) async {
-    await tester
-        .pumpWidget(CoralMusicApp(catalogService: FakeCatalogService()));
-    await tester.pumpAndSettle();
-
-    await tester.scrollUntilVisible(
-      find.text('播放全部'),
-      300,
-      scrollable: find.byKey(const Key('leaderboard-tracks')),
-    );
-    await tester.tap(find.text('播放全部'));
-    await tester.pump();
-    await tester.tap(find.byType(MiniPlayer));
-    await tester.pumpAndSettle();
+    await _openPlayer(tester);
 
     expect(find.text('正在播放'), findsOneWidget);
     expect(find.text('测试歌曲'), findsOneWidget);
 
+    await tester.scrollUntilVisible(
+      find.byTooltip('播放音质'),
+      250,
+      scrollable: find.byType(SingleChildScrollView),
+    );
+    expect(find.text('音量'), findsNothing);
+    expect(find.text('定时停止'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('收藏')).dy,
+      tester.getTopLeft(find.text('下载')).dy,
+    );
+
+    await tester.tap(find.byTooltip('播放音质'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('播放音质'), findsOneWidget);
+    expect(find.text('FLAC 无损音频'), findsOneWidget);
+    expect(find.text('320 kbps 高品质'), findsOneWidget);
+    await tester.tap(find.text('HQ'));
+    await tester.pumpAndSettle();
+
     await tester.tap(find.byTooltip('查看歌词'));
     await tester.pumpAndSettle();
 
+    expect(find.byKey(const Key('lyrics-track-header')), findsOneWidget);
+    expect(find.byKey(const Key('lyrics-player-controls')), findsOneWidget);
+    expect(find.byKey(const Key('lyrics-player-toggle')), findsOneWidget);
     expect(find.text('暂无可用歌词'), findsOneWidget);
+  });
+
+  testWidgets('swipes between player and lyrics and pulls down to close',
+      (tester) async {
+    await _openPlayer(tester);
+
+    await tester.fling(
+      find.byKey(const Key('player-detail-pages')),
+      const Offset(-400, 0),
+      1000,
+    );
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('查看播放'), findsOneWidget);
+
+    await tester.fling(
+      find.byKey(const Key('player-detail-pages')),
+      const Offset(400, 0),
+      1000,
+    );
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('查看歌词'), findsOneWidget);
+
+    await tester.drag(
+      find.byKey(const Key('player-panel')),
+      const Offset(0, 180),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('player-detail-pages')), findsNothing);
+    expect(find.byType(MiniPlayer), findsOneWidget);
+  });
+
+  testWidgets('opens download manager from player download feedback',
+      (tester) async {
+    await _openPlayer(tester);
+    await tester.scrollUntilVisible(
+      find.text('下载'),
+      250,
+      scrollable: find.byType(SingleChildScrollView),
+    );
+
+    await tester.tap(find.text('下载'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('查看'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('下载管理'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('search result replaces queue and updates mini player',
@@ -129,4 +188,20 @@ void main() {
     expect(find.byType(NavigationRail), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+}
+
+Future<void> _openPlayer(WidgetTester tester) async {
+  await tester.pumpWidget(
+    CoralMusicApp(catalogService: FakeCatalogService()),
+  );
+  await tester.pumpAndSettle();
+  await tester.scrollUntilVisible(
+    find.text('播放全部'),
+    300,
+    scrollable: find.byKey(const Key('leaderboard-tracks')),
+  );
+  await tester.tap(find.text('播放全部'));
+  await tester.pump();
+  await tester.tap(find.byType(MiniPlayer));
+  await tester.pumpAndSettle();
 }

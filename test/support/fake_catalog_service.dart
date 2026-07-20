@@ -16,6 +16,7 @@ final class FakeCatalogService implements OnlineCatalogService {
     title: '测试歌曲',
     artist: '测试歌手',
     duration: Duration(minutes: 3),
+    availableQualities: [AudioQuality.flac, AudioQuality.high320k],
   );
 
   static const qqBoard = LeaderboardBoard(

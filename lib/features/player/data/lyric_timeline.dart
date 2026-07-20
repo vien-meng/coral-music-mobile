@@ -54,6 +54,26 @@ List<LyricLine> parseLyricTimeline(LyricPayload payload) {
   ).toList(growable: false);
 }
 
+List<String> parsePlainLyricLines(LyricPayload payload) {
+  final raw = [payload.lyric, payload.lxlyric, payload.tlyric, payload.rlyric]
+      .where((value) => value.trim().isNotEmpty)
+      .firstOrNull;
+  if (raw == null) return const [];
+  final timeTag = RegExp(r'\[\d{1,2}:\d{2}(?:[.:]\d{1,3})?\]');
+  final metadata = RegExp(
+    r'\[(?:ar|ti|al|by|offset|kuwo):[^\]]*\]',
+    caseSensitive: false,
+  );
+  return raw
+      .split(RegExp(r'\r?\n'))
+      .map((line) => _stripWordMarkers(line)
+          .replaceAll(timeTag, '')
+          .replaceAll(metadata, '')
+          .trim())
+      .where((line) => line.isNotEmpty)
+      .toList(growable: false);
+}
+
 List<LyricWord> _parseWords(String raw, Duration offset) {
   final tag = RegExp(r'<(\d+),(\d+)>');
   final matches = tag.allMatches(raw).toList();
