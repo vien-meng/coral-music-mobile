@@ -13,10 +13,11 @@ final class UserApiManifest {
 }
 
 final class ResolvedPlaybackUrl {
-  const ResolvedPlaybackUrl(this.uri, {this.quality});
+  const ResolvedPlaybackUrl(this.uri, {this.quality, this.headers = const {}});
 
   final Uri uri;
   final AudioQuality? quality;
+  final Map<String, String> headers;
 }
 
 abstract interface class UserApiRunner {
@@ -225,6 +226,17 @@ final class MethodChannelUserApiRunner implements UserApiRunner {
 
   static Map<String, Object?> _legacyMusicInfo(Track track) {
     final songId = track.extra['songId'] ?? track.sourceTrackId;
+    final qualityMeta = track.extra['qualityMeta'];
+    Map<String, Object?> metadataFor(AudioQuality quality) {
+      final raw =
+          qualityMeta is Map ? qualityMeta[_qualityName(quality)] : null;
+      if (raw is! Map) return const {'size': null};
+      return {
+        'size': raw['size'],
+        if (raw['hash'] != null) 'hash': raw['hash'],
+      };
+    }
+
     final meta = <String, Object?>{
       'songId': songId,
       'albumName': track.album ?? '',
@@ -236,11 +248,11 @@ final class MethodChannelUserApiRunner implements UserApiRunner {
       'copyrightId': track.extra['copyrightId'] ?? songId,
       'qualitys': [
         for (final quality in track.availableQualities)
-          {'type': _qualityName(quality), 'size': null},
+          {'type': _qualityName(quality), ...metadataFor(quality)},
       ],
       '_qualitys': {
         for (final quality in track.availableQualities)
-          _qualityName(quality): {'size': null},
+          _qualityName(quality): metadataFor(quality),
       },
     };
     return {

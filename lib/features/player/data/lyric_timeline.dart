@@ -28,7 +28,8 @@ final class LyricWord {
 List<LyricLine> parseLyricTimeline(LyricPayload payload) {
   final translations = _parse(payload.tlyric);
   final romanizations = _parse(payload.rlyric);
-  final rawSource = payload.lxlyric.isNotEmpty ? payload.lxlyric : payload.lyric;
+  final rawSource =
+      payload.lxlyric.isNotEmpty ? payload.lxlyric : payload.lyric;
   final kuwoRelativeWords = RegExp(r'<-?\d+,-\d+').hasMatch(rawSource);
   final source = _normalizeKuwoWordTiming(rawSource);
   final offset = _parseOffset(source);

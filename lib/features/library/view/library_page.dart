@@ -1,10 +1,18 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:file_picker/file_picker.dart';
 
+import '../../../app/cover_image.dart';
 import '../../../app/app_theme.dart';
 import '../../../domain/music.dart';
 import '../../player/state/playback_queue_controller.dart';
 import '../../player/state/player_controller.dart';
+import '../data/library_store.dart';
+import '../data/local_audio_scanner.dart';
+import '../data/playlist_duplicates.dart';
 import '../state/library_controller.dart';
 
 class LibraryPage extends ConsumerStatefulWidget {
@@ -38,26 +46,37 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
       );
     }
     return Scaffold(
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton(
+        tooltip: '新建列表',
         onPressed: state.isLoading ? null : () => _editPlaylist(context),
-        icon: const Icon(Icons.add),
-        label: const Text('新建列表'),
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Theme.of(context).colorScheme.onPrimary,
+        child: const Icon(Icons.add),
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+            padding: const EdgeInsets.fromLTRB(20, 12, 12, 8),
             child: Row(
               children: [
-                Text('我的列表', style: Theme.of(context).textTheme.titleLarge),
+                Text('我的列表',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        )),
                 const Spacer(),
+                IconButton(
+                  tooltip: '导入列表',
+                  onPressed:
+                      state.isLoading ? null : () => _importPlaylist(context),
+                  icon: const Icon(Icons.file_upload_outlined),
+                ),
                 IconButton(
                   tooltip: '刷新',
                   onPressed: state.isLoading
                       ? null
                       : ref.read(libraryProvider.notifier).load,
-                  icon: const Icon(Icons.refresh),
+                  icon: const Icon(Icons.refresh_outlined),
                 ),
               ],
             ),
@@ -79,17 +98,29 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                     ? const _EmptyLibrary()
                     : ReorderableListView.builder(
                         buildDefaultDragHandles: false,
-                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 88),
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 88),
                         itemCount: state.playlists.length,
                         onReorder: state.isLoading
                             ? (_, __) {}
                             : ref.read(libraryProvider.notifier).reorder,
                         itemBuilder: (context, index) {
                           final playlist = state.playlists[index];
-                          return Card(
+                          return Container(
                             key: ValueKey(playlist.id),
+                            margin: const EdgeInsets.only(bottom: 8),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.surface,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .outlineVariant,
+                              ),
+                            ),
                             child: ListTile(
                               leading: CircleAvatar(
+                                backgroundColor: CoralPalette.sky,
+                                foregroundColor: CoralPalette.brand,
                                 child: Text('${index + 1}'),
                               ),
                               title: Text(playlist.name),
@@ -124,7 +155,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                                     index: index,
                                     child: const Padding(
                                       padding: EdgeInsets.all(12),
-                                      child: Icon(Icons.drag_handle),
+                                      child: Icon(Icons.drag_handle_outlined),
                                     ),
                                   ),
                                 ],
@@ -203,6 +234,48 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
       await ref.read(libraryProvider.notifier).delete(playlist.id);
     }
   }
+
+  Future<void> _importPlaylist(BuildContext context) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['json'],
+      withData: true,
+    );
+    final file =
+        result == null || result.files.isEmpty ? null : result.files.first;
+    if (file == null) return;
+    if (file.size > 4 * 1024 * 1024) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('列表文件不能超过 4 MB。')),
+        );
+      }
+      return;
+    }
+    try {
+      final raw = file.bytes != null
+          ? utf8.decode(file.bytes!)
+          : await File(file.path!).readAsString();
+      final imported =
+          await ref.read(libraryProvider.notifier).importPlaylist(raw);
+      if (context.mounted && imported != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '已导入“${imported.playlist.name}”：${imported.added} 首歌曲'
+              '${imported.skipped == 0 ? '' : '，跳过 ${imported.skipped} 首重复歌曲'}',
+            ),
+          ),
+        );
+      }
+    } on Object {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('读取列表文件失败。')),
+        );
+      }
+    }
+  }
 }
 
 class _PlaylistTracks extends ConsumerStatefulWidget {
@@ -230,8 +303,12 @@ class _PlaylistTracksState extends ConsumerState<_PlaylistTracks> {
     final playlist = widget.playlist;
     final tracks = widget.tracks;
     final visibleTracks = tracks.where(_matchesFilter).toList(growable: false);
-    final isLoading = ref.watch(libraryProvider).isLoading;
-    final canReorder = !isLoading &&
+    final library = ref.watch(libraryProvider);
+    final isLoading = library.isLoading;
+    final isFavorites = playlist.id == LibraryStore.favoritesId;
+    final favoritePlaylists = library.favoriteOnlinePlaylists;
+    final canReorder = !isFavorites &&
+        !isLoading &&
         _selectedTrackIds.isEmpty &&
         _query.trim().isEmpty &&
         _sourceKind == null;
@@ -259,17 +336,40 @@ class _PlaylistTracksState extends ConsumerState<_PlaylistTracks> {
                 ),
               ),
               if (_selectedTrackIds.isEmpty)
+                IconButton(
+                  tooltip: '导入本地音频',
+                  onPressed: isLoading ? null : () => _importLocal(context),
+                  icon: const Icon(Icons.folder_open_outlined),
+                ),
+              if (_selectedTrackIds.isEmpty)
+                IconButton(
+                  tooltip: '导出列表',
+                  onPressed: isLoading ? null : () => _exportPlaylist(context),
+                  icon: const Icon(Icons.file_download_outlined),
+                ),
+              if (_selectedTrackIds.isEmpty)
+                IconButton(
+                  tooltip: '识别重复歌曲',
+                  onPressed:
+                      isLoading ? null : () => _selectDuplicates(context),
+                  icon: const Icon(Icons.content_copy_outlined),
+                ),
+              if (_selectedTrackIds.isEmpty)
                 FilledButton.tonalIcon(
                   onPressed: visibleTracks.isEmpty || isLoading
                       ? null
                       : () async {
+                          final tracks = await ref
+                              .read(libraryStoreProvider)
+                              .filterIgnored(visibleTracks);
+                          if (tracks.isEmpty) return;
                           ref.read(playbackQueueProvider.notifier).replaceQueue(
-                                visibleTracks,
+                                tracks,
                                 contextId: 'library:${playlist.id}',
                               );
                           await ref
                               .read(playerProvider.notifier)
-                              .playTrack(visibleTracks.first);
+                              .playTrack(tracks.first);
                         },
                   icon: const Icon(Icons.play_arrow),
                   label: const Text('播放全部'),
@@ -347,38 +447,204 @@ class _PlaylistTracksState extends ConsumerState<_PlaylistTracks> {
           ),
         ),
         Expanded(
-          child: tracks.isEmpty
-              ? const _EmptyLibrary(message: '列表还没有歌曲。')
-              : visibleTracks.isEmpty
-                  ? const _EmptyLibrary(message: '没有匹配的歌曲。')
-                  : canReorder
-                      ? ReorderableListView.builder(
-                          buildDefaultDragHandles: false,
-                          itemCount: tracks.length,
-                          onReorder:
-                              ref.read(libraryProvider.notifier).reorderTracks,
-                          itemBuilder: (context, index) => _trackTile(
-                            tracks[index],
-                            index,
-                            tracks,
-                            isLoading,
-                            true,
+          child: isFavorites
+              ? tracks.isEmpty && favoritePlaylists.isEmpty
+                  ? const _EmptyLibrary(message: '还没有收藏歌曲或歌单。')
+                  : ListView(
+                      padding: const EdgeInsets.only(bottom: 20),
+                      children: [
+                        if (favoritePlaylists.isNotEmpty) ...[
+                          const Padding(
+                            padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
+                            child: Text('收藏歌单'),
                           ),
-                        )
-                      : ListView.separated(
-                          itemCount: visibleTracks.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1),
-                          itemBuilder: (context, index) => _trackTile(
-                            visibleTracks[index],
-                            index,
-                            visibleTracks,
-                            isLoading,
-                            false,
+                          for (final detail in favoritePlaylists)
+                            _favoritePlaylistTile(detail),
+                        ],
+                        if (tracks.isNotEmpty) ...[
+                          const Padding(
+                            padding: EdgeInsets.fromLTRB(16, 16, 16, 4),
+                            child: Text('收藏歌曲'),
                           ),
-                        ),
+                          for (var index = 0; index < tracks.length; index++)
+                            _trackTile(
+                              tracks[index],
+                              index,
+                              tracks,
+                              isLoading,
+                              false,
+                            ),
+                        ],
+                      ],
+                    )
+              : tracks.isEmpty
+                  ? const _EmptyLibrary(message: '列表还没有歌曲。')
+                  : visibleTracks.isEmpty
+                      ? const _EmptyLibrary(message: '没有匹配的歌曲。')
+                      : canReorder
+                          ? ReorderableListView.builder(
+                              buildDefaultDragHandles: false,
+                              itemCount: tracks.length,
+                              onReorder: ref
+                                  .read(libraryProvider.notifier)
+                                  .reorderTracks,
+                              itemBuilder: (context, index) => _trackTile(
+                                tracks[index],
+                                index,
+                                tracks,
+                                isLoading,
+                                true,
+                              ),
+                            )
+                          : ListView.separated(
+                              itemCount: visibleTracks.length,
+                              separatorBuilder: (_, __) =>
+                                  const Divider(height: 1),
+                              itemBuilder: (context, index) => _trackTile(
+                                visibleTracks[index],
+                                index,
+                                visibleTracks,
+                                isLoading,
+                                false,
+                              ),
+                            ),
         ),
       ],
     );
+  }
+
+  Widget _favoritePlaylistTile(PlaylistDetail detail) => ListTile(
+        leading: _LibraryTrackArtwork(uri: detail.playlist.coverUri),
+        title: Text(
+          detail.playlist.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(
+          '${detail.playlist.source.label} · ${detail.tracks.length} 首',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: IconButton(
+          tooltip: '取消收藏歌单',
+          onPressed: () => ref
+              .read(libraryProvider.notifier)
+              .toggleFavoriteOnlinePlaylist(detail),
+          icon: const Icon(Icons.bookmark_remove_outlined),
+        ),
+        onTap: detail.tracks.isEmpty
+            ? null
+            : () async {
+                ref.read(playbackQueueProvider.notifier).replaceQueue(
+                      detail.tracks,
+                      contextId:
+                          'favorite-songlist:${detail.playlist.source.id}:${detail.playlist.id}',
+                    );
+                await ref
+                    .read(playerProvider.notifier)
+                    .playTrack(detail.tracks.first);
+              },
+      );
+
+  Future<void> _importLocal(BuildContext context) async {
+    final directory = await showModalBottomSheet<bool>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            leading: const Icon(Icons.audio_file_outlined),
+            title: const Text('选择音频文件'),
+            onTap: () => Navigator.pop(context, false),
+          ),
+          ListTile(
+            leading: const Icon(Icons.folder_open_outlined),
+            title: const Text('选择目录并扫描'),
+            onTap: () => Navigator.pop(context, true),
+          ),
+        ]),
+      ),
+    );
+    if (directory == null) return;
+    final scan = directory ? await _scanDirectory() : await _scanFiles();
+    var added = 0;
+    for (final track in scan.tracks) {
+      if (await ref
+          .read(libraryProvider.notifier)
+          .addTrack(widget.playlist, track)) {
+        added++;
+      }
+    }
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+          scan.skipped.isEmpty
+              ? '已导入 $added 首本地音频'
+              : '已导入 $added 首，跳过 ${scan.skipped.length} 项',
+        ),
+      ));
+    }
+  }
+
+  Future<void> _exportPlaylist(BuildContext context) async {
+    final path = await FilePicker.platform.saveFile(
+      dialogTitle: '导出列表',
+      fileName: '${_safeFileName(widget.playlist.name)}.json',
+      type: FileType.custom,
+      allowedExtensions: const ['json'],
+    );
+    if (path == null) return;
+    try {
+      final raw = await ref
+          .read(libraryProvider.notifier)
+          .exportPlaylist(widget.playlist);
+      await File(path).writeAsString(raw, flush: true);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('列表已导出，可直接在珊瑚音乐桌面端导入。')),
+        );
+      }
+    } on Object {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('导出列表失败。')),
+        );
+      }
+    }
+  }
+
+  void _selectDuplicates(BuildContext context) {
+    final duplicates = findDuplicateTrackIds(widget.tracks);
+    if (duplicates.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('没有识别到重复歌曲。')),
+      );
+      return;
+    }
+    setState(() => _selectedTrackIds.addAll(duplicates));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已预选 ${duplicates.length} 首重复歌曲，请确认后再处理。')),
+    );
+  }
+
+  String _safeFileName(String value) {
+    final normalized = value.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();
+    return normalized.isEmpty ? 'coral-playlist' : normalized;
+  }
+
+  Future<LocalAudioScanResult> _scanFiles() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.audio,
+      allowMultiple: true,
+    );
+    return LocalAudioScanner()
+        .scanFiles(result?.paths.whereType<String>() ?? const []);
+  }
+
+  Future<LocalAudioScanResult> _scanDirectory() async {
+    final path = await FilePicker.platform.getDirectoryPath();
+    return path == null
+        ? const LocalAudioScanResult(tracks: [], skipped: [])
+        : LocalAudioScanner().scanDirectory(path);
   }
 
   bool _matchesFilter(Track track) {
@@ -569,15 +835,14 @@ class _LibraryTrackArtwork extends StatelessWidget {
       ),
       child: const Icon(Icons.music_note_rounded, color: Colors.white),
     );
-    if (uri == null) return fallback;
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
-      child: Image.network(
-        uri.toString(),
+      child: CoverImage(
+        uri: uri,
+        fallback: fallback,
         width: 44,
         height: 44,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => fallback,
       ),
     );
   }

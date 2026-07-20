@@ -37,6 +37,21 @@ void main() {
         () => controller.replaceQueue(tracks, startIndex: 2), throwsRangeError);
   });
 
+  test('restored queue retains mode and safely clamps a stale index', () {
+    final controller = PlaybackQueueController();
+
+    controller.restoreQueue(
+      tracks,
+      currentIndex: 99,
+      contextId: 'library:favorite',
+      mode: PlaybackMode.shuffle,
+    );
+
+    expect(controller.state.currentTrack?.sourceTrackId, '2');
+    expect(controller.state.contextId, 'library:favorite');
+    expect(controller.state.mode, PlaybackMode.shuffle);
+  });
+
   test('next and previous wrap at queue boundaries', () {
     final controller = PlaybackQueueController();
     controller.replaceQueue(tracks, startIndex: 0);

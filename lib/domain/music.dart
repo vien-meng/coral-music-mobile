@@ -35,6 +35,21 @@ AudioQuality defaultPlaybackQuality(Iterable<AudioQuality> qualities) {
       (best, candidate) => candidate.index < best.index ? candidate : best);
 }
 
+AudioQuality preferredPlaybackQuality(
+  Iterable<AudioQuality> qualities,
+  AudioQuality preference,
+) {
+  final values = qualities.toSet();
+  if (values.isEmpty) return preference;
+  final acceptable = values
+      .where((quality) => quality.index >= preference.index)
+      .toList(growable: false);
+  final candidates = acceptable.isEmpty ? values : acceptable;
+  return candidates.reduce(
+    (best, candidate) => candidate.index < best.index ? candidate : best,
+  );
+}
+
 enum PlaybackMode { listLoop, singleLoop, shuffle }
 
 final class LyricPayload {
@@ -152,6 +167,51 @@ final class PlayHistoryEntry {
   final DateTime playedAt;
   final int playCount;
   final Duration lastPosition;
+}
+
+enum DownloadStatus {
+  queued,
+  downloading,
+  paused,
+  completed,
+  failed,
+  cancelled
+}
+
+final class DownloadTask {
+  const DownloadTask({
+    required this.id,
+    required this.track,
+    required this.quality,
+    required this.status,
+    required this.targetPath,
+    required this.createdAt,
+    this.progress = 0,
+    this.error,
+  });
+
+  final String id;
+  final Track track;
+  final AudioQuality quality;
+  final DownloadStatus status;
+  final String targetPath;
+  final DateTime createdAt;
+  final double progress;
+  final String? error;
+}
+
+final class WebDavAccount {
+  const WebDavAccount({
+    required this.id,
+    required this.name,
+    required this.endpoint,
+    this.rootPath = '/',
+  });
+
+  final String id;
+  final String name;
+  final Uri endpoint;
+  final String rootPath;
 }
 
 final class PageResult<T> {

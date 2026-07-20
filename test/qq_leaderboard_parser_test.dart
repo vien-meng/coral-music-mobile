@@ -24,4 +24,48 @@ void main() {
     expect(result.items.last.availableQualities, [AudioQuality.flac24bit]);
     expect(result.items.last.coverUri.toString(), contains('T001singer2'));
   });
+
+  test('normalizes QQ search tracks and preserves result pagination', () {
+    final result = QqLeaderboardParser.parseSearch(
+      {
+        'code': 0,
+        'req': {
+          'code': 0,
+          'data': {
+            'meta': {'estimate_sum': 81},
+            'body': {
+              'item_song': [
+                {
+                  'mid': 'search-mid',
+                  'id': 42,
+                  'title': '搜索歌曲',
+                  'interval': 215,
+                  'singer': [
+                    {'name': '搜索歌手', 'mid': 'singer-mid'},
+                  ],
+                  'album': {'name': '搜索专辑', 'mid': 'album-mid'},
+                  'file': {
+                    'media_mid': 'media-mid',
+                    'size_flac': 30000000,
+                    'size_320mp3': 8000000,
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
+      page: 2,
+    );
+
+    expect(result.page, 2);
+    expect(result.total, 81);
+    expect(result.items.single.id, 'online:tx:search-mid');
+    expect(result.items.single.artist, '搜索歌手');
+    expect(result.items.single.album, '搜索专辑');
+    expect(result.items.single.duration, const Duration(seconds: 215));
+    expect(result.items.single.availableQualities,
+        [AudioQuality.flac, AudioQuality.high320k]);
+    expect(result.items.single.extra['mediaMid'], 'media-mid');
+  });
 }

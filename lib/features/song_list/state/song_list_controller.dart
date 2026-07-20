@@ -4,22 +4,35 @@ import '../../../core/app_failure.dart';
 import '../../../core/http_client.dart';
 import '../../../domain/music.dart';
 import '../data/kuwo_playlist_service.dart';
+import '../data/qq_playlist_service.dart';
 
-final kuwoPlaylistServiceProvider = Provider<KuwoPlaylistService>(
-  (ref) => KuwoPlaylistService(createHttpClient()),
+final playlistCatalogServicesProvider =
+    Provider<Map<OnlineSource, PlaylistCatalogService>>(
+  (ref) {
+    final dio = createHttpClient();
+    return {
+      OnlineSource.kuwo: KuwoPlaylistService(dio),
+      OnlineSource.qq: QqPlaylistService(dio),
+    };
+  },
 );
 
 final songListTagsProvider = FutureProvider<List<PlaylistTag>>(
-  (ref) => ref.watch(kuwoPlaylistServiceProvider).getTags(),
+  (ref) {
+    final source = ref.watch(songListProvider.select((state) => state.source));
+    final service = ref.watch(playlistCatalogServicesProvider)[source];
+    return service?.getTags() ?? Future.value(const []);
+  },
 );
 
 final songListProvider =
     StateNotifierProvider<SongListController, SongListState>(
-  (ref) => SongListController(ref.watch(kuwoPlaylistServiceProvider)),
+  (ref) => SongListController(ref.watch(playlistCatalogServicesProvider)),
 );
 
 final class SongListState {
   const SongListState({
+    this.source = OnlineSource.kuwo,
     this.playlists = const [],
     this.detail,
     this.page = 1,
@@ -32,6 +45,7 @@ final class SongListState {
     this.error,
   });
 
+  final OnlineSource source;
   final List<OnlinePlaylist> playlists;
   final PlaylistDetail? detail;
   final int page;
@@ -46,6 +60,7 @@ final class SongListState {
   bool get hasNext => page * pageSize < total;
 
   SongListState copyWith({
+    OnlineSource? source,
     List<OnlinePlaylist>? playlists,
     PlaylistDetail? detail,
     int? page,
@@ -61,6 +76,7 @@ final class SongListState {
     bool clearError = false,
   }) =>
       SongListState(
+        source: source ?? this.source,
         playlists: playlists ?? this.playlists,
         detail: clearDetail ? null : detail ?? this.detail,
         page: page ?? this.page,
@@ -75,9 +91,9 @@ final class SongListState {
 }
 
 final class SongListController extends StateNotifier<SongListState> {
-  SongListController(this._service) : super(const SongListState());
+  SongListController(this._services) : super(const SongListState());
 
-  final KuwoPlaylistService _service;
+  final Map<OnlineSource, PlaylistCatalogService> _services;
   int _requestId = 0;
 
   Future<void> loadInitial() async {
@@ -91,10 +107,11 @@ final class SongListController extends StateNotifier<SongListState> {
     state =
         state.copyWith(isLoading: true, clearError: true, clearDetail: true);
     try {
+      final service = _serviceFor(state.source);
       final result = state.query.isEmpty
-          ? await _service.getPopularPlaylists(page,
+          ? await service.getPopularPlaylists(page,
               tagId: state.selectedTagId, sortId: state.sortId)
-          : await _service.searchPlaylists(state.query, page);
+          : await service.searchPlaylists(state.query, page);
       if (requestId != _requestId) return;
       state = state.copyWith(
         playlists: result.items,
@@ -126,7 +143,8 @@ final class SongListController extends StateNotifier<SongListState> {
     final requestId = ++_requestId;
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      final detail = await _service.getPlaylistDetail(playlist);
+      final detail =
+          await _serviceFor(playlist.source).getPlaylistDetail(playlist);
       if (requestId != _requestId) return;
       state =
           state.copyWith(detail: detail, isLoading: false, clearError: true);
@@ -173,10 +191,26 @@ final class SongListController extends StateNotifier<SongListState> {
     return loadPage(1);
   }
 
+  Future<void> selectSource(OnlineSource source) {
+    if (source == state.source || state.isLoading) return Future.value();
+    ++_requestId;
+    state = SongListState(source: source);
+    return loadPage(1);
+  }
+
   Future<void> submitSearch(String query) {
     final normalized = query.trim();
     if (normalized == state.query || state.isLoading) return Future.value();
     state = state.copyWith(query: normalized);
     return loadPage(1);
+  }
+
+  PlaylistCatalogService _serviceFor(OnlineSource source) {
+    final service = _services[source];
+    if (service != null) return service;
+    throw AppFailure(
+      code: AppFailureCode.invalidData,
+      message: '${source.label}暂未接入歌单广场',
+    );
   }
 }

@@ -41,7 +41,7 @@ abstract interface class AudioEngine {
   Stream<AudioEngineSnapshot> get snapshots;
   Stream<AudioEngineCommand> get commands;
 
-  Future<void> load(Track track, Uri uri);
+  Future<void> load(Track track, Uri uri, {Map<String, String> headers});
   Future<void> play();
   Future<void> pause();
   Future<void> seek(Duration position);
@@ -65,8 +65,9 @@ final class JustAudioEngine implements AudioEngine {
   Stream<AudioEngineCommand> get commands => _commands.stream;
 
   @override
-  Future<void> load(Track track, Uri uri) async {
-    await (await _getHandler()).load(track, uri);
+  Future<void> load(Track track, Uri uri,
+      {Map<String, String> headers = const {}}) async {
+    await (await _getHandler()).load(track, uri, headers: headers);
   }
 
   @override
@@ -185,7 +186,8 @@ final class _CoralAudioHandler extends BaseAudioHandler with SeekHandler {
   Stream<AudioEngineSnapshot> get snapshots => _snapshots.stream;
   Stream<AudioEngineCommand> get commands => _commands.stream;
 
-  Future<void> load(Track track, Uri uri) async {
+  Future<void> load(Track track, Uri uri,
+      {Map<String, String> headers = const {}}) async {
     _snapshot =
         AudioEngineSnapshot(track: track, status: AudioEngineStatus.loading);
     _snapshots.add(_snapshot);
@@ -197,7 +199,7 @@ final class _CoralAudioHandler extends BaseAudioHandler with SeekHandler {
       duration: track.duration,
       artUri: track.coverUri,
     ));
-    await _player.setUrl(uri.toString());
+    await _player.setAudioSource(AudioSource.uri(uri, headers: headers));
     _emit(track: track, status: AudioEngineStatus.ready, error: null);
   }
 

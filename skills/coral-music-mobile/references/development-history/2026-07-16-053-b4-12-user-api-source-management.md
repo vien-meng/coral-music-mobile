@@ -85,3 +85,8 @@
 - 发现 URL 音源刷新会保持同一个 source ID；原歌词 Provider 仅监听 active ID，因此会继续命中旧歌词 Provider 缓存，即使脚本已经更新。
 - `UserApiDebugState` 新增仅进程内的 `runtimeRevision`，在导入、启用、刷新成功或移除当前运行时后递增。播放 URL 缓存仍由既有 `PlaybackResolver.clear()` 处理。
 - `lyricProvider` 同时监听该 revision，因而当前曲目的歌词会在音源刷新后重新通过已启用脚本获取；不把歌词、脚本或凭据写入数据库。
+# 2026-07-20 本地脚本文件导入（DOING）
+
+- 桌面端支持导入脚本文件，移动端当前仅有 HTTPS URL 与开发粘贴框。本轮补系统文件选择的 `.js` 导入，复用同一受限运行时；不持久化脚本、不允许非 UTF-8 或超过 256 KiB 内容。
+- 已通过 `file_picker` 提供 `.js` 文件选择；读取字节先在 Dart 边界检查 256 KiB 与 UTF-8，成功后才调用既有 `importScript`、WebView 受限运行时和能力解析。脚本继续仅驻留会话内存。
+- 新增控制器回归覆盖字节脚本导入和超限拒绝；`flutter analyze`、`flutter test test/user_api_debug_controller_test.dart test/user_api_script_fetcher_test.dart` 及 `git diff --check` 通过。Android/iOS/鸿蒙文件选择器真机回归仍待平台阶段。

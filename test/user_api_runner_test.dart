@@ -35,7 +35,7 @@ void main() {
         .setMockMethodCallHandler(channel, (call) async {
       if (call.method == 'load') {
         return <String, Object?>{
-          'musicUrlSources': ['kw']
+          'musicUrlSources': ['kg']
         };
       }
       if (call.method == 'resolveMusicUrl') {
@@ -57,13 +57,19 @@ void main() {
     final playbackUrl = await runner.resolveMusicUrl(
       const Track(
         sourceKind: TrackSourceKind.online,
-        sourceId: 'kw',
+        sourceId: 'kg',
         sourceTrackId: '1',
         title: '测试歌曲',
         artist: '测试歌手',
         album: '测试专辑',
         duration: Duration(minutes: 4, seconds: 3),
-        extra: {'albumId': '2'},
+        extra: {
+          'albumId': '2',
+          'hash': '128-hash',
+          'qualityMeta': {
+            '128k': {'hash': '128-hash', 'size': 3000000},
+          },
+        },
       ),
       AudioQuality.standard128k,
     );
@@ -76,6 +82,10 @@ void main() {
     expect(musicInfo['interval'], '04:03');
     expect(meta['songId'], '1');
     expect(meta['albumId'], '2');
+    expect((meta['_qualitys']! as Map)['128k'], {
+      'hash': '128-hash',
+      'size': 3000000,
+    });
   });
 
   test('normalizes a desktop-shaped User API lyric payload', () async {

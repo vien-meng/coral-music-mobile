@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/app_failure.dart';
 import '../../../core/http_client.dart';
 import '../../../domain/music.dart';
+import '../data/kugou_catalog_service.dart';
 import '../data/kuwo_catalog_service.dart';
 import '../data/migu_catalog_service.dart';
 import '../data/netease_catalog_service.dart';
@@ -14,6 +15,7 @@ final onlineCatalogServiceProvider = Provider<OnlineCatalogService>(
     final dio = createHttpClient();
     return MultiSourceOnlineCatalogService({
       OnlineSource.kuwo: KuwoCatalogService(dio),
+      OnlineSource.kugou: KugouCatalogService(dio),
       OnlineSource.qq: QqCatalogService(dio),
       OnlineSource.migu: MiguCatalogService(dio),
       OnlineSource.netease: NeteaseCatalogService(dio),

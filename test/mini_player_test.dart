@@ -48,7 +48,8 @@ final class _DebugAudioEngine implements AudioEngine {
   Future<void> dispose() => _snapshots.close();
 
   @override
-  Future<void> load(Track track, Uri uri) async {
+  Future<void> load(Track track, Uri uri,
+      {Map<String, String> headers = const {}}) async {
     _track = track;
     _snapshots.add(
       AudioEngineSnapshot(

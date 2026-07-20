@@ -127,8 +127,66 @@ final class QqCatalogService implements OnlineCatalogService {
 
   @override
   Future<PageResult<Track>> searchTracks(
-          OnlineSource source, String query, int page) async =>
-      throw _unsupported('歌曲搜索');
+      OnlineSource source, String query, int page) async {
+    if (source != OnlineSource.qq || query.trim().isEmpty || page < 1) {
+      throw const AppFailure(
+        code: AppFailureCode.invalidData,
+        message: 'QQ 音乐搜索请求参数无效',
+      );
+    }
+    const uri = 'https://u.y.qq.com/cgi-bin/musicu.fcg';
+    final payload = {
+      'comm': {'uin': 0, 'format': 'json', 'ct': 20, 'cv': 1859},
+      'req': {
+        'module': 'music.search.SearchCgiService',
+        'method': 'DoSearchForQQMusicMobile',
+        'param': {
+          'search_type': 0,
+          'query': query.trim(),
+          'page_num': page,
+          'num_per_page': 30,
+          'highlight': 0,
+          'nqc_flag': 0,
+          'multi_zhida': 0,
+          'cat': 2,
+          'grp': 1,
+          'sin': 0,
+          'sem': 0,
+        },
+      },
+    };
+    try {
+      final response = await _dio.post<String>(
+        uri,
+        data: jsonEncode(payload),
+        options: Options(
+          contentType: Headers.jsonContentType,
+          responseType: ResponseType.plain,
+        ),
+      );
+      final body = response.data;
+      if (body == null || body.isEmpty) {
+        throw const AppFailure(
+          code: AppFailureCode.invalidData,
+          message: 'QQ 音乐搜索响应为空',
+        );
+      }
+      return QqLeaderboardParser.parseSearch(
+        Map<String, Object?>.from(jsonDecode(body) as Map),
+        page: page,
+      );
+    } on DioException catch (error) {
+      throw mapDioException(error);
+    } on AppFailure {
+      rethrow;
+    } on Object catch (error) {
+      throw AppFailure(
+        code: AppFailureCode.invalidData,
+        message: 'QQ 音乐搜索数据解析失败',
+        diagnostic: error.runtimeType.toString(),
+      );
+    }
+  }
 
   AppFailure _unsupported(String capability) => AppFailure(
       code: AppFailureCode.invalidData, message: 'QQ 音乐暂未接入$capability');

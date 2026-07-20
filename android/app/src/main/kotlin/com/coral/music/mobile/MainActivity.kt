@@ -1,8 +1,13 @@
 package com.coral.music.mobile
 
 import android.content.ComponentName
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.database.Cursor
+import android.net.Uri
 import android.os.Bundle
+import android.provider.OpenableColumns
+import java.io.File
 import com.ryanheise.audioservice.AudioService
 import com.ryanheise.audioservice.MediaButtonReceiver
 import com.ryanheise.audioservice.AudioServiceActivity
@@ -10,7 +15,12 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity: AudioServiceActivity() {
+    companion object {
+        private const val MAX_SHARED_AUDIO_BYTES = 2L * 1024 * 1024 * 1024
+    }
+
     private lateinit var userApiRunner: UserApiRunner
+    private var sharedAudioChannel: MethodChannel? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // AudioServiceActivity connects its engine during Activity creation; the
@@ -51,6 +61,72 @@ class MainActivity: AudioServiceActivity() {
                 )
                 result.success(null)
             }
+        val sharedChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "coral_music/shared_audio")
+        sharedAudioChannel = sharedChannel
+        sharedChannel
+            .setMethodCallHandler { call, result ->
+                if (call.method != "consume") {
+                    result.notImplemented()
+                    return@setMethodCallHandler
+                }
+                result.success(consumeSharedAudio())
+            }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        sharedAudioChannel?.invokeMethod("shared", consumeSharedAudio())
+    }
+
+    private fun consumeSharedAudio(): List<String> {
+        val current = intent ?: return emptyList()
+        if (current.action != Intent.ACTION_SEND && current.action != Intent.ACTION_SEND_MULTIPLE) {
+            return emptyList()
+        }
+        val uris = when (current.action) {
+            Intent.ACTION_SEND -> listOfNotNull(current.getParcelableExtra<Uri>(Intent.EXTRA_STREAM))
+            else -> current.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM) ?: emptyList()
+        }
+        val directory = File(filesDir, "shared-audio").apply { mkdirs() }
+        val paths = uris.mapNotNull { uri -> copySharedAudio(uri, directory) }
+        current.removeExtra(Intent.EXTRA_STREAM)
+        return paths
+    }
+
+    private fun copySharedAudio(uri: Uri, directory: File): String? {
+        var target: File? = null
+        return try {
+            val name = displayName(uri).replace(Regex("[^a-zA-Z0-9._ -]"), "_")
+            val outputFile = File(directory, "${System.currentTimeMillis()}-$name")
+            target = outputFile
+            val input = contentResolver.openInputStream(uri) ?: return null
+            input.use { stream ->
+                outputFile.outputStream().use { output ->
+                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                    var copied = 0L
+                    while (true) {
+                        val count = stream.read(buffer)
+                        if (count < 0) break
+                        copied += count
+                        if (copied > MAX_SHARED_AUDIO_BYTES) throw IllegalArgumentException("Shared file is too large")
+                        output.write(buffer, 0, count)
+                    }
+                }
+            }
+            outputFile.absolutePath
+        } catch (_: Exception) {
+            target?.delete()
+            null
+        }
+    }
+
+    private fun displayName(uri: Uri): String {
+        val cursor: Cursor? = contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+        cursor?.use {
+            if (it.moveToFirst()) return it.getString(0) ?: "shared-audio"
+        }
+        return uri.lastPathSegment ?: "shared-audio"
     }
 
     override fun onDestroy() {

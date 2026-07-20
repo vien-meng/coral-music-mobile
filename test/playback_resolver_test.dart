@@ -4,6 +4,8 @@ import 'package:coral_music_mobile/features/player/data/user_api_runner.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   const track = Track(
     sourceKind: TrackSourceKind.online,
     sourceId: 'kw',
@@ -52,7 +54,6 @@ void main() {
     for (final source in [
       TrackSourceKind.local,
       TrackSourceKind.download,
-      TrackSourceKind.webdav,
     ]) {
       final uri = await resolver.resolve(
         Track(

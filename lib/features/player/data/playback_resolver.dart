@@ -1,11 +1,14 @@
 import '../../../core/app_failure.dart';
 import '../../../domain/music.dart';
+import '../../webdav/data/webdav_credentials.dart';
 import 'user_api_runner.dart';
 
 final class PlaybackResolver {
-  PlaybackResolver(this._userApiRunner);
+  PlaybackResolver(this._userApiRunner, [WebDavCredentials? webDavCredentials])
+      : _webDavCredentials = webDavCredentials ?? WebDavCredentials();
 
   final UserApiRunner _userApiRunner;
+  final WebDavCredentials _webDavCredentials;
   final _cachedUrls = <String, _CachedPlaybackUrl>{};
 
   static const _urlCacheLifetime = Duration(minutes: 15);
@@ -15,6 +18,18 @@ final class PlaybackResolver {
     AudioQuality? quality,
     bool forceRefresh = false,
   }) async {
+    if (track.sourceKind == TrackSourceKind.webdav) {
+      final uri = track.localUri;
+      final authorization = await _webDavCredentials.read(track.sourceId);
+      if (uri != null && authorization != null && authorization.isNotEmpty) {
+        return ResolvedPlaybackUrl(uri,
+            headers: {'Authorization': authorization});
+      }
+      throw const AppFailure(
+        code: AppFailureCode.invalidData,
+        message: 'WebDAV 凭据已失效，请重新连接',
+      );
+    }
     if (track.sourceKind != TrackSourceKind.online) {
       final uri = track.localUri;
       if (uri != null) return ResolvedPlaybackUrl(uri);

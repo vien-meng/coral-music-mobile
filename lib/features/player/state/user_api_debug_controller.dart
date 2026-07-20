@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/app_failure.dart';
@@ -5,6 +8,7 @@ import '../../../core/http_client.dart';
 import '../data/playback_resolver.dart';
 import '../data/user_api_runner.dart';
 import '../data/user_api_script_fetcher.dart';
+import '../data/user_api_source_preferences.dart';
 import 'player_controller.dart';
 
 final userApiDebugProvider =
@@ -13,6 +17,7 @@ final userApiDebugProvider =
     ref.watch(userApiRunnerProvider),
     UserApiScriptFetcher(createHttpClient()),
     ref.watch(playbackResolverProvider),
+    UserApiSourcePreferences(),
   ),
 );
 
@@ -115,15 +120,33 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
     this._runner, [
     UserApiScriptFetcher? fetcher,
     PlaybackResolver? playbackResolver,
+    UserApiSourcePreferences? preferences,
   ])  : _fetcher = fetcher ?? UserApiScriptFetcher(createHttpClient()),
         _playbackResolver = playbackResolver,
-        super(const UserApiDebugState());
+        _preferences = preferences ?? UserApiSourcePreferences(),
+        super(const UserApiDebugState()) {
+    unawaited(restorePersisted());
+  }
 
   final UserApiRunner _runner;
   final UserApiScriptFetcher _fetcher;
   final PlaybackResolver? _playbackResolver;
+  final UserApiSourcePreferences _preferences;
 
-  Future<void> importUrl(String name, String rawUrl) async {
+  Future<void> restorePersisted() async {
+    ({String name, Uri url})? saved;
+    try {
+      saved = await _preferences.read();
+    } on Object {
+      // ponytail: persisted URL sources are optional; unavailable secure storage must not break in-memory imports.
+      return;
+    }
+    if (saved == null || state.sources.isNotEmpty) return;
+    await importUrl(saved.name, saved.url.toString(), persist: false);
+  }
+
+  Future<void> importUrl(String name, String rawUrl,
+      {bool persist = true}) async {
     final uri = Uri.tryParse(rawUrl.trim());
     if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
       state = state.copyWith(
@@ -137,7 +160,7 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final script = await _fetcher.fetch(uri);
-      await importScript(name, script, originUrl: uri);
+      await importScript(name, script, originUrl: uri, persist: persist);
     } on AppFailure catch (error) {
       state = state.copyWith(isLoading: false, error: error);
     } on Object catch (error) {
@@ -152,10 +175,33 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
     }
   }
 
+  Future<void> importBytes(String name, List<int> bytes) async {
+    if (bytes.length > UserApiScriptFetcher.maxBytes) {
+      state = state.copyWith(
+        error: const AppFailure(
+          code: AppFailureCode.invalidData,
+          message: '音源脚本超过大小限制',
+        ),
+      );
+      return;
+    }
+    try {
+      await importScript(name, utf8.decode(bytes));
+    } on FormatException {
+      state = state.copyWith(
+        error: const AppFailure(
+          code: AppFailureCode.invalidData,
+          message: '音源脚本不是 UTF-8 文本',
+        ),
+      );
+    }
+  }
+
   Future<void> importScript(
     String name,
     String script, {
     Uri? originUrl,
+    bool persist = true,
   }) async {
     final info = UserApiSourceInfo.fromScript(script);
     final normalizedName =
@@ -174,6 +220,11 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
         originUrl: originUrl,
       );
       _playbackResolver?.clear();
+      if (persist && originUrl != null) {
+        await _preferences.save(normalizedName, originUrl);
+      } else if (persist) {
+        await _preferences.clear();
+      }
       state = state.copyWith(
         isLoading: false,
         sources: [...state.sources, source],
@@ -214,6 +265,11 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
         originUrl: target.originUrl,
       );
       _playbackResolver?.clear();
+      if (target.originUrl != null) {
+        await _preferences.save(target.name, target.originUrl!);
+      } else {
+        await _preferences.clear();
+      }
       state = state.copyWith(
         isLoading: false,
         sources: [
@@ -301,6 +357,7 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
     try {
       await _runner.clear();
       _playbackResolver?.clear();
+      await _preferences.clear();
       state = state.copyWith(
         isLoading: false,
         sources: state.sources.where((item) => item.id != id).toList(),

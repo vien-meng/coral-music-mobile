@@ -66,6 +66,26 @@ void main() {
     expect(controller.state.isPlaying, isTrue);
   });
 
+  test('stops instead of advancing when current-track sleep stop is enabled',
+      () async {
+    final engine = _FakeAudioEngine();
+    final queue = PlaybackQueueController()
+      ..replaceQueue(const [track, secondTrack]);
+    final controller = PlayerController(
+      engine,
+      PlaybackResolver(_FakeUserApiRunner()),
+      queue,
+    );
+
+    await controller.playTrack(track);
+    controller.setStopAfterCurrent(true);
+    engine.complete(track);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(queue.state.currentTrack?.id, track.id);
+    expect(engine.stopCount, 1);
+  });
+
   test('ignores a stale playback URL after the user selects another track',
       () async {
     final engine = _FakeAudioEngine();
@@ -193,6 +213,34 @@ void main() {
     expect(runner.qualities, [AudioQuality.flac, AudioQuality.high320k]);
     expect(controller.state.quality, AudioQuality.high320k);
     expect(controller.state.isPlaying, isTrue);
+  });
+
+  test('uses the persisted default quality for a new playback request',
+      () async {
+    const qualityTrack = Track(
+      sourceKind: TrackSourceKind.online,
+      sourceId: 'kw',
+      sourceTrackId: 'preferred-quality',
+      title: '默认音质测试',
+      artist: '测试歌手',
+      availableQualities: [
+        AudioQuality.flac,
+        AudioQuality.high320k,
+        AudioQuality.standard128k,
+      ],
+    );
+    final runner = _QualityFallbackRunner();
+    final controller = PlayerController(
+      _FakeAudioEngine(),
+      PlaybackResolver(runner),
+      PlaybackQueueController(),
+    );
+
+    controller.setDefaultQuality(AudioQuality.high320k);
+    await controller.playTrack(qualityTrack);
+
+    expect(runner.qualities, [AudioQuality.high320k]);
+    expect(controller.state.quality, AudioQuality.high320k);
   });
 
   test('shows the actual quality returned by the source', () async {
@@ -401,6 +449,7 @@ final class _FakeAudioEngine implements AudioEngine {
   Duration? seekPosition;
   double? speed;
   double? volume;
+  var stopCount = 0;
 
   @override
   Stream<AudioEngineSnapshot> get snapshots => _snapshots.stream;
@@ -409,7 +458,8 @@ final class _FakeAudioEngine implements AudioEngine {
   Stream<AudioEngineCommand> get commands => _commands.stream;
 
   @override
-  Future<void> load(Track track, Uri uri) async {
+  Future<void> load(Track track, Uri uri,
+      {Map<String, String> headers = const {}}) async {
     loadCount++;
     if (loadCount <= failures) throw StateError('临时地址已过期');
     _track = track;
@@ -444,7 +494,7 @@ final class _FakeAudioEngine implements AudioEngine {
   Future<void> setVolume(double volume) async => this.volume = volume;
 
   @override
-  Future<void> stop() async {}
+  Future<void> stop() async => stopCount++;
 
   @override
   Future<void> dispose() async {

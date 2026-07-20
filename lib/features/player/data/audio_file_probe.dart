@@ -3,11 +3,17 @@ import 'dart:io';
 import 'dart:typed_data';
 
 final class AudioFileInfo {
-  const AudioFileInfo({this.bitrate, this.sampleRate, this.format});
+  const AudioFileInfo({
+    this.bitrate,
+    this.sampleRate,
+    this.format,
+    this.duration,
+  });
 
   final int? bitrate;
   final int? sampleRate;
   final String? format;
+  final Duration? duration;
 }
 
 abstract interface class AudioFileProbe {
@@ -26,6 +32,7 @@ final class HttpAudioFileProbe implements AudioFileProbe {
 
   @override
   Future<AudioFileInfo> probe(Uri uri) async {
+    if (uri.scheme == 'file') return _probeLocalFile(uri);
     if (!{'http', 'https'}.contains(uri.scheme)) return const AudioFileInfo();
     final client = HttpClient()
       ..connectionTimeout = const Duration(seconds: 10);
@@ -61,6 +68,18 @@ final class HttpAudioFileProbe implements AudioFileProbe {
       client.close(force: true);
     }
   }
+
+  Future<AudioFileInfo> _probeLocalFile(Uri uri) async {
+    try {
+      final file = File.fromUri(uri);
+      final totalBytes = await file.length();
+      final bytes = await file.openRead(0, _probeBytes).fold<BytesBuilder>(
+          BytesBuilder(copy: false), (buffer, chunk) => buffer..add(chunk));
+      return parseAudioFileHeader(bytes.takeBytes(), totalBytes: totalBytes);
+    } on Object {
+      return const AudioFileInfo();
+    }
+  }
 }
 
 int? _totalAudioBytes(HttpClientResponse response) {
@@ -88,7 +107,7 @@ AudioFileInfo parseAudioFileHeader(List<int> raw, {int? totalBytes}) {
   }
   if (_matches(bytes, const [0x49, 0x44, 0x33]) ||
       (bytes.length >= 2 && bytes[0] == 0xff && bytes[1] & 0xe0 == 0xe0)) {
-    return _parseMp3(bytes);
+    return _parseMp3(bytes, totalBytes: totalBytes);
   }
   return const AudioFileInfo();
 }
@@ -117,10 +136,16 @@ AudioFileInfo _parseFlac(Uint8List bytes, {int? totalBytes}) {
     sampleRate: sampleRate == 0 ? null : sampleRate,
     bitrate: averageBitrate,
     format: 'flac',
+    duration: sampleRate == 0 || totalSamples == 0
+        ? null
+        : Duration(
+            microseconds:
+                totalSamples * Duration.microsecondsPerSecond ~/ sampleRate,
+          ),
   );
 }
 
-AudioFileInfo _parseMp3(Uint8List bytes) {
+AudioFileInfo _parseMp3(Uint8List bytes, {int? totalBytes}) {
   var offset = 0;
   if (_matches(bytes, const [0x49, 0x44, 0x33]) && bytes.length >= 10) {
     offset = 10 +
@@ -166,6 +191,14 @@ AudioFileInfo _parseMp3(Uint8List bytes) {
       bitrate: bitrate * 1000,
       sampleRate: sampleRate,
       format: 'mp3',
+      duration: totalBytes == null || totalBytes <= 0
+          ? null
+          : Duration(
+              microseconds: totalBytes *
+                  8 *
+                  Duration.microsecondsPerSecond ~/
+                  (bitrate * 1000),
+            ),
     );
   }
   return const AudioFileInfo(format: 'mp3');

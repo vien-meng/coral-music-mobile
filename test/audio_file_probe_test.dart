@@ -35,6 +35,7 @@ void main() {
 
     expect(info.sampleRate, 44100);
     expect(info.bitrate, 882000);
+    expect(info.duration, const Duration(seconds: 2));
   });
 
   test('parses a MPEG1 Layer III frame header', () {

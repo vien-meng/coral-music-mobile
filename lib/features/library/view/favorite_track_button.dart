@@ -1,0 +1,146 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../domain/music.dart';
+import '../state/library_controller.dart';
+
+class FavoriteTrackButton extends ConsumerStatefulWidget {
+  const FavoriteTrackButton({required this.track, super.key});
+
+  final Track track;
+
+  @override
+  ConsumerState<FavoriteTrackButton> createState() =>
+      _FavoriteTrackButtonState();
+}
+
+class _FavoriteTrackButtonState extends ConsumerState<FavoriteTrackButton> {
+  late Future<bool> _favorite;
+  late final ProviderSubscription<int> _favoriteSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _favorite = _loadFavorite();
+    _favoriteSubscription = ref.listenManual(
+      libraryProvider.select((state) => state.favoriteRevision),
+      (previous, _) {
+        if (previous != null && mounted) {
+          setState(() => _favorite = _loadFavorite());
+        }
+      },
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant FavoriteTrackButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.track.id != widget.track.id) _favorite = _loadFavorite();
+  }
+
+  Future<bool> _loadFavorite() =>
+      ref.read(libraryProvider.notifier).isFavorite(widget.track.id);
+
+  @override
+  void dispose() {
+    _favoriteSubscription.close();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<bool>(
+        future: _favorite,
+        builder: (context, snapshot) => IconButton(
+          tooltip: snapshot.data == true ? '取消收藏' : '收藏歌曲',
+          onPressed: snapshot.connectionState != ConnectionState.done
+              ? null
+              : () async {
+                  final favorite = await ref
+                      .read(libraryProvider.notifier)
+                      .toggleFavorite(widget.track);
+                  if (mounted) {
+                    setState(() => _favorite = Future.value(favorite));
+                  }
+                },
+          icon: Icon(
+            Icons.favorite_border,
+            color: snapshot.data == true
+                ? Theme.of(context).colorScheme.primary
+                : null,
+          ),
+        ),
+      );
+}
+
+class FavoriteOnlinePlaylistButton extends ConsumerStatefulWidget {
+  const FavoriteOnlinePlaylistButton({required this.detail, super.key});
+
+  final PlaylistDetail detail;
+
+  @override
+  ConsumerState<FavoriteOnlinePlaylistButton> createState() =>
+      _FavoriteOnlinePlaylistButtonState();
+}
+
+class _FavoriteOnlinePlaylistButtonState
+    extends ConsumerState<FavoriteOnlinePlaylistButton> {
+  late Future<bool> _favorite;
+  late final ProviderSubscription<int> _subscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _favorite = _loadFavorite();
+    _subscription = ref.listenManual(
+      libraryProvider.select((state) => state.playlistFavoriteRevision),
+      (previous, _) {
+        if (previous != null && mounted) {
+          setState(() => _favorite = _loadFavorite());
+        }
+      },
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant FavoriteOnlinePlaylistButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.detail.playlist.id != widget.detail.playlist.id ||
+        oldWidget.detail.playlist.source != widget.detail.playlist.source) {
+      _favorite = _loadFavorite();
+    }
+  }
+
+  Future<bool> _loadFavorite() => ref
+      .read(libraryProvider.notifier)
+      .isFavoriteOnlinePlaylist(widget.detail.playlist);
+
+  @override
+  void dispose() {
+    _subscription.close();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<bool>(
+        future: _favorite,
+        builder: (context, snapshot) => IconButton(
+          tooltip: snapshot.data == true ? '取消收藏歌单' : '收藏歌单',
+          onPressed: snapshot.connectionState != ConnectionState.done
+              ? null
+              : () async {
+                  final favorite = await ref
+                      .read(libraryProvider.notifier)
+                      .toggleFavoriteOnlinePlaylist(widget.detail);
+                  if (mounted) {
+                    setState(() => _favorite = Future.value(favorite));
+                  }
+                },
+          icon: Icon(
+            Icons.bookmark_border,
+            color: snapshot.data == true
+                ? Theme.of(context).colorScheme.primary
+                : null,
+          ),
+        ),
+      );
+}

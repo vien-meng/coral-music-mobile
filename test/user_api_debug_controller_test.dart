@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:coral_music_mobile/domain/music.dart';
 import 'package:coral_music_mobile/features/player/data/playback_resolver.dart';
 import 'package:coral_music_mobile/features/player/data/user_api_runner.dart';
@@ -5,6 +7,8 @@ import 'package:coral_music_mobile/features/player/state/user_api_debug_controll
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   test('imports, activates and removes session-only User API sources',
       () async {
     final runner = _Runner();
@@ -69,6 +73,16 @@ kw-script
     await resolver.resolve(track);
 
     expect(runner.resolveCount, 2);
+  });
+
+  test('imports UTF-8 script bytes and rejects an oversized file', () async {
+    final controller = UserApiDebugController(_Runner());
+
+    await controller.importBytes('文件音源', utf8.encode('kw-script'));
+    expect(controller.state.activeSource?.name, '文件音源');
+
+    await controller.importBytes('', List.filled(256 * 1024 + 1, 0));
+    expect(controller.state.error?.message, '音源脚本超过大小限制');
   });
 }
 

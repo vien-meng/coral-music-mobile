@@ -67,6 +67,7 @@ void main() {
       const Duration(seconds: 1),
       const Duration(seconds: 1, milliseconds: 176),
     ]);
-    expect(lines.single.words.first.duration, const Duration(milliseconds: 176));
+    expect(
+        lines.single.words.first.duration, const Duration(milliseconds: 176));
   });
 }

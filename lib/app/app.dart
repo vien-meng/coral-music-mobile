@@ -2,12 +2,18 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../domain/music.dart';
 import '../features/leaderboard/data/online_catalog_service.dart';
+import '../features/library/state/library_controller.dart';
 import '../features/leaderboard/state/leaderboard_controller.dart';
 import '../features/player/state/player_controller.dart';
+import '../features/player/state/default_quality_controller.dart';
 import 'app_router.dart';
 import 'app_theme.dart';
+import 'shared_audio_receiver.dart';
+import 'theme_mode_controller.dart';
 
 class CoralMusicApp extends StatelessWidget {
   const CoralMusicApp({super.key, this.catalogService});
@@ -36,20 +42,71 @@ class _PlaybackRestore extends ConsumerStatefulWidget {
 }
 
 class _PlaybackRestoreState extends ConsumerState<_PlaybackRestore> {
+  late final ProviderSubscription<List<String>> _sharedAudioSubscription;
+  late final ProviderSubscription<AudioQuality> _qualitySubscription;
+  var _isImportingSharedAudio = false;
+
   @override
   void initState() {
     super.initState();
+    _sharedAudioSubscription = ref.listenManual<List<String>>(
+      sharedAudioPathsProvider,
+      (_, paths) => unawaited(_importSharedAudio(paths)),
+      fireImmediately: true,
+    );
+    _qualitySubscription = ref.listenManual<AudioQuality>(
+      defaultPlaybackQualityProvider,
+      (_, quality) =>
+          ref.read(playerProvider.notifier).setDefaultQuality(quality),
+      fireImmediately: false,
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(ref.read(playerProvider.notifier).restoreLastPlayback());
+      unawaited(SharedAudioReceiver.install(ref));
     });
+  }
+
+  Future<void> _importSharedAudio(List<String> paths) async {
+    if (paths.isEmpty || _isImportingSharedAudio) return;
+    _isImportingSharedAudio = true;
+    try {
+      await ref.read(libraryProvider.notifier).importSharedAudio(paths);
+    } finally {
+      if (identical(ref.read(sharedAudioPathsProvider), paths)) {
+        ref.read(sharedAudioPathsProvider.notifier).state = const [];
+      }
+      _isImportingSharedAudio = false;
+      final pending = ref.read(sharedAudioPathsProvider);
+      if (pending.isNotEmpty) unawaited(_importSharedAudio(pending));
+    }
+  }
+
+  @override
+  void dispose() {
+    _sharedAudioSubscription.close();
+    _qualitySubscription.close();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) => widget.child;
 }
 
-class _CoralMaterialApp extends StatelessWidget {
+class _CoralMaterialApp extends ConsumerStatefulWidget {
   const _CoralMaterialApp();
+
+  @override
+  ConsumerState<_CoralMaterialApp> createState() => _CoralMaterialAppState();
+}
+
+class _CoralMaterialAppState extends ConsumerState<_CoralMaterialApp> {
+  late final GoRouter _router;
+
+  @override
+  void initState() {
+    super.initState();
+    _router = createAppRouter();
+  }
 
   @override
   Widget build(BuildContext context) => MaterialApp.router(
@@ -57,7 +114,7 @@ class _CoralMaterialApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: coralTheme(Brightness.light),
         darkTheme: coralTheme(Brightness.dark),
-        themeMode: ThemeMode.system,
-        routerConfig: createAppRouter(),
+        themeMode: ref.watch(appThemeModeProvider),
+        routerConfig: _router,
       );
 }

@@ -1,3 +1,4 @@
+import 'package:coral_music_mobile/domain/music.dart';
 import 'package:coral_music_mobile/features/player/view/mini_player.dart';
 import 'package:coral_music_mobile/main.dart';
 import 'package:flutter/material.dart';
@@ -12,8 +13,8 @@ void main() {
         .pumpWidget(CoralMusicApp(catalogService: FakeCatalogService()));
     await tester.pumpAndSettle();
 
-    expect(find.text('首页'), findsOneWidget);
-    expect(find.text('测试榜单'), findsOneWidget);
+    expect(find.text('发现'), findsWidgets);
+    expect(find.text('测试榜单'), findsWidgets);
     expect(find.text('未在播放'), findsOneWidget);
 
     await tester.tap(find.text('我的'));
@@ -30,6 +31,11 @@ void main() {
         .pumpWidget(CoralMusicApp(catalogService: FakeCatalogService()));
     await tester.pumpAndSettle();
 
+    await tester.scrollUntilVisible(
+      find.text('播放全部'),
+      300,
+      scrollable: find.byKey(const Key('leaderboard-tracks')),
+    );
     await tester.tap(find.text('播放全部'));
     await tester.pump();
 
@@ -43,9 +49,9 @@ void main() {
     await tester.pumpAndSettle();
 
     final miniPlayer = tester.getRect(find.byType(MiniPlayer));
-    final navigationBar = tester.getRect(find.byType(NavigationBar));
+    final navigationItem = tester.getRect(find.text('我的').last);
 
-    expect(miniPlayer.bottom, lessThanOrEqualTo(navigationBar.top));
+    expect(miniPlayer.bottom, lessThanOrEqualTo(navigationItem.top));
   });
 
   testWidgets('opens the player detail and its lyrics empty state',
@@ -54,6 +60,11 @@ void main() {
         .pumpWidget(CoralMusicApp(catalogService: FakeCatalogService()));
     await tester.pumpAndSettle();
 
+    await tester.scrollUntilVisible(
+      find.text('播放全部'),
+      300,
+      scrollable: find.byKey(const Key('leaderboard-tracks')),
+    );
     await tester.tap(find.text('播放全部'));
     await tester.pump();
     await tester.tap(find.byType(MiniPlayer));
@@ -74,7 +85,7 @@ void main() {
         .pumpWidget(CoralMusicApp(catalogService: FakeCatalogService()));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('发现'));
+    await tester.tap(find.text('搜索').last);
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), '测试');
     await tester.testTextInput.receiveAction(TextInputAction.search);
@@ -90,10 +101,17 @@ void main() {
         .pumpWidget(CoralMusicApp(catalogService: FakeCatalogService()));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('QQ音乐'));
+    await tester.tap(find.byTooltip('切换音乐来源'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.ancestor(
+        of: find.text('QQ音乐'),
+        matching: find.byType(CheckedPopupMenuItem<OnlineSource>),
+      ),
+    );
     await tester.pumpAndSettle();
 
-    expect(find.text('QQ 测试榜单'), findsOneWidget);
+    expect(find.text('QQ 测试榜单'), findsWidgets);
     expect(find.text('QQ 测试歌曲'), findsOneWidget);
   });
 

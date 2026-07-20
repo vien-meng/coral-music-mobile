@@ -1,12 +1,54 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/music.dart';
+import '../../library/data/library_store.dart';
 
 final playbackQueueProvider =
     StateNotifierProvider<PlaybackQueueController, PlaybackQueueState>(
-  (ref) => PlaybackQueueController(),
+  (ref) {
+    final controller = PlaybackQueueController();
+    final store = ref.watch(libraryStoreProvider);
+    var hasLocalMutation = false;
+    var restoring = false;
+    var writes = Future<void>.value();
+    controller.addListener((state) {
+      if (!restoring) hasLocalMutation = true;
+      writes = writes
+          .then(
+            (_) => store.savePlaybackQueue(
+              tracks: state.tracks,
+              currentIndex: state.currentIndex,
+              mode: state.mode,
+              contextId: state.contextId,
+            ),
+          )
+          .catchError((Object _) {});
+    }, fireImmediately: false);
+    unawaited(() async {
+      SavedPlaybackQueue? saved;
+      try {
+        saved = await store.loadPlaybackQueue();
+      } on Object {
+        // ponytail: queue restoration is optional startup context; unavailable storage must not break the app shell.
+        return;
+      }
+      if (saved == null || hasLocalMutation || controller.hasTracks) {
+        return;
+      }
+      restoring = true;
+      controller.restoreQueue(
+        saved.tracks,
+        currentIndex: saved.currentIndex,
+        contextId: saved.contextId,
+        mode: saved.mode,
+      );
+      restoring = false;
+    }());
+    return controller;
+  },
 );
 
 final class PlaybackQueueState {
@@ -35,6 +77,8 @@ final class PlaybackQueueController extends StateNotifier<PlaybackQueueState> {
   final Random _random;
   final _shuffleHistory = <int>{};
 
+  bool get hasTracks => state.tracks.isNotEmpty;
+
   void replaceQueue(
     List<Track> tracks, {
     int startIndex = 0,
@@ -56,6 +100,29 @@ final class PlaybackQueueController extends StateNotifier<PlaybackQueueState> {
     _shuffleHistory
       ..clear()
       ..add(startIndex);
+  }
+
+  void restoreQueue(
+    List<Track> tracks, {
+    required int currentIndex,
+    PlaybackMode mode = PlaybackMode.listLoop,
+    String? contextId,
+  }) {
+    if (tracks.isEmpty) {
+      _shuffleHistory.clear();
+      state = const PlaybackQueueState();
+      return;
+    }
+    final safeIndex = currentIndex.clamp(0, tracks.length - 1).toInt();
+    state = PlaybackQueueState(
+      tracks: List.unmodifiable(tracks),
+      currentIndex: safeIndex,
+      contextId: contextId,
+      mode: mode,
+    );
+    _shuffleHistory
+      ..clear()
+      ..add(safeIndex);
   }
 
   void select(int index) {
