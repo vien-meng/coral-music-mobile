@@ -267,7 +267,6 @@ final class LibraryController extends StateNotifier<LibraryState> {
   Future<bool> isFavorite(String trackId) => _store.isFavorite(trackId);
 
   Future<bool> toggleFavorite(Track track) async {
-    if (state.isLoading) return false;
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final favorite = await _store.toggleFavorite(track);

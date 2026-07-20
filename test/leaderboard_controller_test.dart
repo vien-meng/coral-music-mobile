@@ -6,6 +6,23 @@ import 'package:coral_music_mobile/features/leaderboard/state/leaderboard_contro
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('daily recommendation is stable for the day and loads that board',
+      () async {
+    final service = _DailyCatalogService();
+    final controller = LeaderboardController(service);
+    final date = DateTime(2026, 7, 20);
+
+    final selected = await controller.loadDailyRecommendation(date: date);
+    final nextDay = dailyRecommendationBoard(
+      service.boards,
+      date.add(const Duration(days: 1)),
+    );
+
+    expect(selected?.id, dailyRecommendationBoard(service.boards, date)?.id);
+    expect(controller.state.tracks.single.sourceTrackId, selected?.id);
+    expect(nextDay?.id, isNot(selected?.id));
+  });
+
   test('a stale response cannot overwrite the newest board', () async {
     final service = _DelayedCatalogService();
     final controller = LeaderboardController(service);
@@ -22,6 +39,40 @@ void main() {
     expect(controller.state.activeBoard?.id, second.id);
     expect(controller.state.tracks.single.sourceTrackId, 'second');
   });
+}
+
+final class _DailyCatalogService implements OnlineCatalogService {
+  final boards = List.generate(
+    3,
+    (index) => LeaderboardBoard(
+      id: 'daily-$index',
+      source: OnlineSource.kuwo,
+      name: '每日推荐 $index',
+      remoteId: '$index',
+    ),
+  );
+
+  @override
+  Future<List<LeaderboardBoard>> getLeaderboardBoards(
+    OnlineSource source,
+  ) async =>
+      boards;
+
+  @override
+  Future<PageResult<Track>> getLeaderboardDetail(
+    OnlineSource source,
+    String boardId,
+    int page,
+  ) async =>
+      _page(boardId);
+
+  @override
+  Future<PageResult<Track>> searchTracks(
+    OnlineSource source,
+    String query,
+    int page,
+  ) =>
+      Future.value(_page(query));
 }
 
 PageResult<Track> _page(String id) => PageResult(

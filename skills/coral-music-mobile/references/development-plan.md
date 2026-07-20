@@ -66,6 +66,8 @@
 | B3-16 迁移酷狗音乐歌曲搜索　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-20-124-b3-16-kugou-music-search.md` |
 | B3-17 迁移 QQ 音乐歌单广场与详情　　　　　　　　　　 | DOING　  | `development-history/2026-07-20-125-b3-17-qq-playlist-plaza.md` |
 | B3-18 迁移咪咕音乐歌单广场与详情　　　　　　　　　　 | DOING　  | `development-history/2026-07-20-126-b3-18-migu-playlist-plaza.md` |
+| B3-20 歌单广场滚动加载更多　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-20-137-b3-20-playlist-infinite-scroll.md` |
+| B3-21 每日推荐与音乐电台　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-20-141-b3-21-daily-recommendation-radio.md` |
 | B4-14 队列追加与安全删除　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-040-b4-14-queue-editing.md`　　　　　　　　  |
 | B4-15 队列拖动排序　　　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-041-b4-15-queue-reorder.md`　　　　　　　　  |
 | B5-01 三端 SQLite 可行性与列表 Schema v1　　　　　　 | DOING　  | `development-history/2026-07-16-042-b5-01-sqlite-list-schema.md`　　　　　　 |
@@ -97,6 +99,8 @@
 | B4-28 启动恢复最近播放曲目　　　　　　　　　　　　　 | DOING  | `development-history/2026-07-17-078-b4-28-launch-playback-restore.md`         |
 | B4-29 音频引擎重复错误去重　　　　　　　　　　　　　 | DOING  | `development-history/2026-07-17-079-b4-29-engine-error-deduplication.md`     |
 | B4-32 歌词兜底与重试反馈　　　　　　　　　　　　　　 | DOING  | `development-history/2026-07-20-131-b4-32-lyric-fallback-retry.md`          |
+| B4-33 播放模式切歌修复　　　　　　　　　　　　　　　 | DOING  | `development-history/2026-07-20-138-b4-33-playback-mode-advance-fix.md`     |
+| B4-34 启动时恢复音源　　　　　　　　　　　　　　　　 | DOING  | `development-history/2026-07-20-139-b4-34-startup-user-api-restore.md`       |
 | B4-06 失效音源自动跳过　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-025-b4-06-error-skip.md`　　　　　　　　　　 |
 | B4-07 播放倍速控制　　　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-026-b4-07-playback-rate.md`　　　　　　　　  |
 | B4-08 播放音量控制　　　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-027-b4-08-volume-control.md`　　　　　　　　 |
@@ -132,6 +136,9 @@
 - `UI-13 [DOING]` 播放详情使用原生 `PageView` 左滑进入歌词、右滑返回播放；播放页仅在顶部下拉超过阈值时退出，歌词纵向滚动不触发关闭。记录：`development-history/2026-07-20-132-ui-13-player-swipe-navigation.md`。
 - `UI-14 [DOING]` 歌词页改为顶部小封面与歌曲信息、中部独立滚动歌词、底部固定进度和播放主控；播放与歌词页复用同一传输控制组件。记录：`development-history/2026-07-20-134-ui-14-lyrics-composed-layout.md`。
 - `UI-15 [DOING]` 修复壳外播放详情使用 `push` 进入壳内下载/音源页面造成的重复导航壳红屏，改为 `go` 切换目标位置。记录：`development-history/2026-07-20-135-ui-15-player-shell-navigation.md`。
+- `UI-16 [DOING]` 推荐、搜索、歌单和播放队列共用下载反馈/状态按钮；歌曲收藏显示真实实心状态和反馈；我的列表、我的收藏、下载、设置补可见返回及系统返回栈。记录：`development-history/2026-07-20-136-ui-16-list-actions-and-back-navigation.md`。
+- `UI-17 [DOING]` 单曲下载按钮点击首帧显示加载动画，队列下载中持续显示状态，完成后显示勾；播放详情与所有歌曲列表复用同一按钮。记录：`development-history/2026-07-20-140-ui-17-download-button-state.md`。
+- `UI-18 [DOING]` 首页铃铛显示消息空态，音乐平台选择改为主题化锚点菜单并保留真实来源切换。记录：`development-history/2026-07-20-142-ui-18-home-topbar-menus.md`。
 
 ## 里程碑
 
@@ -154,7 +161,7 @@
 
 - `P1-01` 建立 CI：格式、分析、单测和 HAP/APK/iOS 无签名构建。
 - `P1-02` 建立 Material 3 珊瑚主题、简中/繁中/英文和错误边界。
-- `P1-03 [DOING]` 已建立 `go_router` 九入口、手机底栏、宽屏 Rail、迷你播放栏和独立播放详情页；壳外播放器进入壳内功能统一使用位置切换，避免重复构建 `StatefulShellRoute`。播放器批次仍需补质量、队列与收藏。
+- `P1-03 [DOING]` 已建立 `go_router` 九入口、手机底栏、宽屏 Rail、迷你播放栏和独立播放详情页；壳外播放器进入壳内功能统一使用位置切换，避免重复构建 `StatefulShellRoute`；“我的”子页面使用压栈和共享返回兜底，页面按钮与系统返回均可回到上层。播放器批次仍需补质量、队列与收藏。
 - `P1-04 [DOING]` 已建立 Riverpod 排行榜/队列状态和 HTTP 脱敏诊断；完整启动状态待后续。
 - `P1-05 [DOING]` 已落地 `Track`、来源、音质、榜单和分页类型；其余领域类型按真实调用方加入。
 - `P1-06 [DOING]` B5-01 正在建立 SQLite v1、显式迁移和列表持久化；设置存储与安全凭据引用后续按真实调用方加入。
@@ -167,8 +174,8 @@
 - `P2-01 [DOING]` 已提取酷我榜单 fixture；搜索、歌单和其余来源待迁移。
 - `P2-02 [DOING]` 已建立五源枚举、酷我与 QQ 真实榜单，B3-07 已接入咪咕；B3-08 正在验证网易云最小 HTTPS 切片，酷狗桌面端点 TLS 不可用而阻塞。
 - `P2-03 [DOING]` 已完成酷我/酷狗/QQ/网易云/咪咕歌曲搜索、分页、错误重试、旧响应隔离和酷我热搜词；B3-12 已补酷我歌单搜索，B3-13 已完成 SQLite 本机搜索历史、去重、清空和一键复搜，B3-14 至 B3-16 已将 QQ、酷狗纳入综合搜索并保持单源失败隔离。记录：`development-history/2026-07-20-117-b3-13-search-history.md`、`development-history/2026-07-20-118-b3-14-combined-search.md`、`development-history/2026-07-20-123-b3-15-qq-music-search.md`、`development-history/2026-07-20-124-b3-16-kugou-music-search.md`。
-- `P2-04 [DOING]` B3-05/B3-10 已实现酷我热门歌单、HTTPS 分类标签、排序、搜索、详情和播放入口；B3-17/B3-18 已接入 QQ 与咪咕的热门/最新或推荐歌单、标签（咪咕）和详情。QQ/咪咕的旧 HTTP 或额外签名关键词搜索不进入移动端。B5-13 已实现本地收藏快照，B6-02 已实现歌单下载全部；网易云与酷狗待后续。记录：`development-history/2026-07-20-087-b5-13-online-playlist-favorite-snapshots.md`、`development-history/2026-07-20-125-b3-17-qq-playlist-plaza.md`、`development-history/2026-07-20-126-b3-18-migu-playlist-plaza.md`。
-- `P2-05 [DOING]` 已实现酷我分页榜单及 QQ 当前榜单目录/详情，支持来源切换和跨导航状态；其余来源待迁移，跨来源缓存待后续。
+- `P2-04 [DOING]` B3-05/B3-10 已实现酷我热门歌单、HTTPS 分类标签、排序、搜索、详情和播放入口；B3-17/B3-18 已接入 QQ 与咪咕的热门/最新或推荐歌单、标签（咪咕）和详情；B3-20 已移除页码控件，统一为触底追加、跨页去重和末页停止。QQ/咪咕的旧 HTTP 或额外签名关键词搜索不进入移动端。B5-13 已实现本地收藏快照，B6-02 已实现歌单下载全部；网易云与酷狗待后续。记录：`development-history/2026-07-20-087-b5-13-online-playlist-favorite-snapshots.md`、`development-history/2026-07-20-125-b3-17-qq-playlist-plaza.md`、`development-history/2026-07-20-126-b3-18-migu-playlist-plaza.md`、`development-history/2026-07-20-137-b3-20-playlist-infinite-scroll.md`。
+- `P2-05 [DOING]` 已实现酷我分页榜单及 QQ 当前榜单目录/详情，支持来源切换和跨导航状态；B3-21 已增加按本地日期稳定轮换真实榜单的每日推荐，并将原无效排行榜快捷入口替换为过滤不感兴趣歌曲、立即随机播放的音乐电台。其余来源待迁移，跨来源缓存待后续。记录：`development-history/2026-07-20-141-b3-21-daily-recommendation-radio.md`。
 - `P2-06 [DOING]` 已实现榜单/搜索旧响应隔离、图片惰性列表和错误重试；取消与持久缓存待后续。
 - `P2-07 [DOING]` 已实现酷我/QQ 榜单播放全部及歌曲点击替换内存队列；歌单待迁移。
 
@@ -178,7 +185,7 @@
 
 - `P3-01 [DOING]` B4-01 已实现最小 `AudioEngine`，Android 真机播放/seek 通过；底层 `just_audio.play()` 仅作为启动命令触发，控制器不会等待整首歌结束。B4-11 已在真实 LX 音源下完成排行榜播放全部、榜单点歌和搜索点播三条入口回归，稳定自动化入口覆盖待补。B4-22 将系统媒体处理器收敛在 `AudioEngine` 内，iOS/鸿蒙真机验收仍待完成。
 - `P3-02 [DOING]` B4-01 已实现在线 `PlaybackResolver` 与 Android 受限 User API `musicUrl`，并通过真机 `kw` 取链；B4-12 已完成会话内音源管理，支持从原 HTTPS 地址刷新并在失败时恢复旧脚本；B4-13 已实现 URL 缓存/刷新，且脚本导入、启用、刷新或清除成功后会清空会话 URL 缓存，避免旧脚本地址复用；播放详情的用户主动重试也会强制重新取链。User API 返回的实际质量 type 会随缓存传入播放器，避免降档流仍显示 SQ；B4-19 已实现已声明质量内的降级重试。B4-26 已在真实 SQ/FLAC 流以 Range 总大小和 FLAC 总采样数显示平均 `1643 kbps · 44 kHz · FLAC · SQ`，未探测到的文件参数不再以理论规格伪回退。B4-27 已完成 iOS WKWebView/同步 MD5 的同协议编译校验，真机/真实脚本验证仍待平台 Runtime；本地、下载和 WebDAV 已直连各自地址且不走 User API；来源发现、鉴权 Range 和跨来源换源仍待后续扩展。
-- `P3-03 [DOING]` B4-03 已实现队列首尾循环的上一首/下一首与详情页控制；详情页下一首已在 Android 真机切至《红尘客栈》并立即恢复 `PLAYING`。B4-04/B4-05 已在 Android 真机验证列表循环、单曲循环与随机自动切歌；B4-14/B4-15 已在真实 30 首队列验证非当前删除和拖动排序均不打断当前播放；B4-31 已将队列曲目、索引、模式和上下文安全恢复到 SQLite，但不自动播放。B4-06 失效音源自动跳过及其余平台回归待补。记录：`development-history/2026-07-20-114-b4-31-playback-queue-persistence.md`。
+- `P3-03 [DOING]` B4-03 已实现队列首尾循环的上一首/下一首与详情页控制；详情页下一首已在 Android 真机切至《红尘客栈》并立即恢复 `PLAYING`。B4-04/B4-05 已在 Android 真机验证列表循环、单曲循环与随机自动切歌；B4-33 已修复重复完成快照连续推进队列、替换队列重置模式，以及随机模式手动切歌仍按相邻项的问题，自动测试与三模式真机回归待补。B4-14/B4-15 已在真实 30 首队列验证非当前删除和拖动排序均不打断当前播放；B4-31 已将队列曲目、索引、模式和上下文安全恢复到 SQLite，但不自动播放。B4-06 失效音源自动跳过及其余平台回归待补。记录：`development-history/2026-07-20-114-b4-31-playback-queue-persistence.md`、`development-history/2026-07-20-138-b4-33-playback-mode-advance-fix.md`。
 - `P3-04 [DOING]` seek 已在 B4-01 通过 Android 真机；B4-07 已接入 0.5–2.0 倍速控制，B4-16 已在真机验证 seek 至 `02:16` 后从播放历史恢复，恢复后的媒体位置为 `02:24`；B4-28 已在应用启动恢复最近曲目与合法进度但不自动播放，首次点击才重新取链；三端冷启动与音频焦点中断仍待后续集中验收。
 - `P3-05 [DOING]` B4-02 已实现可从迷你播放栏进入的播放详情、专辑卡片、进度和播放控制；UI-14 已把歌词页收口为固定歌曲头、独立歌词视口和底部播放主控；B4-09 已提供共享队列抽屉、删除与拖动排序，B4-10 可切换当前曲目的已声明音质，播放详情顶部可真实收藏/取消收藏。平台音效仍待后续能力对接。
 - `P3-06 [DOING]` B4-02 已实现歌词阅读入口，B4-17 已接通 User API 原文/翻译/罗马音与 LX 逐字 LRC、当前行高亮及 LRC `offset`；Android 真机逐字填充仅作用于当前行、完成行恢复普通色且无绿色进度条。当前启用音源变更会使同一曲目歌词自动重新获取，空态/失败态可手动重新加载；酷我原生回退受 HTTP/GB18030 协议约束，iOS/鸿蒙来源优先级与真机兼容待补。
@@ -212,7 +219,7 @@
 
 ### Phase 6：高级能力与设置（4 周）
 
-- `P6-01 [DOING]` B4-01 已提前受限 `musicUrl` 小样，B4-12 已实现脚本 URL、文件与粘贴导入、启用/删除与能力展示；B4-30 已将 HTTPS 来源地址/名称安全持久化并在启动时重新校验加载，本地会话脚本不保存。完整隔离和商店版门控仍在本阶段。记录：`development-history/2026-07-20-105-b4-30-user-api-url-persistence.md`。
+- `P6-01 [DOING]` B4-01 已提前受限 `musicUrl` 小样，B4-12 已实现脚本 URL、文件与粘贴导入、启用/删除与能力展示；B4-30 已将 HTTPS 来源地址/名称安全持久化，B4-34 已在应用根启动阶段自动重新校验加载，不再依赖进入音源管理；本地会话脚本不保存。完整隔离和商店版门控仍在本阶段。记录：`development-history/2026-07-20-105-b4-30-user-api-url-persistence.md`、`development-history/2026-07-20-139-b4-34-startup-user-api-restore.md`。
 - `P6-02 [DOING]` 已实现本地曲目级不感兴趣切换、关键词规则、查看、逐首恢复和清空，并在排行榜、歌单、本地列表和分类的“播放全部”建队前过滤；规则已经进入本机备份，关键词匹配采用安全直接包含，不影响手动点播。跨端导入与真机回归待继续。记录：`development-history/2026-07-20-104-b6-13-not-interested-track-rules.md`、`development-history/2026-07-20-109-b6-15-ignored-keyword-rules.md`。
 - `P6-03 [DOING]` B6-14 已实现本机文件的资料备份、格式校验、恢复前统计预览和 SQLite 事务合并恢复；备份只包含列表/收藏/不感兴趣规则，不包含凭据、脚本、播放 URL 或下载文件。覆盖恢复、历史/下载任务迁移与三端文件选择验收待继续。记录：`development-history/2026-07-20-108-b6-14-library-backup-restore.md`。
 - `P6-04 [DOING]` 已实现播放器会话内定时停止和当前曲结束停止；B6-16 已提供系统/浅色/深色主题持久化，模块描边由当前主题主色低饱和混合得出，且切换不重建路由；B6-18 已提供 SQ 默认的持久化播放质量并真实影响后续取链。网络代理、缓存、完整语言资源和诊断待继续。记录：`development-history/2026-07-20-096-b6-07-sleep-timer.md`、`development-history/2026-07-20-110-b6-16-theme-mode-preference.md`、`development-history/2026-07-20-113-ui-10-theme-tinted-module-borders.md`、`development-history/2026-07-20-122-b6-18-default-playback-quality-setting.md`。
@@ -223,10 +230,10 @@
 ### Phase 7：收口与发布（4–7 周）
 
 - `P7-01 [DOING]` Android/iOS/OpenHarmony 已注册 `coralmusic://`；Android 真机已成功由系统启动 Activity，B7-02 已增加 Android `audio/*` 系统分享接收、私有文件复制和“分享导入”列表衔接；B7-03 将分享消费移动至应用根部，保证所有导航页面均可接收；B7-04 已归一化 `coralmusic:///player` 与 `coralmusic://player` 等链接的 Flutter 路由落点。真实文件分享、iOS/鸿蒙系统回调与 Android 完整落点仍待继续。记录：`development-history/2026-07-20-111-p7-01-deep-link-registration.md`、`development-history/2026-07-20-112-p7-02-android-shared-audio-import.md`、`development-history/2026-07-20-115-p7-03-global-shared-audio-import.md`、`development-history/2026-07-20-119-p7-04-deep-link-route-normalization.md`。
-- `P7-02` 包名、版本、图标、启动页、签名、权限文案和隐私清单。
+- `P7-02 [DOING]` 包名保持 `com.coral.music.mobile`，首个 Android 业务版本已锁定为 `1.0.0+1`；正式签名、图标、启动页、权限文案和隐私清单仍待完成。记录：`development-history/2026-07-20-143-p7-05-android-1-0-0-apk.md`。
 - `P7-03` 弱网、断网、网络切换、低内存、来电、耳机断开和进程终止测试。
 - `P7-04` 性能、无障碍、国际化、敏感信息和依赖漏洞检查。
-- `P7-05` TestFlight、AAB/APK、HAP 内测及三端同版回归。
+- `P7-05 [DOING]` 正在生成 Android `1.0.0` Release 模式 APK；当前仍为 debug 签名内测产物，TestFlight、AAB、HAP、正式签名和三端同版回归待继续。记录：`development-history/2026-07-20-143-p7-05-android-1-0-0-apk.md`。
 - `P7-06` 商店素材、审核说明和动态脚本/后台音频能力说明。
 
 ## 任务依赖

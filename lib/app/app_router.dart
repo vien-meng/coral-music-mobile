@@ -14,6 +14,7 @@ import '../features/settings/view/settings_page.dart';
 import '../features/settings/view/ignored_tracks_page.dart';
 import '../features/settings/view/library_backup_page.dart';
 import 'app_shell.dart';
+import 'app_back_navigation.dart';
 import 'placeholder_page.dart';
 
 GoRouter createAppRouter() => GoRouter(
@@ -70,13 +71,17 @@ GoRouter createAppRouter() => GoRouter(
                   name: 'list',
                   path: '/list',
                   pageBuilder: (context, state) =>
-                      _page(state, const LibraryPage()),
+                      _page(state, const AppBackScope(child: LibraryPage())),
                 ),
                 GoRoute(
                   name: 'favorites',
                   path: '/favorites',
-                  pageBuilder: (context, state) =>
-                      _page(state, const LibraryPage(favoritesOnly: true)),
+                  pageBuilder: (context, state) => _page(
+                    state,
+                    const AppBackScope(
+                      child: LibraryPage(favoritesOnly: true),
+                    ),
+                  ),
                 ),
                 GoRoute(
                   name: 'library',
@@ -88,7 +93,7 @@ GoRouter createAppRouter() => GoRouter(
                   name: 'download',
                   path: '/download',
                   pageBuilder: (context, state) =>
-                      _page(state, const DownloadPage()),
+                      _page(state, const AppBackScope(child: DownloadPage())),
                 ),
                 GoRoute(
                   name: 'webdav',
@@ -100,7 +105,7 @@ GoRouter createAppRouter() => GoRouter(
                   name: 'setting',
                   path: '/setting',
                   pageBuilder: (context, state) =>
-                      _page(state, const SettingsPage()),
+                      _page(state, const AppBackScope(child: SettingsPage())),
                 ),
                 GoRoute(
                   name: 'source-management',

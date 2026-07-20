@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/app_theme.dart';
 import '../../../domain/music.dart';
-import '../../download/state/download_controller.dart';
+import '../../download/view/download_track_button.dart';
 import '../../library/data/library_store.dart';
 import '../../library/view/favorite_track_button.dart';
 import '../../library/view/playlist_picker.dart';
@@ -42,7 +42,10 @@ class _LeaderboardPageState extends ConsumerState<LeaderboardPage> {
           const SizedBox(height: 18),
           _DiscoveryHero(state: state),
           const SizedBox(height: 16),
-          const _QuickActions(),
+          _QuickActions(
+            onDailyRecommendation: _loadDailyRecommendation,
+            onRadio: _startRadio,
+          ),
           const SizedBox(height: 28),
           _SectionHeader(
             title: '推荐歌单',
@@ -122,6 +125,53 @@ class _LeaderboardPageState extends ConsumerState<LeaderboardPage> {
         );
     await ref.read(playerProvider.notifier).playTrack(track);
   }
+
+  Future<void> _loadDailyRecommendation() async {
+    if (ref.read(leaderboardProvider).isLoading) {
+      _showMessage('推荐内容正在加载');
+      return;
+    }
+    final board =
+        await ref.read(leaderboardProvider.notifier).loadDailyRecommendation();
+    if (!mounted) return;
+    final error = ref.read(leaderboardProvider).error;
+    _showMessage(
+        board == null ? error?.message ?? '暂无每日推荐' : '今日推荐：${board.name}');
+  }
+
+  Future<void> _startRadio() async {
+    var state = ref.read(leaderboardProvider);
+    if (state.isLoading) {
+      _showMessage('推荐内容正在加载');
+      return;
+    }
+    if (state.tracks.isEmpty) {
+      await ref.read(leaderboardProvider.notifier).loadDailyRecommendation();
+      state = ref.read(leaderboardProvider);
+    }
+    final tracks =
+        await ref.read(libraryStoreProvider).filterIgnored(state.tracks);
+    if (!mounted) return;
+    if (tracks.isEmpty) {
+      _showMessage(state.error?.message ?? '暂无可播放的电台歌曲');
+      return;
+    }
+    final queue = ref.read(playbackQueueProvider.notifier);
+    queue
+      ..replaceQueue(
+        tracks,
+        contextId: 'radio:${state.source.id}:${state.activeBoard?.id}',
+      )
+      ..setMode(PlaybackMode.shuffle);
+    final track =
+        queue.selectNext() ?? ref.read(playbackQueueProvider).currentTrack;
+    if (track == null) return;
+    await ref.read(playerProvider.notifier).playTrack(track);
+    if (mounted) _showMessage('音乐电台已开始随机播放');
+  }
+
+  void _showMessage(String message) => ScaffoldMessenger.of(context)
+      .showSnackBar(SnackBar(content: Text(message)));
 }
 
 class _TopBar extends ConsumerWidget {
@@ -138,36 +188,162 @@ class _TopBar extends ConsumerWidget {
                     letterSpacing: -.6,
                   )),
           const Spacer(),
-          PopupMenuButton<OnlineSource>(
-            enabled: !state.isLoading,
-            tooltip: '切换音乐来源',
-            onSelected: ref.read(leaderboardProvider.notifier).selectSource,
-            itemBuilder: (context) => [
-              for (final source in const [
-                OnlineSource.kuwo,
-                OnlineSource.qq,
-                OnlineSource.migu,
-                OnlineSource.netease,
-              ])
-                CheckedPopupMenuItem(
-                  value: source,
-                  checked: state.source == source,
-                  child: Text(source.label),
-                ),
-            ],
-            icon: const Icon(Icons.library_music_outlined),
-          ),
-          IconButton(
-            tooltip: '通知',
-            onPressed: state.isLoading ? null : () {},
-            icon: const Icon(Icons.notifications_none_outlined),
-          ),
+          _SourceMenu(state: state),
+          const _NotificationMenu(),
         ],
       );
 }
 
+class _SourceMenu extends ConsumerWidget {
+  const _SourceMenu({required this.state});
+
+  final LeaderboardState state;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => MenuAnchor(
+        style: _topBarMenuStyle(context),
+        menuChildren: [
+          const _MenuHeading(title: '音乐平台'),
+          for (final source in const [
+            OnlineSource.kuwo,
+            OnlineSource.qq,
+            OnlineSource.migu,
+            OnlineSource.netease,
+          ])
+            MenuItemButton(
+              leadingIcon: Icon(
+                _sourceIcon(source),
+                size: 20,
+                color: source == state.source
+                    ? Theme.of(context).colorScheme.primary
+                    : null,
+              ),
+              trailingIcon: source == state.source
+                  ? Icon(
+                      Icons.check_rounded,
+                      size: 18,
+                      color: Theme.of(context).colorScheme.primary,
+                    )
+                  : const SizedBox(width: 18),
+              onPressed: () {
+                if (source != state.source) {
+                  ref.read(leaderboardProvider.notifier).selectSource(source);
+                }
+              },
+              child: SizedBox(width: 126, child: Text(source.label)),
+            ),
+        ],
+        builder: (context, controller, _) => IconButton(
+          tooltip: '切换音乐来源',
+          onPressed: state.isLoading
+              ? null
+              : () =>
+                  controller.isOpen ? controller.close() : controller.open(),
+          icon: Icon(
+            Icons.library_music_outlined,
+            color: controller.isOpen
+                ? Theme.of(context).colorScheme.primary
+                : null,
+          ),
+        ),
+      );
+}
+
+class _NotificationMenu extends StatelessWidget {
+  const _NotificationMenu();
+
+  @override
+  Widget build(BuildContext context) => MenuAnchor(
+        style: _topBarMenuStyle(context),
+        menuChildren: [
+          const _MenuHeading(title: '消息通知'),
+          SizedBox(
+            width: 220,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 18, 16, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.notifications_none_rounded,
+                    size: 30,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    '暂无新消息',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+        builder: (context, controller, _) => IconButton(
+          tooltip: '通知',
+          onPressed: () =>
+              controller.isOpen ? controller.close() : controller.open(),
+          icon: Icon(
+            Icons.notifications_none_outlined,
+            color: controller.isOpen
+                ? Theme.of(context).colorScheme.primary
+                : null,
+          ),
+        ),
+      );
+}
+
+class _MenuHeading extends StatelessWidget {
+  const _MenuHeading({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: 220,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: Text(
+            title,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+        ),
+      );
+}
+
+MenuStyle _topBarMenuStyle(BuildContext context) => MenuStyle(
+      backgroundColor:
+          WidgetStatePropertyAll(Theme.of(context).colorScheme.surface),
+      elevation: const WidgetStatePropertyAll(6),
+      padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(vertical: 4)),
+      shape: WidgetStatePropertyAll(
+        RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        ),
+      ),
+    );
+
+IconData _sourceIcon(OnlineSource source) => switch (source) {
+      OnlineSource.kuwo => Icons.graphic_eq_rounded,
+      OnlineSource.qq => Icons.chat_bubble_outline_rounded,
+      OnlineSource.migu => Icons.headphones_rounded,
+      OnlineSource.netease => Icons.album_outlined,
+      OnlineSource.kugou => Icons.music_note_rounded,
+    };
+
 class _QuickActions extends StatelessWidget {
-  const _QuickActions();
+  const _QuickActions({
+    required this.onDailyRecommendation,
+    required this.onRadio,
+  });
+
+  final VoidCallback onDailyRecommendation;
+  final VoidCallback onRadio;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -175,7 +351,7 @@ class _QuickActions extends StatelessWidget {
           _QuickAction(
             icon: Icons.play_circle_outline,
             label: '每日推荐',
-            onTap: () => context.go('/leaderboard'),
+            onTap: onDailyRecommendation,
           ),
           _QuickAction(
             icon: Icons.grid_view_outlined,
@@ -183,9 +359,9 @@ class _QuickActions extends StatelessWidget {
             onTap: () => context.go('/song-list'),
           ),
           _QuickAction(
-            icon: Icons.equalizer_outlined,
-            label: '排行榜',
-            onTap: () => context.go('/leaderboard'),
+            icon: Icons.radio_rounded,
+            label: '音乐电台',
+            onTap: onRadio,
           ),
           _QuickAction(
             icon: Icons.category_outlined,
@@ -518,12 +694,7 @@ class _TrackTile extends ConsumerWidget {
                   Text(_duration(track.duration),
                       style: Theme.of(context).textTheme.labelSmall),
                   FavoriteTrackButton(track: track),
-                  IconButton(
-                    tooltip: '下载歌曲',
-                    onPressed: () =>
-                        ref.read(downloadProvider.notifier).enqueue(track),
-                    icon: const Icon(Icons.download_outlined),
-                  ),
+                  DownloadTrackButton(track: track),
                   IconButton(
                     tooltip: '添加到我的列表',
                     onPressed: () => addTrackToPlaylist(context, ref, track),

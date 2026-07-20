@@ -10,6 +10,7 @@ import '../features/library/state/library_controller.dart';
 import '../features/leaderboard/state/leaderboard_controller.dart';
 import '../features/player/state/player_controller.dart';
 import '../features/player/state/default_quality_controller.dart';
+import '../features/player/state/user_api_debug_controller.dart';
 import 'app_router.dart';
 import 'app_theme.dart';
 import 'shared_audio_receiver.dart';
@@ -49,6 +50,7 @@ class _PlaybackRestoreState extends ConsumerState<_PlaybackRestore> {
   @override
   void initState() {
     super.initState();
+    ref.read(userApiDebugProvider.notifier);
     _sharedAudioSubscription = ref.listenManual<List<String>>(
       sharedAudioPathsProvider,
       (_, paths) => unawaited(_importSharedAudio(paths)),

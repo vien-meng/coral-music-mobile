@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:coral_music_mobile/domain/music.dart';
 import 'package:coral_music_mobile/features/player/state/playback_queue_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -52,12 +54,47 @@ void main() {
     expect(controller.state.mode, PlaybackMode.shuffle);
   });
 
+  test('replacing the queue retains the selected playback mode', () {
+    final controller = PlaybackQueueController()
+      ..setMode(PlaybackMode.shuffle)
+      ..replaceQueue(tracks, startIndex: 1);
+
+    expect(controller.state.mode, PlaybackMode.shuffle);
+  });
+
   test('next and previous wrap at queue boundaries', () {
     final controller = PlaybackQueueController();
     controller.replaceQueue(tracks, startIndex: 0);
 
     expect(controller.selectPrevious()?.sourceTrackId, '2');
     expect(controller.selectNext()?.sourceTrackId, '1');
+  });
+
+  test('manual next and previous honor shuffle mode', () {
+    const moreTracks = [
+      ...tracks,
+      Track(
+        sourceKind: TrackSourceKind.online,
+        sourceId: 'kw',
+        sourceTrackId: '3',
+        title: '三',
+        artist: '歌手',
+      ),
+      Track(
+        sourceKind: TrackSourceKind.online,
+        sourceId: 'kw',
+        sourceTrackId: '4',
+        title: '四',
+        artist: '歌手',
+      ),
+    ];
+    PlaybackQueueController shuffledQueue() =>
+        PlaybackQueueController(random: _MiddleRandom())
+          ..replaceQueue(moreTracks)
+          ..setMode(PlaybackMode.shuffle);
+
+    expect(shuffledQueue().selectNext()?.sourceTrackId, '3');
+    expect(shuffledQueue().selectPrevious()?.sourceTrackId, '3');
   });
 
   test('completion follows the selected playback mode', () {
@@ -85,4 +122,15 @@ void main() {
     controller.select(2);
     expect(controller.selectAfterCompletion()?.sourceTrackId, '1');
   });
+}
+
+final class _MiddleRandom implements Random {
+  @override
+  bool nextBool() => false;
+
+  @override
+  double nextDouble() => .5;
+
+  @override
+  int nextInt(int max) => max ~/ 2;
 }

@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/app_theme.dart';
 import '../../../app/cover_image.dart';
 import '../../../domain/music.dart';
-import '../../download/state/download_controller.dart';
+import '../../download/view/download_track_button.dart';
 import '../state/playback_queue_controller.dart';
 import '../state/player_controller.dart';
 
@@ -60,13 +60,7 @@ class PlaybackQueueDrawer extends ConsumerWidget {
                             children: [
                               if (track.sourceKind == TrackSourceKind.online ||
                                   track.sourceKind == TrackSourceKind.webdav)
-                                IconButton(
-                                  tooltip: '下载歌曲',
-                                  onPressed: () => ref
-                                      .read(downloadProvider.notifier)
-                                      .enqueue(track),
-                                  icon: const Icon(Icons.download_outlined),
-                                ),
+                                DownloadTrackButton(track: track),
                               IconButton(
                                 tooltip: isCurrent ? '当前播放歌曲不可删除' : '移出队列',
                                 onPressed: isCurrent

@@ -66,6 +66,35 @@ void main() {
     expect(controller.state.isPlaying, isTrue);
   });
 
+  test('handles duplicate completion snapshots once in every playback mode',
+      () async {
+    for (final mode in PlaybackMode.values) {
+      final engine = _FakeAudioEngine();
+      final runner = _FakeUserApiRunner();
+      final queue = PlaybackQueueController()
+        ..replaceQueue(const [track, secondTrack])
+        ..setMode(mode);
+      final controller = PlayerController(
+        engine,
+        PlaybackResolver(runner),
+        queue,
+      );
+
+      await controller.playTrack(track);
+      engine
+        ..complete(track)
+        ..complete(track);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(runner.resolveCount, 2, reason: mode.name);
+      expect(
+        controller.state.track?.id,
+        mode == PlaybackMode.singleLoop ? track.id : secondTrack.id,
+        reason: mode.name,
+      );
+    }
+  });
+
   test('stops instead of advancing when current-track sleep stop is enabled',
       () async {
     final engine = _FakeAudioEngine();

@@ -2,6 +2,52 @@
 
 All notable changes to 珊瑚音乐移动端 (Coral Music Mobile) will be documented in this file.
 
+## [1.0.0] - 2026-07-20(03)
+
+### 列表动作反馈与子页面返回
+
+- 新增 `DownloadTrackButton`：推荐/搜索/歌单/队列统一显示空闲/下载中/已下载图标并反馈加入/重复/已下载
+- `FavoriteTrackButton` 点击即乐观切换实心/空心心形，阻止重复提交，收藏/取消后显示 SnackBar
+- "我的"四个快捷入口统一使用 `push` 保留系统返回栈；新增 `AppBackScope`/`AppBackButton` 处理无栈时回到"我的"
+
+### 歌单广场滚动加载更多
+
+- 移除底部上一页/页码/下一页控件，改用 `SliverGrid` 惰性构建
+- 距底部少于 320px 自动加载下一页，跨页按 `source + playlist id` 去重
+- 来源/排序/标签/搜索/下拉刷新仍从第 1 页重新加载
+
+### 播放模式切歌修复
+
+- 完成事件重复快照只推进一次：先切到 `completed` 状态再推进队列
+- `replaceQueue()` 保留当前 `PlaybackMode`，随机历史随新队列重置
+- 随机模式手动上一曲/下一曲复用 `_selectShuffle()` 选择非相邻候选
+
+### 启动时恢复音源
+
+- 应用根 `initState()` 主动创建 `userApiDebugProvider`，不再依赖用户先进入设置页
+- 冷启动即恢复持久化 HTTPS 音源并可直接播放在线歌曲
+
+### 下载按钮即时状态
+
+- `DownloadTrackButton` 带本地提交态，不等待下载控制器恢复即显示加载动画
+- `queued/downloading` 显示加载动画，`paused` 显示暂停，`completed` 显示勾
+- 播放详情删除独立下载动作，统一观察 `downloadProvider`
+
+### 每日推荐与音乐电台
+
+- 每日推荐按当前来源和本地日期稳定选择一个真实榜单并加载歌曲
+- 原"排行榜"快捷入口改为"音乐电台"：从推荐曲库过滤不感兴趣后建立随机队列并立即播放
+
+### 首页顶部菜单
+
+- 平台选择使用 Material 3 `MenuAnchor` 替换下拉框，显示图标和当前选中状态
+- 铃铛按钮显示锚定消息面板，无消息数据时显示"暂无新消息"
+
+### Android 1.0.0 APK
+
+- `pubspec.yaml` 更新为 `1.0.0+1`
+- Release APK 构建待审批服务恢复后执行（当前被 HTTP 503 拦截）
+
 ## [1.0.0] - 2026-07-20(02)
 
 ### 咪咕歌单广场与详情

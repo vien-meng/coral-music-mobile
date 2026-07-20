@@ -88,9 +88,7 @@ class MorePage extends StatelessWidget {
                     Expanded(
                       child: _QuickEntry(
                         destination: item,
-                        onTap: () => item.path == '/setting'
-                            ? context.push(item.path)
-                            : context.go(item.path),
+                        onTap: () => context.push(item.path),
                       ),
                     ),
                 ],
