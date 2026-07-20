@@ -26,3 +26,10 @@
 ## 风险
 
 - 仅依赖在线目录声明的可用质量；不探测服务端真实能力、不换来源，Android/iOS/鸿蒙真机回归待补录，任务保持 `DOING`。
+
+## 2026-07-17 SQ 默认后的解析阶段修订（DOING）
+
+- SQ 默认改为 FLAC 后发现遗漏：`PlaybackResolver.resolve()` 的 User API 取链失败会直接进入失效歌曲跳过，只有音频引擎加载失败才走已有的较低质量重试。
+- 修订：解析阶段的 `AppFailure` 也必须按已声明的较低质量递归重试；FLAC 不可取时优先尝试 HQ/320k，再尝试 192k/128k，所有档位失败后才跳过。
+- 实际修改：`PlayerController.playTrack()` 的两类取链异常统一进入 `_handleResolveFailure()`；它复用既有 `_lowerQuality()` 顺序和失败跳过逻辑，不增加额外状态机。
+- 验证：新增 `falls back from SQ to HQ when FLAC URL resolution fails`；与播放解析回归共 16 项通过，`git diff --check` 通过。Android/iOS/鸿蒙真实多档音源回归待补，任务保持 `DOING`。

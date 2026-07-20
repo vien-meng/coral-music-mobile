@@ -27,19 +27,23 @@ void main() {
     expect(invoked, isFalse);
   });
 
-  test('accepts a legacy HTTP playback URL from an enabled User API', () async {
+  test('preserves the actual quality returned by an enabled User API',
+      () async {
     const channel = MethodChannel('coral_music/user_api');
     Map<Object?, Object?>? request;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
       if (call.method == 'load') {
         return <String, Object?>{
-          'musicUrlSources': ['kw']
+          'musicUrlSources': ['kg']
         };
       }
       if (call.method == 'resolveMusicUrl') {
         request = call.arguments as Map<Object?, Object?>;
-        return 'http://media.example.com/a.mp3';
+        return <String, Object?>{
+          'url': 'http://media.example.com/a.mp3',
+          'type': '320k',
+        };
       }
       return null;
     });
@@ -50,27 +54,38 @@ void main() {
 
     final runner = MethodChannelUserApiRunner();
     await runner.load('source');
-    final uri = await runner.resolveMusicUrl(
+    final playbackUrl = await runner.resolveMusicUrl(
       const Track(
         sourceKind: TrackSourceKind.online,
-        sourceId: 'kw',
+        sourceId: 'kg',
         sourceTrackId: '1',
         title: '测试歌曲',
         artist: '测试歌手',
         album: '测试专辑',
         duration: Duration(minutes: 4, seconds: 3),
-        extra: {'albumId': '2'},
+        extra: {
+          'albumId': '2',
+          'hash': '128-hash',
+          'qualityMeta': {
+            '128k': {'hash': '128-hash', 'size': 3000000},
+          },
+        },
       ),
       AudioQuality.standard128k,
     );
 
-    expect(uri.scheme, 'http');
+    expect(playbackUrl.uri.scheme, 'http');
+    expect(playbackUrl.quality, AudioQuality.high320k);
     final musicInfo = request!['musicInfo']! as Map<Object?, Object?>;
     final meta = musicInfo['meta']! as Map<Object?, Object?>;
     expect(musicInfo['id'], '1');
     expect(musicInfo['interval'], '04:03');
     expect(meta['songId'], '1');
     expect(meta['albumId'], '2');
+    expect((meta['_qualitys']! as Map)['128k'], {
+      'hash': '128-hash',
+      'size': 3000000,
+    });
   });
 
   test('normalizes a desktop-shaped User API lyric payload', () async {

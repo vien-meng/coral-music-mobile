@@ -92,3 +92,14 @@ lx.send('inited', {
 - `flutter test test/mini_player_test.dart test/player_controller_test.dart`：2 个测试通过。
 - `flutter build apk --debug`：通过；最新 Debug APK 已安装到上述真机。
 - 任务仍为 `DOING`：Android 最小闭环通过；iOS/鸿蒙 User API 运行时、三端后台媒体和真实设备验收尚未开始，不能以 Android 结果标记三端能力完成。
+
+## 2026-07-17 播放启动 Future 收口（DOING）
+
+- 已核对锁定 `just_audio 0.10.6`：`AudioPlayer.play()` 返回的 Future 在播放完成、暂停或停止后才结束。当前处理器若 `await` 它，会让 `AudioEngine.play()`、`PlayerController.playTrack()` 及调用方在整首歌期间一直挂起。
+- 将保持状态流与错误流为唯一播放状态来源，触发底层播放后立即完成命令 Future；底层异步错误仍需映射回现有 `AudioEngineSnapshot.error`，不能成为未处理异常。
+
+## 2026-07-17 播放启动 Future 收口（DONE for shared engine）
+
+- `_CoralAudioHandler.play()` 现在发布播放状态并触发底层 `AudioPlayer.play()` 后立即完成；不再等待整首歌曲结束。`PlayerController.playTrack()` 因而在启动成功后能及时返回，后续点播、自动下一首和 UI 调用不会被播放时长串行阻塞。
+- 底层 `play()` Future 的异常会回写为现有“音频播放失败”快照；原有错误流、刷新 URL、质量降级和失败跳过仍是同一恢复链，未新建第二套状态机。
+- 验证待补：本轮 `dart format`/差异检查后，Flutter 受控运行额度不可用，下一可运行会话以真实 LX 点播后立即切歌和聚焦播放控制器回归确认。

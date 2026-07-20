@@ -10,7 +10,7 @@ final class UserApiScriptFetcher {
   UserApiScriptFetcher(this._dio);
 
   final Dio _dio;
-  static const _limit = 256 * 1024;
+  static const maxBytes = 256 * 1024;
 
   Future<String> fetch(Uri uri) async {
     if (uri.scheme != 'https' || uri.host.isEmpty) {
@@ -29,7 +29,7 @@ final class UserApiScriptFetcher {
       );
       final contentLength =
           int.tryParse(response.headers.value('content-length') ?? '');
-      if (contentLength != null && contentLength > _limit) {
+      if (contentLength != null && contentLength > maxBytes) {
         throw const AppFailure(
           code: AppFailureCode.invalidData,
           message: '音源脚本超过大小限制',
@@ -37,7 +37,7 @@ final class UserApiScriptFetcher {
       }
       final bytes = BytesBuilder(copy: false);
       await for (final chunk in response.data!.stream) {
-        if (bytes.length + chunk.length > _limit) {
+        if (bytes.length + chunk.length > maxBytes) {
           throw const AppFailure(
             code: AppFailureCode.invalidData,
             message: '音源脚本超过大小限制',

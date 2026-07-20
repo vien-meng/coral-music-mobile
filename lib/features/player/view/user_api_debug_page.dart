@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:file_picker/file_picker.dart';
 
 import '../../../app/app_theme.dart';
 import '../state/player_controller.dart';
@@ -35,9 +36,9 @@ class _UserApiDebugPageState extends ConsumerState<UserApiDebugPage> {
     final scheme = Theme.of(context).colorScheme;
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 32),
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
       children: [
-        Text('导入音源', style: Theme.of(context).textTheme.headlineSmall),
+        Text('音源管理', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 6),
         Text(
           '通过 HTTPS 地址导入受限音源脚本。脚本只在本次会话保留，不会写入本地数据库。',
@@ -46,7 +47,12 @@ class _UserApiDebugPageState extends ConsumerState<UserApiDebugPage> {
               ),
         ),
         const SizedBox(height: 16),
-        Card(
+        Container(
+          decoration: BoxDecoration(
+            color: CoralPalette.sky,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: scheme.outlineVariant),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -57,11 +63,11 @@ class _UserApiDebugPageState extends ConsumerState<UserApiDebugPage> {
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: CoralPalette.mint.withValues(alpha: .16),
-                        borderRadius: BorderRadius.circular(14),
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Icon(Icons.link_rounded,
-                          color: CoralPalette.mint),
+                      child: const Icon(Icons.link_outlined,
+                          color: CoralPalette.brand),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -88,9 +94,16 @@ class _UserApiDebugPageState extends ConsumerState<UserApiDebugPage> {
                     onPressed: userApi.isLoading
                         ? null
                         : () => _importUrl(controller, false),
-                    icon: const Icon(Icons.download_for_offline_outlined),
+                    icon: const Icon(Icons.download_outlined),
                     label: Text(userApi.isLoading ? '正在验证音源…' : '导入并启用'),
                   ),
+                ),
+                const SizedBox(height: 4),
+                TextButton.icon(
+                  onPressed:
+                      userApi.isLoading ? null : () => _importFile(controller),
+                  icon: const Icon(Icons.upload_file_outlined),
+                  label: const Text('从本地文件导入 .js 音源'),
                 ),
               ],
             ),
@@ -110,6 +123,10 @@ class _UserApiDebugPageState extends ConsumerState<UserApiDebugPage> {
               active: source.id == userApi.activeSourceId,
               loading: userApi.isLoading,
               onActivate: () => controller.activate(source.id),
+              onRefresh: source.id == userApi.activeSourceId &&
+                      source.originUrl != null
+                  ? () => controller.refresh(source.id)
+                  : null,
               onRemove: () => controller.remove(source.id),
             ),
             const SizedBox(height: 10),
@@ -191,6 +208,28 @@ class _UserApiDebugPageState extends ConsumerState<UserApiDebugPage> {
     if (loading) return;
     controller.importUrl('', _scriptUrl.text);
   }
+
+  Future<void> _importFile(UserApiDebugController controller) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['js'],
+      withData: true,
+    );
+    final file = result?.files.singleOrNull;
+    if (file == null) return;
+    final bytes = file.bytes;
+    if (bytes == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('无法读取所选音源文件')),
+        );
+      }
+      return;
+    }
+    final dot = file.name.lastIndexOf('.');
+    final name = dot > 0 ? file.name.substring(0, dot) : file.name;
+    await controller.importBytes(name, bytes);
+  }
 }
 
 class _SourceDetailsCard extends StatelessWidget {
@@ -199,6 +238,7 @@ class _SourceDetailsCard extends StatelessWidget {
     required this.active,
     required this.loading,
     required this.onActivate,
+    required this.onRefresh,
     required this.onRemove,
   });
 
@@ -206,6 +246,7 @@ class _SourceDetailsCard extends StatelessWidget {
   final bool active;
   final bool loading;
   final VoidCallback onActivate;
+  final VoidCallback? onRefresh;
   final VoidCallback onRemove;
 
   @override
@@ -216,9 +257,17 @@ class _SourceDetailsCard extends StatelessWidget {
       if (source.info.author != null) ('作者', source.info.author!),
       if (source.info.homepage != null) ('主页', source.info.homepage!),
     ];
-    return Card(
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+            color: active
+                ? CoralPalette.brand.withValues(alpha: .5)
+                : scheme.outlineVariant),
+      ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(12),
         onTap: loading || active ? null : onActivate,
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -230,13 +279,12 @@ class _SourceDetailsCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: (active ? CoralPalette.player : CoralPalette.sky)
-                          .withValues(alpha: .2),
-                      borderRadius: BorderRadius.circular(14),
+                      color: active ? CoralPalette.sky : CoralPalette.lilac,
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
-                      Icons.graphic_eq_rounded,
-                      color: active ? CoralPalette.player : scheme.primary,
+                      Icons.graphic_eq_outlined,
+                      color: active ? CoralPalette.brand : scheme.primary,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -248,12 +296,18 @@ class _SourceDetailsCard extends StatelessWidget {
                     Chip(
                       label: const Text('已启用'),
                       visualDensity: VisualDensity.compact,
-                      backgroundColor: CoralPalette.mint.withValues(alpha: .16),
+                      backgroundColor: CoralPalette.sky,
+                    ),
+                  if (onRefresh != null)
+                    IconButton(
+                      tooltip: '从原地址刷新音源',
+                      onPressed: loading ? null : onRefresh,
+                      icon: const Icon(Icons.refresh_outlined),
                     ),
                   IconButton(
                     tooltip: '移除音源',
                     onPressed: loading ? null : onRemove,
-                    icon: const Icon(Icons.delete_outline_rounded),
+                    icon: const Icon(Icons.delete_outline),
                   ),
                 ],
               ),

@@ -47,6 +47,8 @@ final class PlayerState {
     this.speed = 1,
     this.volume = 1,
     this.quality = AudioQuality.flac,
+    this.sleepTimerEndsAt,
+    this.stopAfterCurrent = false,
     this.fileInfo,
     this.error,
   });
@@ -58,6 +60,8 @@ final class PlayerState {
   final double speed;
   final double volume;
   final AudioQuality quality;
+  final DateTime? sleepTimerEndsAt;
+  final bool stopAfterCurrent;
   final AudioFileInfo? fileInfo;
   final AppFailure? error;
 
@@ -71,10 +75,13 @@ final class PlayerState {
     double? speed,
     double? volume,
     AudioQuality? quality,
+    DateTime? sleepTimerEndsAt,
+    bool? stopAfterCurrent,
     AudioFileInfo? fileInfo,
     AppFailure? error,
     bool clearError = false,
     bool clearFileInfo = false,
+    bool clearSleepTimer = false,
   }) =>
       PlayerState(
         track: track ?? this.track,
@@ -84,6 +91,9 @@ final class PlayerState {
         speed: speed ?? this.speed,
         volume: volume ?? this.volume,
         quality: quality ?? this.quality,
+        sleepTimerEndsAt:
+            clearSleepTimer ? null : sleepTimerEndsAt ?? this.sleepTimerEndsAt,
+        stopAfterCurrent: stopAfterCurrent ?? this.stopAfterCurrent,
         fileInfo: clearFileInfo ? null : fileInfo ?? this.fileInfo,
         error: clearError ? null : error ?? this.error,
       );
@@ -96,9 +106,11 @@ final class PlayerController extends StateNotifier<PlayerState> {
     this._queue, [
     LibraryStore? library,
     AudioFileProbe? fileProbe,
+    Future<List<PlayHistoryEntry>> Function()? loadHistory,
   ])  : _library = library ?? LibraryStore(),
         _fileProbe = fileProbe ?? const NoopAudioFileProbe(),
         super(const PlayerState()) {
+    _loadHistory = loadHistory ?? _library.listHistory;
     _subscription = _engine.snapshots.listen(_onSnapshot);
     _engineCommandSubscription = _engine.commands.listen(_onEngineCommand);
   }
@@ -108,13 +120,17 @@ final class PlayerController extends StateNotifier<PlayerState> {
   final PlaybackQueueController _queue;
   final LibraryStore _library;
   final AudioFileProbe _fileProbe;
+  late final Future<List<PlayHistoryEntry>> Function() _loadHistory;
   final _failedTrackIds = <String>{};
   final _refreshedTrackQualities = <String>{};
+  final _handledEngineFailures = <String>{};
   var _playRequest = 0;
   String? _recordedHistoryTrackId;
   String? _lastPersistedTrackId;
   Duration _lastPersistedPosition = Duration.zero;
   Future<void> _historyWrites = Future.value();
+  AudioQuality _preferredQuality = AudioQuality.flac;
+  Timer? _sleepTimer;
   late final StreamSubscription<AudioEngineSnapshot> _subscription;
   late final StreamSubscription<AudioEngineCommand> _engineCommandSubscription;
 
@@ -127,7 +143,39 @@ final class PlayerController extends StateNotifier<PlayerState> {
             state.status == AudioEngineStatus.paused)) {
       return _engine.play();
     }
-    return playTrack(track);
+    return playTrack(
+      track,
+      initialPosition: state.track?.id == track.id ? state.position : null,
+    );
+  }
+
+  Future<void> retryCurrent() {
+    final track = state.track;
+    if (track == null) return Future.value();
+    return playTrack(
+      track,
+      refreshUrl: true,
+      initialPosition: state.position,
+    );
+  }
+
+  Future<void> restoreLastPlayback() async {
+    if (state.track != null) return;
+    try {
+      final history = await _loadHistory();
+      if (state.track != null || history.isEmpty) return;
+      final latest = history.first;
+      state = PlayerState(
+        track: latest.track,
+        position: _validResumePosition(latest.track, latest.lastPosition) ??
+            Duration.zero,
+        speed: state.speed,
+        volume: state.volume,
+        quality: _defaultQuality(latest.track),
+      );
+    } on Object {
+      // ponytail: history is optional startup context; a storage failure must not block the app shell.
+    }
   }
 
   Future<void> playTrack(
@@ -149,8 +197,13 @@ final class PlayerController extends StateNotifier<PlayerState> {
       _failedTrackIds.remove(track.id);
       _refreshedTrackQualities
           .removeWhere((key) => key.startsWith('${track.id}:'));
+      _handledEngineFailures
+          .removeWhere((key) => key.startsWith('${track.id}:'));
     }
     final resolvedQuality = quality ?? _defaultQuality(track);
+    if (refreshUrl) {
+      _handledEngineFailures.remove(_engineFailureKey(track, resolvedQuality));
+    }
     state = PlayerState(
       track: track,
       status: AudioEngineStatus.loading,
@@ -159,35 +212,48 @@ final class PlayerController extends StateNotifier<PlayerState> {
       quality: resolvedQuality,
       fileInfo: null,
     );
-    Uri uri;
+    ResolvedPlaybackUrl playbackUrl;
     try {
-      uri = await _resolver.resolve(
+      playbackUrl = await _resolver.resolve(
         track,
         quality: resolvedQuality,
         forceRefresh: refreshUrl,
       );
     } on AppFailure catch (error) {
       if (request != _playRequest) return;
-      _handleFailure(track, error);
+      _handleResolveFailure(
+        track,
+        resolvedQuality,
+        error,
+        initialPosition: initialPosition,
+        autoPlay: autoPlay,
+      );
       return;
     } on Object catch (error) {
       if (request != _playRequest) return;
-      _handleFailure(
+      _handleResolveFailure(
         track,
+        resolvedQuality,
         AppFailure(
           code: AppFailureCode.unknown,
           message: '播放地址解析失败',
           diagnostic: error.runtimeType.toString(),
         ),
+        initialPosition: initialPosition,
+        autoPlay: autoPlay,
       );
       return;
     }
     if (request != _playRequest) return;
-    unawaited(_probeFileInfo(request, uri));
+    final actualQuality = playbackUrl.quality ?? resolvedQuality;
+    state = state.copyWith(quality: actualQuality);
+    unawaited(_probeFileInfo(request, playbackUrl.uri));
     try {
-      await _engine.load(track, uri);
+      await _engine.load(track, playbackUrl.uri, headers: playbackUrl.headers);
       if (request != _playRequest) return;
-      final resumePosition = _validResumePosition(track, initialPosition);
+      final resumePosition = initialPosition == null
+          ? _cueStart(track)
+          : _validResumePosition(track, initialPosition);
       if (resumePosition != null) await _engine.seek(resumePosition);
       if (request != _playRequest) return;
       if (autoPlay) await _engine.play();
@@ -195,7 +261,7 @@ final class PlayerController extends StateNotifier<PlayerState> {
       if (request != _playRequest) return;
       _handleEngineFailure(
         track,
-        resolvedQuality,
+        actualQuality,
         error,
         initialPosition: initialPosition,
         autoPlay: autoPlay,
@@ -204,7 +270,7 @@ final class PlayerController extends StateNotifier<PlayerState> {
       if (request != _playRequest) return;
       _handleEngineFailure(
         track,
-        resolvedQuality,
+        actualQuality,
         AppFailure(
           code: AppFailureCode.unknown,
           message: '播放加载失败',
@@ -291,6 +357,41 @@ final class PlayerController extends StateNotifier<PlayerState> {
     state = state.copyWith(volume: normalized);
   }
 
+  void setSleepTimer(Duration? duration) {
+    _sleepTimer?.cancel();
+    _sleepTimer = null;
+    if (duration == null) {
+      state = state.copyWith(clearSleepTimer: true);
+      return;
+    }
+    final endsAt = DateTime.now().add(duration);
+    state = state.copyWith(
+      sleepTimerEndsAt: endsAt,
+      stopAfterCurrent: false,
+    );
+    _sleepTimer = Timer(duration, () => unawaited(_stopForSleepTimer()));
+  }
+
+  void setStopAfterCurrent(bool enabled) {
+    if (enabled) {
+      _sleepTimer?.cancel();
+      _sleepTimer = null;
+    }
+    state = state.copyWith(
+      stopAfterCurrent: enabled,
+      clearSleepTimer: enabled,
+    );
+  }
+
+  Future<void> _stopForSleepTimer() async {
+    _sleepTimer = null;
+    await _engine.stop();
+    state = state.copyWith(
+      clearSleepTimer: true,
+      stopAfterCurrent: false,
+    );
+  }
+
   Future<void> setQuality(AudioQuality quality) {
     final track = state.track;
     if (track == null || !track.availableQualities.contains(quality)) {
@@ -303,6 +404,8 @@ final class PlayerController extends StateNotifier<PlayerState> {
       autoPlay: state.isPlaying,
     );
   }
+
+  void setDefaultQuality(AudioQuality quality) => _preferredQuality = quality;
 
   void _onSnapshot(AudioEngineSnapshot snapshot) {
     if (state.track != null && snapshot.track?.id != state.track?.id) return;
@@ -319,11 +422,32 @@ final class PlayerController extends StateNotifier<PlayerState> {
     if (snapshot.status == AudioEngineStatus.completed &&
         snapshot.track?.id == state.track?.id) {
       _persistPosition(snapshot.track!, Duration.zero, force: true);
+      if (state.stopAfterCurrent) {
+        state = state.copyWith(
+          stopAfterCurrent: false,
+          clearSleepTimer: true,
+        );
+        unawaited(_engine.stop());
+        return;
+      }
       final nextTrack = _queue.selectAfterCompletion();
       if (nextTrack != null) {
         unawaited(playTrack(nextTrack));
         return;
       }
+    }
+    final cueEnd = snapshot.track == null ? null : _cueEnd(snapshot.track!);
+    if (snapshot.status == AudioEngineStatus.playing &&
+        snapshot.track?.id == state.track?.id &&
+        cueEnd != null &&
+        snapshot.position >= cueEnd) {
+      final nextTrack = _queue.selectAfterCompletion();
+      if (nextTrack != null) {
+        unawaited(playTrack(nextTrack));
+      } else {
+        unawaited(_engine.stop());
+      }
+      return;
     }
     if (snapshot.status == AudioEngineStatus.playing &&
         snapshot.track != null &&
@@ -347,6 +471,8 @@ final class PlayerController extends StateNotifier<PlayerState> {
       speed: state.speed,
       volume: state.volume,
       quality: state.quality,
+      sleepTimerEndsAt: state.sleepTimerEndsAt,
+      stopAfterCurrent: state.stopAfterCurrent,
       fileInfo: state.fileInfo,
       error: snapshot.error == null
           ? null
@@ -414,6 +540,7 @@ final class PlayerController extends StateNotifier<PlayerState> {
     Duration? initialPosition,
     bool autoPlay = true,
   }) {
+    if (!_handledEngineFailures.add(_engineFailureKey(track, quality))) return;
     if (_refreshedTrackQualities.add('${track.id}:${quality.name}')) {
       _resolver.invalidate(track, quality: quality);
       unawaited(
@@ -444,6 +571,32 @@ final class PlayerController extends StateNotifier<PlayerState> {
     _handleFailure(track, error);
   }
 
+  String _engineFailureKey(Track track, AudioQuality quality) =>
+      '${track.id}:${quality.name}';
+
+  void _handleResolveFailure(
+    Track track,
+    AudioQuality quality,
+    AppFailure error, {
+    Duration? initialPosition,
+    bool autoPlay = true,
+  }) {
+    final fallback = _lowerQuality(track, quality);
+    if (fallback != null) {
+      unawaited(
+        playTrack(
+          track,
+          quality: fallback,
+          retryFailed: false,
+          initialPosition: initialPosition,
+          autoPlay: autoPlay,
+        ),
+      );
+      return;
+    }
+    _handleFailure(track, error);
+  }
+
   Track? _nextAvailableTrackAfterFailure() {
     for (var attempt = 0; attempt < _queue.state.tracks.length; attempt++) {
       final candidate = _queue.selectAfterFailure();
@@ -454,7 +607,7 @@ final class PlayerController extends StateNotifier<PlayerState> {
   }
 
   AudioQuality _defaultQuality(Track track) =>
-      defaultPlaybackQuality(track.availableQualities);
+      preferredPlaybackQuality(track.availableQualities, _preferredQuality);
 
   AudioQuality? _lowerQuality(Track track, AudioQuality quality) {
     final candidates = track.availableQualities
@@ -473,8 +626,19 @@ final class PlayerController extends StateNotifier<PlayerState> {
     return position;
   }
 
+  Duration? _cueStart(Track track) => _cueMarker(track, 'cueStartMs');
+
+  Duration? _cueEnd(Track track) => _cueMarker(track, 'cueEndMs');
+
+  Duration? _cueMarker(Track track, String key) => switch (track.extra[key]) {
+        final int milliseconds => Duration(milliseconds: milliseconds),
+        final num milliseconds => Duration(milliseconds: milliseconds.toInt()),
+        _ => null,
+      };
+
   @override
   void dispose() {
+    _sleepTimer?.cancel();
     _subscription.cancel();
     _engineCommandSubscription.cancel();
     super.dispose();

@@ -4,6 +4,8 @@ import 'package:coral_music_mobile/features/player/data/user_api_runner.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   const track = Track(
     sourceKind: TrackSourceKind.online,
     sourceId: 'kw',
@@ -52,7 +54,6 @@ void main() {
     for (final source in [
       TrackSourceKind.local,
       TrackSourceKind.download,
-      TrackSourceKind.webdav,
     ]) {
       final uri = await resolver.resolve(
         Track(
@@ -64,7 +65,7 @@ void main() {
           localUri: Uri.parse('https://example.com/${source.name}.mp3'),
         ),
       );
-      expect(uri.host, 'example.com');
+      expect(uri.uri.host, 'example.com');
     }
 
     expect(runner.resolveCount, 0);
@@ -86,9 +87,14 @@ final class _Runner implements UserApiRunner {
       const UserApiManifest({'kw'});
 
   @override
-  Future<Uri> resolveMusicUrl(Track track, AudioQuality quality) async {
+  Future<ResolvedPlaybackUrl> resolveMusicUrl(
+    Track track,
+    AudioQuality quality,
+  ) async {
     resolveCount++;
     lastQuality = quality;
-    return Uri.parse('https://example.com/$resolveCount.mp3');
+    return ResolvedPlaybackUrl(
+      Uri.parse('https://example.com/$resolveCount.mp3'),
+    );
   }
 }

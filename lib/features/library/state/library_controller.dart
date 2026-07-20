@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/app_failure.dart';
 import '../../../domain/music.dart';
 import '../data/library_store.dart';
+import '../data/library_backup_codec.dart';
+import '../data/local_audio_scanner.dart';
+import '../data/playlist_transfer_codec.dart';
 
 final libraryProvider = StateNotifierProvider<LibraryController, LibraryState>(
   (ref) => LibraryController(ref.watch(libraryStoreProvider)),
@@ -13,6 +16,10 @@ final class LibraryState {
     this.playlists = const [],
     this.selectedPlaylist,
     this.tracks = const [],
+    this.favoriteOnlinePlaylists = const [],
+    this.favoriteAlbums = const [],
+    this.favoriteRevision = 0,
+    this.playlistFavoriteRevision = 0,
     this.isLoading = false,
     this.error,
   });
@@ -20,6 +27,10 @@ final class LibraryState {
   final List<UserPlaylist> playlists;
   final UserPlaylist? selectedPlaylist;
   final List<Track> tracks;
+  final List<PlaylistDetail> favoriteOnlinePlaylists;
+  final List<FavoriteAlbum> favoriteAlbums;
+  final int favoriteRevision;
+  final int playlistFavoriteRevision;
   final bool isLoading;
   final AppFailure? error;
 
@@ -27,6 +38,10 @@ final class LibraryState {
     List<UserPlaylist>? playlists,
     UserPlaylist? selectedPlaylist,
     List<Track>? tracks,
+    List<PlaylistDetail>? favoriteOnlinePlaylists,
+    List<FavoriteAlbum>? favoriteAlbums,
+    int? favoriteRevision,
+    int? playlistFavoriteRevision,
     bool? isLoading,
     AppFailure? error,
     bool clearError = false,
@@ -38,6 +53,12 @@ final class LibraryState {
             ? null
             : selectedPlaylist ?? this.selectedPlaylist,
         tracks: clearSelectedPlaylist ? const [] : tracks ?? this.tracks,
+        favoriteOnlinePlaylists:
+            favoriteOnlinePlaylists ?? this.favoriteOnlinePlaylists,
+        favoriteAlbums: favoriteAlbums ?? this.favoriteAlbums,
+        favoriteRevision: favoriteRevision ?? this.favoriteRevision,
+        playlistFavoriteRevision:
+            playlistFavoriteRevision ?? this.playlistFavoriteRevision,
         isLoading: isLoading ?? this.isLoading,
         error: clearError ? null : error ?? this.error,
       );
@@ -64,6 +85,75 @@ final class LibraryController extends StateNotifier<LibraryState> {
           clearError: true,
         );
       });
+
+  Future<({UserPlaylist playlist, int added, int skipped})?> importPlaylist(
+    String raw,
+  ) async {
+    if (state.isLoading) return null;
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final result =
+          await _store.importPlaylist(PlaylistTransferCodec.decode(raw));
+      state = state.copyWith(
+        playlists: await _store.listPlaylists(),
+        isLoading: false,
+        clearError: true,
+      );
+      return result;
+    } on FormatException catch (error) {
+      state = state.copyWith(
+        isLoading: false,
+        error: AppFailure(
+          code: AppFailureCode.invalidData,
+          message: error.message,
+        ),
+      );
+      return null;
+    } on Object catch (error) {
+      state = state.copyWith(
+        isLoading: false,
+        error: AppFailure(
+          code: AppFailureCode.unknown,
+          message: '导入列表失败',
+          diagnostic: error.runtimeType.toString(),
+        ),
+      );
+      return null;
+    }
+  }
+
+  Future<String> exportPlaylist(UserPlaylist playlist) =>
+      _store.exportPlaylist(playlist);
+
+  LibraryBackup previewLibraryBackup(String raw) =>
+      LibraryBackupCodec.decode(raw);
+
+  Future<({int playlists, int tracks, int favorites, int ignored})?>
+      restoreLibraryBackup(LibraryBackup backup) async {
+    if (state.isLoading) return null;
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final result = await _store.restoreLibraryBackup(backup);
+      state = state.copyWith(
+        playlists: await _store.listPlaylists(),
+        isLoading: false,
+        clearError: true,
+      );
+      return result;
+    } on Object catch (error) {
+      state = state.copyWith(
+        isLoading: false,
+        error: AppFailure(
+          code: AppFailureCode.unknown,
+          message: '恢复备份失败，现有资料未被修改',
+          diagnostic: error.runtimeType.toString(),
+        ),
+      );
+      return null;
+    }
+  }
+
+  Future<String> exportLibraryBackup() => _store.exportLibraryBackup();
 
   Future<void> rename(UserPlaylist playlist, String name) => _run(() async {
         await _store.renamePlaylist(playlist, name);
@@ -102,6 +192,8 @@ final class LibraryController extends StateNotifier<LibraryState> {
             updatedAt: DateTime.fromMillisecondsSinceEpoch(0),
           ),
           tracks: await _store.listFavorites(),
+          favoriteOnlinePlaylists: await _store.listFavoriteOnlinePlaylists(),
+          favoriteAlbums: await _store.listFavoriteAlbums(),
           isLoading: false,
           clearError: true,
         );
@@ -135,6 +227,43 @@ final class LibraryController extends StateNotifier<LibraryState> {
     }
   }
 
+  Future<({int added, int skipped})?> importSharedAudio(
+    List<String> paths,
+  ) async {
+    if (paths.isEmpty || state.isLoading) return null;
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      var playlists = await _store.listPlaylists();
+      var target = playlists.where((item) => item.name == '分享导入').firstOrNull;
+      target ??= await _store.createPlaylist('分享导入');
+      final scan = await LocalAudioScanner().scanFiles(paths);
+      var added = 0;
+      for (final track in scan.tracks) {
+        if (await _store.addTrack(target.id, track)) added++;
+      }
+      final selected = state.selectedPlaylist;
+      state = state.copyWith(
+        playlists: await _store.listPlaylists(),
+        tracks: selected?.id == target.id
+            ? await _store.listTracks(target.id)
+            : null,
+        isLoading: false,
+        clearError: true,
+      );
+      return (added: added, skipped: scan.skipped.length);
+    } on Object catch (error) {
+      state = state.copyWith(
+        isLoading: false,
+        error: AppFailure(
+          code: AppFailureCode.unknown,
+          message: '系统分享音频导入失败',
+          diagnostic: error.runtimeType.toString(),
+        ),
+      );
+      return null;
+    }
+  }
+
   Future<bool> isFavorite(String trackId) => _store.isFavorite(trackId);
 
   Future<bool> toggleFavorite(Track track) async {
@@ -146,6 +275,7 @@ final class LibraryController extends StateNotifier<LibraryState> {
         tracks: state.selectedPlaylist?.id == LibraryStore.favoritesId
             ? await _store.listFavorites()
             : null,
+        favoriteRevision: state.favoriteRevision + 1,
         isLoading: false,
         clearError: true,
       );
@@ -156,6 +286,63 @@ final class LibraryController extends StateNotifier<LibraryState> {
         error: AppFailure(
           code: AppFailureCode.unknown,
           message: '收藏歌曲失败',
+          diagnostic: error.runtimeType.toString(),
+        ),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> isFavoriteOnlinePlaylist(OnlinePlaylist playlist) =>
+      _store.isFavoriteOnlinePlaylist(playlist);
+
+  Future<bool> toggleFavoriteOnlinePlaylist(PlaylistDetail detail) async {
+    if (state.isLoading) return false;
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final favorite = await _store.toggleFavoriteOnlinePlaylist(detail);
+      state = state.copyWith(
+        favoriteOnlinePlaylists:
+            state.selectedPlaylist?.id == LibraryStore.favoritesId
+                ? await _store.listFavoriteOnlinePlaylists()
+                : null,
+        playlistFavoriteRevision: state.playlistFavoriteRevision + 1,
+        isLoading: false,
+        clearError: true,
+      );
+      return favorite;
+    } on Object catch (error) {
+      state = state.copyWith(
+        isLoading: false,
+        error: AppFailure(
+          code: AppFailureCode.unknown,
+          message: '收藏歌单失败',
+          diagnostic: error.runtimeType.toString(),
+        ),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> toggleFavoriteAlbum(String name, List<Track> tracks) async {
+    if (state.isLoading) return false;
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final favorite = await _store.toggleFavoriteAlbum(name, tracks);
+      state = state.copyWith(
+        favoriteAlbums: state.selectedPlaylist?.id == LibraryStore.favoritesId
+            ? await _store.listFavoriteAlbums()
+            : null,
+        isLoading: false,
+        clearError: true,
+      );
+      return favorite;
+    } on Object catch (error) {
+      state = state.copyWith(
+        isLoading: false,
+        error: AppFailure(
+          code: AppFailureCode.unknown,
+          message: '收藏专辑失败',
           diagnostic: error.runtimeType.toString(),
         ),
       );

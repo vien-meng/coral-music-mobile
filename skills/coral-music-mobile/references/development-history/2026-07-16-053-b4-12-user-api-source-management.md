@@ -55,3 +55,38 @@
 - `MorePage` 的三个设置入口改为 `context.push('/setting')`；底栏主页面及其它“我的”快捷入口仍保持 `go`，不改变 Tab 的替换导航行为。
 - 新增 `test/more_page_test.dart` 覆盖“打开设置 → router.pop → 返回我的”；测试、相关 Dart 分析和 diff 检查通过。
 - Samsung SM-N986U / Android 13 覆盖安装后，真实执行“我的 → 设置 → 系统返回”，前台仍为 `com.coral.music.mobile.MainActivity`，界面回到“我的”。随后同一会话重新导入用户指定 LX URL，能力卡正确显示 `kw、kg、tx、wy、mg、local`，证明返回不会清空会话内运行时。
+
+## 2026-07-17 音源切换与取链缓存边界（DOING）
+
+- 审计发现 `PlaybackResolver` 以“歌曲稳定 ID + 音质”缓存 URL 15 分钟，却不了解当前 User API 脚本；成功导入、启用或移除脚本后，同一曲目可能继续使用前一个脚本生成的旧 URL。
+- 这直接违反音源管理的“切换立即影响取链”行为，且会让用户误以为新脚本未生效。修订范围仅为成功切换运行时后的内存 URL 缓存失效；不持久化脚本、URL 或凭据，也不打断正在播放的已加载音频。
+
+## 2026-07-17 音源切换与取链缓存边界（DONE for shared runtime）
+
+- `PlaybackResolver` 新增仅清空会话内缓存的 `clear()`；`UserApiDebugController` 在新脚本成功导入并启用、切换启用成功，或移除当前运行时成功后调用它。验证失败会恢复旧运行时且不清缓存。
+- 这样后续点播同一歌曲必定向当前启用脚本重新取链；已经被 `AudioPlayer` 加载的当前曲目不会被中途停止。脚本本身仍只在进程内存保存。
+- 新增 `clears cached URLs after the active source changes`：同一首酷我歌曲先通过版本一脚本解析、成功导入版本二后再次解析，确认 `UserApiRunner.resolveMusicUrl` 被调用两次，而不是命中旧 15 分钟 URL。`flutter test test/user_api_debug_controller_test.dart -r compact` 3 项通过，`flutter analyze --no-fatal-infos` 与 `git diff --check` 通过。
+
+## 2026-07-17 URL 音源刷新与回退（DOING）
+
+- URL 导入的真实 LX 脚本可能更新；此前用户只能移除后重新粘贴 URL，且加载更新失败后没有面向“原脚本仍可用”的专门恢复路径。
+- 将为具有 `originUrl` 的音源增加原地址刷新：先下载，再在原生受限运行时验证；成功才替换脚本、公开详情和能力，并清空会话 URL 缓存。下载或运行时验证失败时立即重新加载旧脚本，保留原音源卡和启用状态。
+- 不写入脚本磁盘、不做后台自动更新，也不刷新没有 HTTPS 来源地址的手动粘贴脚本。
+
+## 2026-07-17 URL 音源刷新与回退（共享实现完成）
+
+- `UserApiDebugController.refresh()` 仅接受当前启用且存在 HTTPS `originUrl` 的来源：下载新脚本 → 受限运行时 `load`/能力验证 → 以原 ID 替换脚本、声明详情和能力 → 清空播放 URL 缓存。
+- 下载、解析或脚本验证失败时 `_restore(previous)` 重新加载旧脚本；原音源卡、启用状态和正在播放的已加载媒体均保留。用户手动命名不会被新脚本的 metadata 覆盖。
+- 音源详情卡为可刷新来源显示“从原地址刷新音源”按钮；手动粘贴且无来源 URL 的脚本不显示该操作。
+- 验证：`dart format`、`flutter analyze --no-fatal-infos`、`flutter build ios --no-codesign` 与 `git diff --check` 通过。真实 LX 脚本刷新/失败回退的 Android 真机场景待后续集中验收。
+
+## 2026-07-17 音源刷新后的歌词失效（DONE for shared state）
+
+- 发现 URL 音源刷新会保持同一个 source ID；原歌词 Provider 仅监听 active ID，因此会继续命中旧歌词 Provider 缓存，即使脚本已经更新。
+- `UserApiDebugState` 新增仅进程内的 `runtimeRevision`，在导入、启用、刷新成功或移除当前运行时后递增。播放 URL 缓存仍由既有 `PlaybackResolver.clear()` 处理。
+- `lyricProvider` 同时监听该 revision，因而当前曲目的歌词会在音源刷新后重新通过已启用脚本获取；不把歌词、脚本或凭据写入数据库。
+# 2026-07-20 本地脚本文件导入（DOING）
+
+- 桌面端支持导入脚本文件，移动端当前仅有 HTTPS URL 与开发粘贴框。本轮补系统文件选择的 `.js` 导入，复用同一受限运行时；不持久化脚本、不允许非 UTF-8 或超过 256 KiB 内容。
+- 已通过 `file_picker` 提供 `.js` 文件选择；读取字节先在 Dart 边界检查 256 KiB 与 UTF-8，成功后才调用既有 `importScript`、WebView 受限运行时和能力解析。脚本继续仅驻留会话内存。
+- 新增控制器回归覆盖字节脚本导入和超限拒绝；`flutter analyze`、`flutter test test/user_api_debug_controller_test.dart test/user_api_script_fetcher_test.dart` 及 `git diff --check` 通过。Android/iOS/鸿蒙文件选择器真机回归仍待平台阶段。

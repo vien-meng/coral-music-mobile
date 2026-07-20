@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../app/app_theme.dart';
 import '../../../domain/music.dart';
+import '../../download/state/download_controller.dart';
+import '../../library/data/library_store.dart';
+import '../../library/view/favorite_track_button.dart';
 import '../../library/view/playlist_picker.dart';
 import '../../player/state/playback_queue_controller.dart';
 import '../../player/state/player_controller.dart';
@@ -32,16 +36,16 @@ class _LeaderboardPageState extends ConsumerState<LeaderboardPage> {
       child: ListView(
         key: const Key('leaderboard-tracks'),
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
         children: [
-          _TopBar(isLoading: state.isLoading),
-          const SizedBox(height: 14),
-          _SourceSelector(state: state),
-          const SizedBox(height: 14),
+          _TopBar(state: state),
+          const SizedBox(height: 18),
           _DiscoveryHero(state: state),
-          const SizedBox(height: 22),
+          const SizedBox(height: 16),
+          const _QuickActions(),
+          const SizedBox(height: 28),
           _SectionHeader(
-            title: '精选榜单',
+            title: '推荐歌单',
             trailing: state.isLoading
                 ? const SizedBox.square(
                     dimension: 18,
@@ -61,22 +65,21 @@ class _LeaderboardPageState extends ConsumerState<LeaderboardPage> {
             _BoardStrip(state: state)
           else
             _InlineMessage(message: state.error?.message ?? '暂无可用榜单'),
-          const SizedBox(height: 24),
+          const SizedBox(height: 28),
           _SectionHeader(
             title: state.activeBoard?.name ?? '热门歌曲',
             subtitle: state.activeBoard == null ? null : '${state.total} 首歌曲',
-            trailing: FilledButton.icon(
+            trailing: OutlinedButton.icon(
               onPressed: state.tracks.isEmpty ? null : () => _playAll(state),
               icon: const Icon(Icons.play_arrow_rounded, size: 18),
               label: const Text('播放全部'),
-              style: FilledButton.styleFrom(
-                backgroundColor: CoralPalette.mint,
-                foregroundColor: Colors.white,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.onSurface,
                 padding: const EdgeInsets.symmetric(horizontal: 14),
               ),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           if (state.error != null)
             _ErrorCard(
               message: state.error!.message,
@@ -100,11 +103,14 @@ class _LeaderboardPageState extends ConsumerState<LeaderboardPage> {
   }
 
   Future<void> _playAll(LeaderboardState state) async {
+    final tracks =
+        await ref.read(libraryStoreProvider).filterIgnored(state.tracks);
+    if (tracks.isEmpty) return;
     ref.read(playbackQueueProvider.notifier).replaceQueue(
-          state.tracks,
+          tracks,
           contextId: 'leaderboard:${state.activeBoard?.id}:${state.page}',
         );
-    await ref.read(playerProvider.notifier).playTrack(state.tracks.first);
+    await ref.read(playerProvider.notifier).playTrack(tracks.first);
   }
 
   Future<void> _playTrack(LeaderboardState state, int index) async {
@@ -118,83 +124,105 @@ class _LeaderboardPageState extends ConsumerState<LeaderboardPage> {
   }
 }
 
-class _TopBar extends StatelessWidget {
-  const _TopBar({required this.isLoading});
+class _TopBar extends ConsumerWidget {
+  const _TopBar({required this.state});
 
-  final bool isLoading;
+  final LeaderboardState state;
 
   @override
-  Widget build(BuildContext context) => Row(
+  Widget build(BuildContext context, WidgetRef ref) => Row(
         children: [
-          Text(
-            '推荐',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -.8,
-                ),
-          ),
-          const SizedBox(width: 18),
-          Text('发现', style: Theme.of(context).textTheme.titleSmall),
+          Text('发现',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -.6,
+                  )),
           const Spacer(),
+          PopupMenuButton<OnlineSource>(
+            enabled: !state.isLoading,
+            tooltip: '切换音乐来源',
+            onSelected: ref.read(leaderboardProvider.notifier).selectSource,
+            itemBuilder: (context) => [
+              for (final source in const [
+                OnlineSource.kuwo,
+                OnlineSource.qq,
+                OnlineSource.migu,
+                OnlineSource.netease,
+              ])
+                CheckedPopupMenuItem(
+                  value: source,
+                  checked: state.source == source,
+                  child: Text(source.label),
+                ),
+            ],
+            icon: const Icon(Icons.library_music_outlined),
+          ),
           IconButton(
             tooltip: '通知',
-            onPressed: isLoading ? null : () {},
-            icon: const Icon(Icons.notifications_none_rounded),
+            onPressed: state.isLoading ? null : () {},
+            icon: const Icon(Icons.notifications_none_outlined),
           ),
         ],
       );
 }
 
-class _SourceSelector extends ConsumerWidget {
-  const _SourceSelector({required this.state});
-
-  final LeaderboardState state;
+class _QuickActions extends StatelessWidget {
+  const _QuickActions();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => SizedBox(
-        height: 37,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          itemCount: const [
-            OnlineSource.kuwo,
-            OnlineSource.qq,
-            OnlineSource.migu,
-            OnlineSource.netease,
-          ].length,
-          separatorBuilder: (_, __) => const SizedBox(width: 8),
-          itemBuilder: (context, index) {
-            const sources = [
-              OnlineSource.kuwo,
-              OnlineSource.qq,
-              OnlineSource.migu,
-              OnlineSource.netease,
-            ];
-            final source = sources[index];
-            final selected = state.source == source;
-            return ChoiceChip(
-              label: Text(source.label),
-              selected: selected,
-              selectedColor: CoralPalette.mint.withValues(alpha: .18),
-              labelStyle: TextStyle(
-                color: selected
-                    ? CoralPalette.player
-                    : Theme.of(context).colorScheme.onSurfaceVariant,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              ),
-              shape: StadiumBorder(
-                side: BorderSide(
-                  color: selected
-                      ? CoralPalette.mint.withValues(alpha: .42)
-                      : Theme.of(context).dividerColor,
-                ),
-              ),
-              onSelected: state.isLoading
-                  ? null
-                  : (_) => ref
-                      .read(leaderboardProvider.notifier)
-                      .selectSource(source),
-            );
-          },
+  Widget build(BuildContext context) => Row(
+        children: [
+          _QuickAction(
+            icon: Icons.play_circle_outline,
+            label: '每日推荐',
+            onTap: () => context.go('/leaderboard'),
+          ),
+          _QuickAction(
+            icon: Icons.grid_view_outlined,
+            label: '歌单广场',
+            onTap: () => context.go('/song-list'),
+          ),
+          _QuickAction(
+            icon: Icons.equalizer_outlined,
+            label: '排行榜',
+            onTap: () => context.go('/leaderboard'),
+          ),
+          _QuickAction(
+            icon: Icons.category_outlined,
+            label: '音乐分类',
+            onTap: () => context.go('/library'),
+          ),
+        ],
+      );
+}
+
+class _QuickAction extends StatelessWidget {
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Expanded(
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 22, color: CoralPalette.brand),
+                const SizedBox(height: 6),
+                Text(label, style: Theme.of(context).textTheme.labelSmall),
+              ],
+            ),
+          ),
         ),
       );
 }
@@ -208,19 +236,18 @@ class _DiscoveryHero extends StatelessWidget {
   Widget build(BuildContext context) {
     final board = state.activeBoard?.name ?? '今日推荐';
     return Container(
-      height: 174,
-      padding: const EdgeInsets.all(18),
+      height: 106,
+      padding: const EdgeInsets.fromLTRB(16, 13, 14, 13),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(14),
         gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xffb7ecf2), Color(0xffc9d7ff), Color(0xffffd7ee)],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [Color(0xffffeee9), Color(0xfffff8f5)],
         ),
-        boxShadow: const [
-          BoxShadow(
-              color: Color(0x22284491), blurRadius: 22, offset: Offset(0, 10)),
-        ],
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outlineVariant,
+        ),
       ),
       child: Stack(
         children: [
@@ -232,32 +259,27 @@ class _DiscoveryHero extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Coral Music · Free',
-                  style: TextStyle(color: Color(0xff6c7290))),
-              const Spacer(),
+              Text('春日初遇',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: CoralPalette.brand,
+                        fontWeight: FontWeight.w700,
+                      )),
+              const SizedBox(height: 4),
               Text(
                 board,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: CoralPalette.ink,
-                      fontWeight: FontWeight.w800,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface,
+                      fontWeight: FontWeight.w600,
                     ),
               ),
-              const SizedBox(height: 4),
-              const Text('让喜欢的旋律，陪你度过今天',
-                  style: TextStyle(color: Color(0xff636985))),
-              const SizedBox(height: 12),
-              FilledButton(
-                style: FilledButton.styleFrom(
-                  backgroundColor: Colors.white.withValues(alpha: .8),
-                  foregroundColor: CoralPalette.player,
-                  minimumSize: const Size(94, 34),
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                ),
-                onPressed: null,
-                child: const Text('正在聆听'),
-              ),
+              const Spacer(),
+              Text('温柔旋律陪你度过今天',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontSize: 12,
+                  )),
             ],
           ),
         ],
@@ -274,23 +296,25 @@ class _HeroArtwork extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fallback = Container(
-      width: 116,
-      height: 116,
+      width: 78,
+      height: 78,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(34),
-        color: Colors.white.withValues(alpha: .4),
-        border: Border.all(color: Colors.white.withValues(alpha: .7)),
+        borderRadius: BorderRadius.circular(12),
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: .74),
       ),
-      child:
-          const Icon(Icons.music_note_rounded, color: Colors.white, size: 64),
+      child: Icon(
+        Icons.music_note_rounded,
+        color: Theme.of(context).colorScheme.primary,
+        size: 34,
+      ),
     );
     if (uri == null) return fallback;
     return ClipRRect(
-      borderRadius: BorderRadius.circular(34),
+      borderRadius: BorderRadius.circular(12),
       child: Image.network(
         uri.toString(),
-        width: 116,
-        height: 116,
+        width: 78,
+        height: 78,
         fit: BoxFit.cover,
         errorBuilder: (_, __, ___) => fallback,
       ),
@@ -338,7 +362,7 @@ class _BoardStrip extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) => SizedBox(
-        height: 116,
+        height: 142,
         child: ListView.separated(
           scrollDirection: Axis.horizontal,
           itemCount: state.boards.length,
@@ -347,29 +371,30 @@ class _BoardStrip extends ConsumerWidget {
             final board = state.boards[index];
             final selected = state.activeBoard?.id == board.id;
             return SizedBox(
-              width: 128,
+              width: 108,
               child: Material(
-                color: selected
-                    ? CoralPalette.mint.withValues(alpha: .12)
-                    : Theme.of(context)
-                        .colorScheme
-                        .surface
-                        .withValues(alpha: .82),
-                borderRadius: BorderRadius.circular(20),
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(12),
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(12),
                   onTap: state.isLoading
                       ? null
                       : () => ref
                           .read(leaderboardProvider.notifier)
                           .selectBoard(board),
                   child: Padding(
-                    padding: const EdgeInsets.all(13),
+                    padding: const EdgeInsets.all(5),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _BoardMark(index: index),
-                        const Spacer(),
+                        _BoardCover(
+                          uri: state.tracks.isEmpty
+                              ? null
+                              : state
+                                  .tracks[index % state.tracks.length].coverUri,
+                          index: index,
+                        ),
+                        const SizedBox(height: 7),
                         Text(
                           board.name,
                           maxLines: 2,
@@ -377,7 +402,7 @@ class _BoardStrip extends ConsumerWidget {
                           style:
                               Theme.of(context).textTheme.titleSmall?.copyWith(
                                     fontWeight: selected
-                                        ? FontWeight.w800
+                                        ? FontWeight.w700
                                         : FontWeight.w600,
                                   ),
                         ),
@@ -392,9 +417,10 @@ class _BoardStrip extends ConsumerWidget {
       );
 }
 
-class _BoardMark extends StatelessWidget {
-  const _BoardMark({required this.index});
+class _BoardCover extends StatelessWidget {
+  const _BoardCover({required this.uri, required this.index});
 
+  final Uri? uri;
   final int index;
 
   @override
@@ -405,11 +431,13 @@ class _BoardMark extends StatelessWidget {
       CoralPalette.peach,
       CoralPalette.cyan
     ];
-    return Container(
-      width: 38,
-      height: 38,
+    final fallback = Container(
+      width: double.infinity,
+      height: 74,
       decoration: BoxDecoration(
-          color: colors[index % colors.length], shape: BoxShape.circle),
+        color: colors[index % colors.length],
+        borderRadius: BorderRadius.circular(9),
+      ),
       child: Icon(
         [
           Icons.auto_awesome_rounded,
@@ -417,9 +445,18 @@ class _BoardMark extends StatelessWidget {
           Icons.nightlight_round,
           Icons.favorite_rounded
         ][index % 4],
-        size: 20,
+        size: 24,
         color: Colors.white,
       ),
+    );
+    if (uri == null) return fallback;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(9),
+      child: Image.network(uri.toString(),
+          width: double.infinity,
+          height: 74,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => fallback),
     );
   }
 }
@@ -436,10 +473,10 @@ class _TrackTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) => Padding(
         padding: const EdgeInsets.only(bottom: 8),
         child: Material(
-          color: Theme.of(context).colorScheme.surface.withValues(alpha: .72),
-          borderRadius: BorderRadius.circular(18),
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(8),
           child: InkWell(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(8),
             onTap: onTap,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -480,6 +517,13 @@ class _TrackTile extends ConsumerWidget {
                   ),
                   Text(_duration(track.duration),
                       style: Theme.of(context).textTheme.labelSmall),
+                  FavoriteTrackButton(track: track),
+                  IconButton(
+                    tooltip: '下载歌曲',
+                    onPressed: () =>
+                        ref.read(downloadProvider.notifier).enqueue(track),
+                    icon: const Icon(Icons.download_outlined),
+                  ),
                   IconButton(
                     tooltip: '添加到我的列表',
                     onPressed: () => addTrackToPlaylist(context, ref, track),
@@ -511,15 +555,14 @@ class _TrackArtwork extends StatelessWidget {
       width: 48,
       height: 48,
       decoration: const BoxDecoration(
-        borderRadius: BorderRadius.all(Radius.circular(14)),
-        gradient: LinearGradient(
-            colors: [CoralPalette.periwinkle, CoralPalette.lilac]),
+        borderRadius: BorderRadius.all(Radius.circular(8)),
+        color: CoralPalette.sky,
       ),
       child: const Icon(Icons.music_note_rounded, color: Colors.white),
     );
     if (uri == null) return placeholder;
     return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(8),
       child: Image.network(
         uri.toString(),
         width: 48,

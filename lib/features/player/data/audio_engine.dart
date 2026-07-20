@@ -41,7 +41,7 @@ abstract interface class AudioEngine {
   Stream<AudioEngineSnapshot> get snapshots;
   Stream<AudioEngineCommand> get commands;
 
-  Future<void> load(Track track, Uri uri);
+  Future<void> load(Track track, Uri uri, {Map<String, String> headers});
   Future<void> play();
   Future<void> pause();
   Future<void> seek(Duration position);
@@ -65,8 +65,9 @@ final class JustAudioEngine implements AudioEngine {
   Stream<AudioEngineCommand> get commands => _commands.stream;
 
   @override
-  Future<void> load(Track track, Uri uri) async {
-    await (await _getHandler()).load(track, uri);
+  Future<void> load(Track track, Uri uri,
+      {Map<String, String> headers = const {}}) async {
+    await (await _getHandler()).load(track, uri, headers: headers);
   }
 
   @override
@@ -92,10 +93,17 @@ final class JustAudioEngine implements AudioEngine {
 
   @override
   Future<void> dispose() async {
+    final handler = _handler;
+    _handler = null;
     await _snapshotSubscription?.cancel();
     await _commandSubscription?.cancel();
-    await _snapshots.close();
-    await _commands.close();
+    try {
+      if (handler != null) await (await handler).dispose();
+    } finally {
+      await _setBackgroundMediaEnabled(false);
+      await _snapshots.close();
+      await _commands.close();
+    }
   }
 
   Future<_CoralAudioHandler> _getHandler() async {
@@ -178,7 +186,8 @@ final class _CoralAudioHandler extends BaseAudioHandler with SeekHandler {
   Stream<AudioEngineSnapshot> get snapshots => _snapshots.stream;
   Stream<AudioEngineCommand> get commands => _commands.stream;
 
-  Future<void> load(Track track, Uri uri) async {
+  Future<void> load(Track track, Uri uri,
+      {Map<String, String> headers = const {}}) async {
     _snapshot =
         AudioEngineSnapshot(track: track, status: AudioEngineStatus.loading);
     _snapshots.add(_snapshot);
@@ -190,14 +199,17 @@ final class _CoralAudioHandler extends BaseAudioHandler with SeekHandler {
       duration: track.duration,
       artUri: track.coverUri,
     ));
-    await _player.setUrl(uri.toString());
+    await _player.setAudioSource(AudioSource.uri(uri, headers: headers));
     _emit(track: track, status: AudioEngineStatus.ready, error: null);
   }
 
   @override
-  Future<void> play() async {
+  Future<void> play() {
     _emit(status: AudioEngineStatus.playing, error: null);
-    await _player.play();
+    unawaited(_player.play().catchError((Object _, StackTrace __) {
+      _emit(status: AudioEngineStatus.error, error: '音频播放失败');
+    }));
+    return Future.value();
   }
 
   @override
@@ -226,7 +238,17 @@ final class _CoralAudioHandler extends BaseAudioHandler with SeekHandler {
     await _player.stop();
     _emit(status: AudioEngineStatus.idle);
     await super.stop();
-    await _setBackgroundMediaEnabled(false);
+  }
+
+  Future<void> dispose() async {
+    try {
+      await stop();
+    } finally {
+      await Future.wait(_subscriptions.map((item) => item.cancel()));
+      await _player.dispose();
+      await _snapshots.close();
+      await _commands.close();
+    }
   }
 
   void _emit(

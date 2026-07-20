@@ -19,6 +19,44 @@ final class QqLeaderboardParser {
       );
     }
 
+    return _page(rawList, page: 1, total: rawList.length);
+  }
+
+  static PageResult<Track> parseSearch(
+    Map<String, Object?> response, {
+    required int page,
+  }) {
+    final request = response['req'];
+    if (response['code'] != 0 ||
+        request is! Map<String, Object?> ||
+        request['code'] != 0) {
+      throw const AppFailure(
+        code: AppFailureCode.invalidData,
+        message: 'QQ 音乐搜索数据格式异常',
+      );
+    }
+    final data = request['data'];
+    final dataMap = data is Map<String, Object?> ? data : null;
+    final body = dataMap?['body'];
+    final rawList = body is Map<String, Object?> ? body['item_song'] : null;
+    if (rawList is! List<Object?>) {
+      throw const AppFailure(
+        code: AppFailureCode.invalidData,
+        message: 'QQ 音乐搜索歌曲数据缺失',
+      );
+    }
+    final meta = dataMap?['meta'];
+    final total = meta is Map<String, Object?>
+        ? int.tryParse('${meta['estimate_sum'] ?? ''}') ?? rawList.length
+        : rawList.length;
+    return _page(rawList, page: page, total: total);
+  }
+
+  static PageResult<Track> _page(
+    List<Object?> rawList, {
+    required int page,
+    required int total,
+  }) {
     final tracks = <Track>[];
     final ids = <String>{};
     for (final value in rawList) {
@@ -72,9 +110,9 @@ final class QqLeaderboardParser {
     }
     return PageResult(
       items: tracks,
-      page: 1,
+      page: page,
       pageSize: tracks.length,
-      total: tracks.length,
+      total: total,
     );
   }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/cover_image.dart';
 import '../../../app/app_theme.dart';
 import '../../../domain/music.dart';
 import '../data/audio_engine.dart';
@@ -29,25 +30,28 @@ class MiniPlayer extends ConsumerWidget {
       child: Ink(
         decoration: BoxDecoration(
           color: colors.surface.withValues(alpha: .9),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.white.withValues(alpha: .72)),
-          boxShadow: const [
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: colors.outlineVariant),
+          boxShadow: [
             BoxShadow(
-                color: Color(0x160e1450), blurRadius: 20, offset: Offset(0, 7)),
+              color: CoralPalette.brand.withValues(alpha: .05),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
           ],
         ),
         child: InkWell(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(12),
           onTap: () => context.push('/player'),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(10, 8, 8, 7),
+                padding: const EdgeInsets.fromLTRB(9, 5, 7, 4),
                 child: Row(
                   children: [
                     _MiniArtwork(track: track),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -64,7 +68,6 @@ class MiniPlayer extends ConsumerWidget {
                                   fontWeight: FontWeight.w700,
                                 ),
                           ),
-                          const SizedBox(height: 2),
                           Text(
                             track == null
                                 ? '从首页、发现或列表选择歌曲'
@@ -82,21 +85,22 @@ class MiniPlayer extends ConsumerWidget {
                         ],
                       ),
                     ),
-                    IconButton.filled(
+                    IconButton.outlined(
                       tooltip: player.isPlaying ? '暂停' : '播放',
                       onPressed: track == null
                           ? null
                           : () =>
                               ref.read(playerProvider.notifier).toggle(track),
                       style: IconButton.styleFrom(
-                        backgroundColor: CoralPalette.player,
-                        foregroundColor: Colors.white,
-                        disabledBackgroundColor: colors.surfaceContainerHighest,
+                        minimumSize: const Size(38, 38),
+                        backgroundColor: colors.primary.withValues(alpha: .1),
+                        foregroundColor: colors.primary,
+                        side: BorderSide(
+                          color: colors.primary.withValues(alpha: .42),
+                        ),
                       ),
                       icon: Icon(
-                        player.isPlaying
-                            ? Icons.pause_rounded
-                            : Icons.play_arrow_rounded,
+                        player.isPlaying ? Icons.pause : Icons.play_arrow,
                       ),
                     ),
                   ],
@@ -105,13 +109,16 @@ class MiniPlayer extends ConsumerWidget {
               if (player.track?.id == track?.id && duration != null)
                 SliderTheme(
                   data: SliderTheme.of(context).copyWith(
-                    trackHeight: 2,
+                    trackHeight: 1.5,
                     thumbShape:
                         const RoundSliderThumbShape(enabledThumbRadius: 3),
                     overlayShape: SliderComponentShape.noOverlay,
+                    activeTrackColor: colors.primary,
+                    inactiveTrackColor: colors.primary.withValues(alpha: .14),
+                    thumbColor: colors.surface,
                   ),
                   child: SizedBox(
-                    height: 10,
+                    height: 6,
                     child: Slider(
                       value: progress.clamp(0, 1),
                       onChanged: (value) =>
@@ -146,24 +153,22 @@ class _MiniArtwork extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final placeholder = Container(
-      width: 42,
-      height: 42,
+      width: 38,
+      height: 38,
       decoration: const BoxDecoration(
-        borderRadius: BorderRadius.all(Radius.circular(13)),
-        gradient:
-            LinearGradient(colors: [CoralPalette.sky, CoralPalette.lilac]),
+        borderRadius: BorderRadius.all(Radius.circular(7)),
+        color: CoralPalette.sky,
       ),
-      child: const Icon(Icons.music_note_rounded, color: Colors.white),
+      child: const Icon(Icons.music_note_outlined, color: Colors.white),
     );
-    if (track?.coverUri == null) return placeholder;
     return ClipRRect(
-      borderRadius: BorderRadius.circular(13),
-      child: Image.network(
-        track!.coverUri.toString(),
-        width: 42,
-        height: 42,
+      borderRadius: BorderRadius.circular(7),
+      child: CoverImage(
+        uri: track?.coverUri,
+        fallback: placeholder,
+        width: 38,
+        height: 38,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => placeholder,
       ),
     );
   }

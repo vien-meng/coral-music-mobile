@@ -45,3 +45,35 @@
 - `PlaybackResolver` 对本地、下载和 WebDAV 的 `Track.localUri` 直接返回，不查询 User API、不写在线 URL 缓存，也不参与在线音质降级。
 - `uses non-online URIs without invoking User API` 覆盖三类来源的共享边界；没有地址时返回可读的“缺少播放地址”错误。
 - 关联功能矩阵：四类来源 P0；本地文件导入和 WebDAV 发现仍属于后续 B5/B6 范围。
+
+## 2026-07-17 音源运行时变更清理（DONE for shared cache boundary）
+
+- 缓存键只含歌曲和音质，不能跨 User API 脚本复用。`PlaybackResolver.clear()` 现由音源管理器在成功导入、启用或清除当前脚本后调用；失败操作不会影响旧缓存和正在播放的已加载音频。
+- 回归由 `test/user_api_debug_controller_test.dart` 的 `clears cached URLs after the active source changes` 覆盖；同一在线歌曲在脚本变更后重新执行 `resolveMusicUrl`。聚焦测试 3 项、静态分析和 diff 检查通过。
+
+## 2026-07-17 实际质量随缓存保留（DONE for shared cache payload）
+
+- 缓存条目由单一 URL 改为 `ResolvedPlaybackUrl`，同时保存音源实际返回的质量 type；命中缓存与首次取链都会向播放器提供同一准确质量，不会仅首次加载显示 HQ、缓存重播又错误回到请求的 SQ。
+- 缓存键仍为“歌曲 + 请求质量”，因此不改变用户选择质量、URL 刷新或失败降档策略。协议与控制器回归、Android Debug APK 构建均见 B4-10 同日记录。
+
+## 2026-07-17 请求质量与实际质量别名失效（DOING）
+
+- 音源可对 SQ 请求实际返回 HQ。缓存正确保留在“请求 SQ”键下，但播放失败时控制器会按实际 HQ 调用 `invalidate`，旧 SQ 键可能残留并在用户再次选择 SQ 时返回过期地址。
+- 将让定点失效在移除请求质量键之外，同时移除同曲且 `ResolvedPlaybackUrl.quality` 等于目标质量的别名缓存；不改变正常命中策略或跨曲目边界。
+
+## 2026-07-17 请求质量与实际质量别名失效（DONE for shared cache）
+
+- `PlaybackResolver.invalidate()` 现在先移除正常的“歌曲 + 请求质量”键，再移除同一稳定曲目下实际返回质量匹配的缓存条目。只有音源明确返回 `type` 时才存在别名，正常同质 URL 的行为不变。
+- 这样当请求 SQ 实际得到 HQ 且 HQ 流失败时，刷新/降级不会留下 SQ 键下的旧 HQ 地址；不跨曲目删除，不持久化 URL。
+- 按当前业务优先节奏未单独运行缓存用例；将在下一次播放器聚合测试加入“SQ 请求返回 HQ 后按 HQ 失效”的断言。
+
+## 2026-07-17 手动播放重试强制刷新地址（DOING）
+
+- 播放详情当前“重试播放”直接调用 `playTrack(track)`，在 15 分钟缓存仍有效时会再次取用同一失效临时地址，不能满足用户主动重试的预期。
+- 将只增加控制器的当前曲目重试入口，沿用既有 `forceRefresh`、进度恢复与质量降级；不改变列表点播的正常缓存命中。
+
+## 2026-07-17 手动播放重试强制刷新地址（DONE for shared player）
+
+- 新增 `PlayerController.retryCurrent()`：以当前曲目、当前进度并开启 `refreshUrl` 再次播放。播放详情“重试播放”已改用该入口，因此用户主动恢复时一定绕开内存 URL 缓存。
+- 列表点播和自动重播仍按正常缓存策略执行；本地、下载、WebDAV 继续直连 `localUri`。新增最小控制器断言，确认两次调用取得不同 URL。
+- 验证记录：`dart format` 与 `git diff --check` 通过；聚焦的 `flutter test test/player_controller_test.dart -r compact` 因当前受控 Flutter 执行额度被拒绝，未执行，保留为待补项而非标记已通过。

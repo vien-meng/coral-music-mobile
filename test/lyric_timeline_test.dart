@@ -55,4 +55,19 @@ void main() {
     expect(lines.single.at, const Duration(milliseconds: 1250));
     expect(lines.single.words.single.start, const Duration(milliseconds: 1250));
   });
+
+  test('converts desktop Kuwo signed timing into karaoke words', () {
+    final lines = parseLyricTimeline(const LyricPayload(
+      lyric: '[kuwo:127]\n[00:01.00]<1232,-1232>为<2640,176>你',
+    ));
+
+    expect(lines.single.text, '为你');
+    expect(lines.single.words.map((word) => word.text), ['为', '你']);
+    expect(lines.single.words.map((word) => word.start), [
+      const Duration(seconds: 1),
+      const Duration(seconds: 1, milliseconds: 176),
+    ]);
+    expect(
+        lines.single.words.first.duration, const Duration(milliseconds: 176));
+  });
 }

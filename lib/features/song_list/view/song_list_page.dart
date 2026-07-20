@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/app_theme.dart';
 import '../../../domain/music.dart';
+import '../../library/view/favorite_track_button.dart';
 import '../../library/view/playlist_picker.dart';
+import '../../library/data/library_store.dart';
+import '../../download/state/download_controller.dart';
 import '../../player/state/playback_queue_controller.dart';
 import '../../player/state/player_controller.dart';
 import '../state/song_list_controller.dart';
@@ -42,43 +46,70 @@ class _PlaylistSquare extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
+          padding: const EdgeInsets.fromLTRB(20, 12, 12, 8),
           child: Row(
             children: [
               Text('歌单广场', style: Theme.of(context).textTheme.titleLarge),
               const Spacer(),
-              DropdownButton<String>(
-                value: state.sortId,
-                items: const [
-                  DropdownMenuItem(value: 'hot', child: Text('最热')),
-                  DropdownMenuItem(value: 'new', child: Text('最新')),
+              PopupMenuButton<OnlineSource>(
+                enabled: !state.isLoading,
+                tooltip: '切换歌单来源',
+                onSelected: ref.read(songListProvider.notifier).selectSource,
+                itemBuilder: (context) => [
+                  for (final source in const [
+                    OnlineSource.kuwo,
+                    OnlineSource.qq,
+                    OnlineSource.migu,
+                  ])
+                    CheckedPopupMenuItem(
+                      value: source,
+                      checked: source == state.source,
+                      child: Text(source.label),
+                    ),
                 ],
-                onChanged: state.isLoading
-                    ? null
-                    : (value) {
-                        if (value != null) {
-                          ref.read(songListProvider.notifier).selectSort(value);
-                        }
-                      },
+                icon: const Icon(Icons.library_music_outlined),
+              ),
+              PopupMenuButton<String>(
+                enabled: !state.isLoading,
+                tooltip: '歌单排序',
+                onSelected: ref.read(songListProvider.notifier).selectSort,
+                itemBuilder: (context) => [
+                  CheckedPopupMenuItem(
+                    value: 'hot',
+                    checked: state.sortId == 'hot',
+                    child: const Text('最热'),
+                  ),
+                  CheckedPopupMenuItem(
+                    value: 'new',
+                    checked: state.sortId == 'new',
+                    child: const Text('最新'),
+                  ),
+                ],
+                icon: const Icon(Icons.sort_outlined),
               ),
               IconButton(
                 tooltip: '刷新',
                 onPressed: state.isLoading
                     ? null
                     : ref.read(songListProvider.notifier).refresh,
-                icon: const Icon(Icons.refresh),
+                icon: const Icon(Icons.refresh_outlined),
               ),
             ],
           ),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
           child: TextField(
+            enabled: state.source == OnlineSource.kuwo,
             textInputAction: TextInputAction.search,
-            onSubmitted: ref.read(songListProvider.notifier).submitSearch,
-            decoration: const InputDecoration(
-              hintText: '搜索歌单（清空并搜索可返回广场）',
-              prefixIcon: Icon(Icons.search),
+            onSubmitted: state.source != OnlineSource.kuwo
+                ? null
+                : ref.read(songListProvider.notifier).submitSearch,
+            decoration: InputDecoration(
+              hintText: state.source == OnlineSource.kuwo
+                  ? '搜索歌单（清空并搜索可返回广场）'
+                  : '${state.source.label}歌单关键词搜索暂未接入',
+              prefixIcon: Icon(Icons.search_outlined),
               isDense: true,
             ),
           ),
@@ -87,24 +118,58 @@ class _PlaylistSquare extends ConsumerWidget {
           loading: () => const SizedBox(height: 36),
           error: (_, __) => const SizedBox.shrink(),
           data: (items) => SizedBox(
-            height: 40,
+            height: 36,
             child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
               scrollDirection: Axis.horizontal,
               children: [
                 ChoiceChip(
                   label: const Text('热门'),
                   selected: state.selectedTagId == null,
+                  selectedColor: Colors.transparent,
+                  labelStyle: TextStyle(
+                    color: state.selectedTagId == null
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontWeight: state.selectedTagId == null
+                        ? FontWeight.w600
+                        : FontWeight.w500,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(
+                      color: state.selectedTagId == null
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).colorScheme.outlineVariant,
+                    ),
+                  ),
                   onSelected: state.isLoading
                       ? null
                       : (_) =>
                           ref.read(songListProvider.notifier).selectTag(null),
                 ),
                 for (final tag in items) ...[
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
                   ChoiceChip(
                     label: Text(tag.name),
                     selected: state.selectedTagId == tag.id,
+                    selectedColor: Colors.transparent,
+                    labelStyle: TextStyle(
+                      color: state.selectedTagId == tag.id
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontWeight: state.selectedTagId == tag.id
+                          ? FontWeight.w600
+                          : FontWeight.w500,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(
+                        color: state.selectedTagId == tag.id
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).colorScheme.outlineVariant,
+                      ),
+                    ),
                     onSelected: state.isLoading
                         ? null
                         : (_) => ref
@@ -132,19 +197,19 @@ class _PlaylistSquare extends ConsumerWidget {
               : RefreshIndicator(
                   onRefresh: ref.read(songListProvider.notifier).refresh,
                   child: GridView.builder(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
                     gridDelegate:
                         const SliverGridDelegateWithMaxCrossAxisExtent(
-                      maxCrossAxisExtent: 180,
-                      mainAxisSpacing: 16,
-                      crossAxisSpacing: 12,
-                      childAspectRatio: .72,
+                      maxCrossAxisExtent: 156,
+                      mainAxisSpacing: 18,
+                      crossAxisSpacing: 14,
+                      childAspectRatio: .78,
                     ),
                     itemCount: state.playlists.length,
                     itemBuilder: (context, index) {
                       final playlist = state.playlists[index];
                       return InkWell(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(8),
                         onTap: state.isLoading
                             ? null
                             : () => ref
@@ -232,18 +297,45 @@ class _PlaylistDetail extends ConsumerWidget {
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
+                FavoriteOnlinePlaylistButton(detail: detail),
+                IconButton(
+                  tooltip: '下载全部',
+                  onPressed: detail.tracks.isEmpty
+                      ? null
+                      : () async {
+                          final result = await ref
+                              .read(downloadProvider.notifier)
+                              .enqueueAll(detail.tracks);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  result.skipped == 0
+                                      ? '已加入 ${result.added} 首下载任务'
+                                      : '已加入 ${result.added} 首，跳过 ${result.skipped} 首重复或不支持歌曲',
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                  icon: const Icon(Icons.download_for_offline_outlined),
+                ),
                 FilledButton.tonalIcon(
                   onPressed: detail.tracks.isEmpty
                       ? null
                       : () async {
+                          final tracks = await ref
+                              .read(libraryStoreProvider)
+                              .filterIgnored(detail.tracks);
+                          if (tracks.isEmpty) return;
                           ref.read(playbackQueueProvider.notifier).replaceQueue(
-                                detail.tracks,
+                                tracks,
                                 contextId:
                                     'songlist:${detail.playlist.source.id}:${detail.playlist.id}',
                               );
                           await ref
                               .read(playerProvider.notifier)
-                              .playTrack(detail.tracks.first);
+                              .playTrack(tracks.first);
                         },
                   icon: const Icon(Icons.play_arrow),
                   label: const Text('播放全部'),
@@ -270,7 +362,19 @@ class _PlaylistDetail extends ConsumerWidget {
               itemBuilder: (context, index) {
                 final track = detail.tracks[index];
                 return ListTile(
-                  leading: Text('${index + 1}'.padLeft(2, '0')),
+                  leading: SizedBox(
+                    width: 64,
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 20,
+                          child: Text('${index + 1}'.padLeft(2, '0')),
+                        ),
+                        const SizedBox(width: 5),
+                        _PlaylistTrackArtwork(uri: track.coverUri),
+                      ],
+                    ),
+                  ),
                   title: Text(track.title,
                       maxLines: 1, overflow: TextOverflow.ellipsis),
                   subtitle: Text(
@@ -278,10 +382,23 @@ class _PlaylistDetail extends ConsumerWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  trailing: IconButton(
-                    tooltip: '添加到我的列表',
-                    onPressed: () => addTrackToPlaylist(context, ref, track),
-                    icon: const Icon(Icons.playlist_add),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      FavoriteTrackButton(track: track),
+                      IconButton(
+                        tooltip: '下载歌曲',
+                        onPressed: () =>
+                            ref.read(downloadProvider.notifier).enqueue(track),
+                        icon: const Icon(Icons.download_outlined),
+                      ),
+                      IconButton(
+                        tooltip: '添加到我的列表',
+                        onPressed: () =>
+                            addTrackToPlaylist(context, ref, track),
+                        icon: const Icon(Icons.playlist_add),
+                      ),
+                    ],
                   ),
                   onTap: () async {
                     ref.read(playbackQueueProvider.notifier).replaceQueue(
@@ -310,15 +427,45 @@ class _PlaylistCover extends StatelessWidget {
     final fallback = DecoratedBox(
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: const Center(child: Icon(Icons.queue_music, size: 44)),
     );
     if (playlist.coverUri == null) return fallback;
     return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(8),
       child: Image.network(
         playlist.coverUri.toString(),
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => fallback,
+      ),
+    );
+  }
+}
+
+class _PlaylistTrackArtwork extends StatelessWidget {
+  const _PlaylistTrackArtwork({required this.uri});
+
+  final Uri? uri;
+
+  @override
+  Widget build(BuildContext context) {
+    final fallback = Container(
+      width: 38,
+      height: 38,
+      decoration: const BoxDecoration(
+        borderRadius: BorderRadius.all(Radius.circular(8)),
+        color: CoralPalette.sky,
+      ),
+      child: const Icon(Icons.music_note_rounded, color: Colors.white),
+    );
+    if (uri == null) return fallback;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Image.network(
+        uri.toString(),
+        width: 38,
+        height: 38,
         fit: BoxFit.cover,
         errorBuilder: (_, __, ___) => fallback,
       ),

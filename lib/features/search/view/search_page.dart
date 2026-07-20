@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/app_theme.dart';
 import '../../../domain/music.dart';
+import '../../download/state/download_controller.dart';
+import '../../library/view/favorite_track_button.dart';
 import '../../library/view/playlist_picker.dart';
 import '../../player/state/playback_queue_controller.dart';
 import '../../player/state/player_controller.dart';
@@ -33,16 +35,10 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       onRefresh: ref.read(searchProvider.notifier).refresh,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
         children: [
-          Text(
-            '发现',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -.8,
-                ),
-          ),
-          const SizedBox(height: 14),
+          _SearchHeader(state: state),
+          const SizedBox(height: 16),
           TextField(
             controller: _queryController,
             textInputAction: TextInputAction.search,
@@ -50,7 +46,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
             onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
               hintText: '搜索歌曲 / 歌手 / 专辑 / 歌单',
-              prefixIcon: const Icon(Icons.search_rounded),
+              prefixIcon: const Icon(Icons.search_outlined),
               suffixIcon: _queryController.text.isEmpty
                   ? null
                   : IconButton(
@@ -63,8 +59,6 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                     ),
             ),
           ),
-          const SizedBox(height: 12),
-          _SourcePills(state: state),
           if (state.error != null) ...[
             const SizedBox(height: 14),
             _SearchError(
@@ -76,11 +70,13 @@ class _SearchPageState extends ConsumerState<SearchPage> {
           if (state.tracks.isEmpty && state.query.isEmpty)
             _DiscoverySearch(
               terms: hotTerms,
+              history: state.history,
               onSelected: (term) {
                 _queryController.text = term;
                 _submit(term);
                 setState(() {});
               },
+              onClearHistory: ref.read(searchProvider.notifier).clearHistory,
               onRetry: () => ref.invalidate(kuwoHotSearchProvider),
             )
           else
@@ -110,65 +106,124 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   }
 }
 
-class _SourcePills extends ConsumerWidget {
-  const _SourcePills({required this.state});
+class _SearchHeader extends ConsumerWidget {
+  const _SearchHeader({required this.state});
 
   final SearchState state;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => SizedBox(
-        height: 36,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          itemCount: const [
-            OnlineSource.kuwo,
-            OnlineSource.netease,
-            OnlineSource.migu
-          ].length,
-          separatorBuilder: (_, __) => const SizedBox(width: 8),
-          itemBuilder: (context, index) {
-            const sources = [
-              OnlineSource.kuwo,
-              OnlineSource.netease,
-              OnlineSource.migu
-            ];
-            final source = sources[index];
-            final selected = source == state.source;
-            return ChoiceChip(
-              label: Text(source.label),
-              selected: selected,
-              selectedColor: CoralPalette.mint.withValues(alpha: .18),
-              labelStyle: TextStyle(
-                color: selected
-                    ? CoralPalette.player
-                    : Theme.of(context).colorScheme.onSurfaceVariant,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+  Widget build(BuildContext context, WidgetRef ref) => Row(
+        children: [
+          Text('搜索',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -.6,
+                  )),
+          const Spacer(),
+          PopupMenuButton<_SearchMenuAction>(
+            enabled: !state.isLoading,
+            tooltip: '切换搜索来源',
+            onSelected: (action) {
+              switch (action) {
+                case _SearchMenuAction.combined:
+                  ref.read(searchProvider.notifier).selectCombined();
+                case _SearchMenuAction.kuwo:
+                  ref
+                      .read(searchProvider.notifier)
+                      .selectSource(OnlineSource.kuwo);
+                case _SearchMenuAction.kugou:
+                  ref
+                      .read(searchProvider.notifier)
+                      .selectSource(OnlineSource.kugou);
+                case _SearchMenuAction.qq:
+                  ref
+                      .read(searchProvider.notifier)
+                      .selectSource(OnlineSource.qq);
+                case _SearchMenuAction.netease:
+                  ref
+                      .read(searchProvider.notifier)
+                      .selectSource(OnlineSource.netease);
+                case _SearchMenuAction.migu:
+                  ref
+                      .read(searchProvider.notifier)
+                      .selectSource(OnlineSource.migu);
+              }
+            },
+            itemBuilder: (context) => [
+              CheckedPopupMenuItem(
+                value: _SearchMenuAction.combined,
+                checked: state.isCombined,
+                child: const Text('综合搜索'),
               ),
-              onSelected: state.isLoading
-                  ? null
-                  : (_) =>
-                      ref.read(searchProvider.notifier).selectSource(source),
-            );
-          },
-        ),
+              const PopupMenuDivider(),
+              for (final entry in const [
+                (_SearchMenuAction.kuwo, OnlineSource.kuwo),
+                (_SearchMenuAction.kugou, OnlineSource.kugou),
+                (_SearchMenuAction.qq, OnlineSource.qq),
+                (_SearchMenuAction.netease, OnlineSource.netease),
+                (_SearchMenuAction.migu, OnlineSource.migu),
+              ])
+                CheckedPopupMenuItem(
+                  value: entry.$1,
+                  checked: entry.$2 == state.source && !state.isCombined,
+                  child: Text(entry.$2.label),
+                ),
+            ],
+            icon: const Icon(Icons.library_music_outlined),
+          ),
+        ],
       );
 }
+
+enum _SearchMenuAction { combined, kuwo, kugou, qq, netease, migu }
 
 class _DiscoverySearch extends StatelessWidget {
   const _DiscoverySearch({
     required this.terms,
+    required this.history,
     required this.onSelected,
+    required this.onClearHistory,
     required this.onRetry,
   });
 
   final AsyncValue<List<String>> terms;
+  final List<String> history;
   final ValueChanged<String> onSelected;
+  final VoidCallback onClearHistory;
   final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (history.isNotEmpty) ...[
+            Row(children: [
+              Text('最近搜索',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w800)),
+              const Spacer(),
+              IconButton(
+                tooltip: '清空搜索历史',
+                icon: const Icon(Icons.delete_outline),
+                onPressed: onClearHistory,
+              ),
+            ]),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final term in history)
+                  ActionChip(
+                    label: Text(term),
+                    onPressed: () => onSelected(term),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 26),
+          ],
           Text('热门搜索',
               style: Theme.of(context)
                   .textTheme
@@ -261,10 +316,10 @@ class _HotTermRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Material(
-        color: Theme.of(context).colorScheme.surface.withValues(alpha: .67),
-        borderRadius: BorderRadius.circular(16),
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(8),
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(8),
           onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -318,7 +373,7 @@ class _SearchResults extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '“${state.query}” 的结果',
+          '“${state.query}” 的${state.isCombined ? '综合' : state.source.label}结果',
           style: Theme.of(context)
               .textTheme
               .titleLarge
@@ -328,6 +383,7 @@ class _SearchResults extends ConsumerWidget {
         for (var index = 0; index < state.tracks.length; index++)
           _SearchTrackTile(
             track: state.tracks[index],
+            showSource: state.isCombined,
             onTap: () => onPlay(state, index),
           ),
       ],
@@ -336,19 +392,24 @@ class _SearchResults extends ConsumerWidget {
 }
 
 class _SearchTrackTile extends ConsumerWidget {
-  const _SearchTrackTile({required this.track, required this.onTap});
+  const _SearchTrackTile({
+    required this.track,
+    required this.showSource,
+    required this.onTap,
+  });
 
   final Track track;
+  final bool showSource;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) => Padding(
         padding: const EdgeInsets.only(bottom: 8),
         child: Material(
-          color: Theme.of(context).colorScheme.surface.withValues(alpha: .72),
-          borderRadius: BorderRadius.circular(18),
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(8),
           child: InkWell(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(8),
             onTap: onTap,
             child: Padding(
               padding: const EdgeInsets.all(9),
@@ -365,6 +426,7 @@ class _SearchTrackTile extends ConsumerWidget {
                         const SizedBox(height: 3),
                         Text(
                           [
+                            if (showSource) _sourceLabel(track),
                             track.artist,
                             if (track.album?.isNotEmpty == true) track.album!
                           ].where((value) => value.isNotEmpty).join(' · '),
@@ -374,6 +436,13 @@ class _SearchTrackTile extends ConsumerWidget {
                         ),
                       ],
                     ),
+                  ),
+                  FavoriteTrackButton(track: track),
+                  IconButton(
+                    tooltip: '下载歌曲',
+                    onPressed: () =>
+                        ref.read(downloadProvider.notifier).enqueue(track),
+                    icon: const Icon(Icons.download_outlined),
                   ),
                   IconButton(
                     tooltip: '添加到我的列表',
@@ -388,6 +457,13 @@ class _SearchTrackTile extends ConsumerWidget {
       );
 }
 
+String _sourceLabel(Track track) =>
+    OnlineSource.values
+        .where((source) => source.id == track.sourceId)
+        .firstOrNull
+        ?.label ??
+    track.sourceId;
+
 class _SearchArtwork extends StatelessWidget {
   const _SearchArtwork({required this.uri});
 
@@ -399,15 +475,14 @@ class _SearchArtwork extends StatelessWidget {
       width: 48,
       height: 48,
       decoration: const BoxDecoration(
-        borderRadius: BorderRadius.all(Radius.circular(14)),
-        gradient:
-            LinearGradient(colors: [CoralPalette.sky, CoralPalette.lilac]),
+        borderRadius: BorderRadius.all(Radius.circular(8)),
+        color: CoralPalette.sky,
       ),
       child: const Icon(Icons.music_note_rounded, color: Colors.white),
     );
     if (uri == null) return fallback;
     return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(8),
       child: Image.network(
         uri.toString(),
         width: 48,

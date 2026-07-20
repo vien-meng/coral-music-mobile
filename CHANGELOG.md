@@ -2,6 +2,200 @@
 
 All notable changes to 珊瑚音乐移动端 (Coral Music Mobile) will be documented in this file.
 
+## [1.0.0] - 2026-07-20
+
+### 底栏页面切换稳定性
+
+- 路由改用 `StatefulShellRoute.indexedStack` + `NoTransitionPage`，修复底栏切换文字叠帧和状态丢失
+- 首页/搜索/"我的"各自保活
+
+### 在线歌单收藏快照
+
+- SQLite schema v4 新增 `online_playlist_favorite` 表，保存歌单元信息和曲目 JSON 快照
+- 歌单详情新增收藏按钮，"我的收藏"可离线播放和移除收藏歌单
+
+### 在线歌曲下载队列
+
+- 新增 `DownloadTask`/`DownloadStatus`、下载控制器和下载页
+- Dio 下载到应用私有目录，支持暂停/Range 续传/取消/重试/离线播放
+- SQLite v5 持久化任务状态，重启后未完成任务安全转为"已暂停"
+- 歌单详情新增"下载全部"，固定快照、去重、单曲失败不停止其余
+- 下载文件命名 `歌名 - 歌手.扩展名`，重名自动加后缀不覆盖
+
+### 本地音频导入与播放闭环
+
+- 新增 `LocalAudioScanner` 支持文件/目录递归扫描和扩展名过滤
+- 同目录封面发现、LRC/CUE 旁路识别、MP3/FLAC/M4A/Ogg/Opus/WAV 嵌入标签读取（纯 Dart）
+- CUE 单文件分轨播放：读取 FILE/TRACK/INDEX 生成分轨起止毫秒，按边界自动切歌
+- 已下载歌曲进入本地媒体库：完成且文件存在的下载任务合并为 `download` 本地 URI Track
+
+### WebDAV 远程媒体
+
+- PROPFIND 目录客户端、音频格式识别和 Track 转换
+- 凭据通过 `flutter_secure_storage` 保存，播放时运行期传递 Authorization
+- 目录本地关键词筛选和上级目录导航（纯 URI 逻辑拒绝越界）
+- WebDAV 下载复用 B6-01 的 `.part` 原子写入和 Range 续传
+- 多账号管理：非敏感账户索引 JSON 编解码，支持多账户保存/切换/删除
+- 面包屑导航：根目录到当前目录转为可点击 URI 层级
+- WebDAV 音频行新增"添加到我的列表"入口
+
+### 音乐分类
+
+- 音乐分类页提供历史/艺术家/专辑/类型/年份五个页签
+- 类型/年份读取真实 `Track.extra` 标签
+
+### 定时停止
+
+- `PlayerController` 维护会话内截止时间和"当前曲结束后停止"状态
+- 播放详情新增 15/30/45/60 分钟和当前曲结束的定时入口
+
+### 有效设置入口
+
+- "设置"与"音源管理"拆分为独立路由，设置页只导航到已有真实能力
+
+### 列表导入导出与重复检测
+
+- `PlaylistTransferCodec` 兼容桌面端 `playListPart_v2` 格式，支持单列表 JSON 导入/导出
+- 导入显示新增和跳过数量，导出不包含凭据
+- `findDuplicateTrackIds` 规范化歌名/歌手/专辑/时长后检测重复，列表详情增加"识别重复歌曲"入口
+
+### 本地资料备份与恢复
+
+- `coralMusicMobileBackup_v1` 格式备份用户列表/收藏/歌单收藏/不感兴趣规则
+- 恢复前统计预览和二次确认，单 SQLite 事务合并恢复不覆盖现有数据
+
+### 不感兴趣规则
+
+- SQLite v7 新增 `ignored_track` 表保存曲目 id 快照；播放详情新增"不喜欢"切换
+- "播放全部"建队列前过滤命中曲目，单曲点击不受影响
+- SQLite v8 新增 `ignored_keyword` 表，关键词去空格小写化去重；`filterIgnored` 同时过滤 ID 和关键词
+
+### 主题模式持久化
+
+- `ThemeModeController` 使用安全存储保存 `system/light/dark`，跨启动恢复
+- 模块边框改为 `ColorScheme.outlineVariant`，深浅色自动适配
+
+### User API HTTPS 来源恢复
+
+- `UserApiSourcePreferences` 使用安全存储保存来源名称和地址
+- 启动后自动恢复并重新下载加载脚本，不持久化脚本内容
+
+### 播放队列持久化
+
+- SQLite v9 新增 `playback_queue` 表存曲目快照/索引/模式/上下文
+- 队列 provider 串行写入状态，恢复不自动播放也不覆盖启动期间用户操作
+
+### 深链注册与路由归一化
+
+- Android/iOS/鸿蒙三端注册 `coralmusic://` scheme
+- `go_router` 统一识别 `coralmusic:///player` 与 `coralmusic://player` 等不同写法
+- 未知深链安全回落排行榜
+
+### 系统分享音频导入
+
+- Android 注册 `audio/*` 的 `ACTION_SEND`/`ACTION_SEND_MULTIPLE`，URI 复制到应用私有目录
+- 导入动作移到应用根部，由 `LibraryController` 统一创建/复用"分享导入"列表并去重
+
+### 下载文件系统导出
+
+- 已完成下载项新增"导出文件"入口，复用 `file_picker` 选择目标路径后直接复制
+
+### 搜索历史与综合搜索
+
+- SQLite v10 新增搜索关键词表，按最近时间截断为 20 条；空搜索页展示"最近搜索"Chip
+- 综合搜索模式并行请求酷我/网易云/咪咕三来源，逐项展示来源标签
+- QQ 音乐搜索：`QqCatalogService.searchTracks()` 向 `musicu.fcg` 发送桌面端同模块 JSON 请求
+- 酷狗音乐搜索：新增 `KugouCatalogService` 请求 `song_search_v2`，展开 `Grp` 去重，各音质 hash 存入 `Track.extra`
+- 综合搜索扩展为五来源并行
+
+### 默认播放音质设置
+
+- `DefaultQualityController` 安全持久化默认音质（默认 SQ FLAC）
+- `PlayerController` 使用偏好选择自动取链质量，手动切换仍优先
+
+### 排行榜卡片溢出修复
+
+- 横向榜单卡高度从 124 调整为 142，修复窄高约束下 RenderFlex 溢出
+
+### Flutter 与 Android CI
+
+- GitHub Actions 工作流执行格式检查/静态分析/单元测试/Android Debug 构建
+- 修复队列恢复在无 SQLite 环境的异常和安全存储不可用时的降级
+
+## [1.0.0] - 2026-07-17(04)
+
+### 在线歌曲收藏入口
+
+- 新增 `FavoriteTrackButton` 组件，复用 `LibraryController` 的 `favorites` 列表状态
+- 搜索、排行榜、歌单详情和播放详情统一接入收藏/取消收藏操作
+- `favoriteRevision` 递增确保按钮即时刷新
+
+### TDesign 移动端规范迁移
+
+- 因 `tdesign_flutter` 缺乏鸿蒙兼容性，决定使用 Flutter Material 组件实现 TDesign 视觉规范
+- `app_theme.dart` 统一 ColorScheme 和控件圆角（8pt 圆角、中性表面、状态色）
+- 经多轮真机回归，从灰白毛玻璃改为珊瑚暖白视觉，重写首页/搜索/我的/播放器/歌单/设置等页面
+
+## [1.0.0] - 2026-07-17(03)
+
+### 范围修订：本地优先、无服务器
+
+- 移除评论、跨设备同步、OpenAPI/局域网服务及相关发布验收任务
+- 保留在线音乐检索与播放、受限 User API、本地 SQLite、本地文件、应用目录下载、用户自配 WebDAV 和本地文件备份
+- WebDAV 明确为"用户自行配置的远程文件源"，不提供账号、同步或数据托管
+- 备份仅保留本地文件导入/导出，不上传至项目或局域网服务器
+
+### 计划修订：本地音频导入与播放闭环
+
+- 新增 B5-11 纵向任务：系统文件选择器选文件/目录、递归扫描、元数据解析、入库、播放、歌词、后台恢复
+- 目录扫描仅访问用户显式授权位置，不做静默全盘扫描
+- 本地曲目 `PlaybackResolver` 直连 `localUri`，不调用 User API 或在线取链
+- 复用 `AudioEngine`、MediaSession、进度保存和同目录歌词
+
+### 计划修订：在线收藏与下载
+
+- B5-12：在线歌曲收藏入口，复用 `favorites` 列表状态
+- B5-13：在线歌单收藏，SQLite 保存来源、歌单 ID、名称、封面和曲目快照
+- B6-01：在线歌曲下载队列，临时文件校验后原子写入应用下载目录，支持暂停/恢复/重试/取消/进程恢复
+- B6-02：歌单下载全部，固定当前快照、去重、并发排队、单曲失败不停止其余
+
+## [1.0.0] - 2026-07-17(02)
+
+### 在线封面与歌词服务补全
+
+- 酷我搜索解析补齐 `web_albumpic_short`，生成可访问 CDN 封面地址
+- 播放队列和播放详情复用同一封面
+- 歌词请求移除 manifest `lyricSources` 门控，改为已启用在线音源的受限尝试，失败返回空歌词且不影响播放
+- 播放详情显示当前质量与码率
+
+### 播放音频文件信息探测
+
+- 新增 `audio_file_probe.dart`：64KB Range 请求，解析 MP3 ID3/帧头和 FLAC STREAMINFO
+- 播放详情显示 `kbps · kHz · 容器格式 · 档位`，探测失败仅显示质量标签（不再伪回退规格）
+- SQ 语义修正：SQ = FLAC 无损，HQ = 320 kbps
+- FLAC 实际平均码率：从 `Content-Range` 总字节数与 STREAMINFO 总采样数计算
+- MP3 ID3 跳过偏移修正（`10 + size`）与 MPEG Layer I/II/III 码率表修正
+- 副信息层级调整：副标题为"歌手 · 专辑"，文件信息行仅 `kbps · kHz · 格式 · 档位`
+- 真机验证：《晴天》显示 `1643 kbps · 44 kHz · FLAC · SQ`
+
+### iOS 受限 User API 运行时
+
+- 新增 `ios/Runner/UserApiRunner.swift`，WKWebView 实现 `load`/`clear`/`resolveMusicUrl`/`resolveLyric`
+- 原生 `URLSession` 执行脚本请求（HTTPS only、GET/POST、无重定向、64KB 请求体、1MB 响应）
+- 受限 bridge 加入同步 JS MD5（`lx.utils.crypto.md5`），AES/RSA/zlib 仍拒绝
+- `flutter build ios --no-codesign` 编译通过；iOS Platform Runtime/真机验收待补
+
+### 启动恢复最近播放曲目
+
+- `PlayerController.restoreLastPlayback()` 从历史恢复最近曲目（`idle` 状态，不触碰音频引擎）
+- 用户首次 `toggle()` 才走取链并 seek 到保存位置
+- 在线曲目恢复后无音源时提示"请先导入音源"，播放详情提供"去导入音源"直达入口
+
+### 音频引擎重复错误去重
+
+- 按 `Track.id + AudioQuality` 去重，`load()` Future 异常与 `errorStream` 同次错误只处理一次
+- 引擎加载错误使用 User API 实际返回的质量（而非用户请求的质量）进行降级
+
 ## [1.0.0] - 2026-07-17(01)
 
 ### 音源 URL 导入优先与详情卡

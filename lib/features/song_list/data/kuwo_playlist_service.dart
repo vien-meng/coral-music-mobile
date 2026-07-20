@@ -12,12 +12,24 @@ final class PlaylistTag {
   final String name;
 }
 
-final class KuwoPlaylistService {
+abstract interface class PlaylistCatalogService {
+  Future<List<PlaylistTag>> getTags();
+  Future<PageResult<OnlinePlaylist>> getPopularPlaylists(
+    int page, {
+    String? tagId,
+    String sortId = 'hot',
+  });
+  Future<PageResult<OnlinePlaylist>> searchPlaylists(String query, int page);
+  Future<PlaylistDetail> getPlaylistDetail(OnlinePlaylist playlist);
+}
+
+final class KuwoPlaylistService implements PlaylistCatalogService {
   KuwoPlaylistService(this._dio);
 
   final Dio _dio;
   static const _pageSize = 30;
 
+  @override
   Future<List<PlaylistTag>> getTags() async {
     final uri =
         Uri.https('wapi.kuwo.cn', '/api/pc/classify/playlist/getTagList', {
@@ -45,6 +57,7 @@ final class KuwoPlaylistService {
     }
   }
 
+  @override
   Future<PageResult<OnlinePlaylist>> getPopularPlaylists(
     int page, {
     String? tagId,
@@ -88,6 +101,7 @@ final class KuwoPlaylistService {
     }
   }
 
+  @override
   Future<PageResult<OnlinePlaylist>> searchPlaylists(
     String query,
     int page,
@@ -148,6 +162,7 @@ final class KuwoPlaylistService {
     return tags;
   }
 
+  @override
   Future<PlaylistDetail> getPlaylistDetail(OnlinePlaylist playlist) async {
     final playlistId = playlist.id.split('__').last;
     if (playlistId.isEmpty) {

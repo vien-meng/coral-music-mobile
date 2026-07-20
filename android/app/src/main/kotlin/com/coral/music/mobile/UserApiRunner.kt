@@ -4,6 +4,7 @@ import android.app.Activity
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.util.Base64
 import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
@@ -12,12 +13,16 @@ import android.webkit.WebViewClient
 import io.flutter.plugin.common.MethodChannel
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
+import java.io.ByteArrayInputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
+import java.nio.charset.Charset
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.UUID
 import java.util.concurrent.Executors
+import java.util.zip.InflaterInputStream
 
 class UserApiRunner(private val activity: Activity) {
     private val handler = Handler(Looper.getMainLooper())
@@ -108,6 +113,61 @@ class UserApiRunner(private val activity: Activity) {
         handler.postDelayed({
             pendingLyricResults.remove(requestId)?.error("timeout", "音源歌词获取超时", null)
         }, 20_000)
+    }
+
+    fun resolveKuwoLyric(songId: String, result: MethodChannel.Result) {
+        if (!songId.matches(Regex("\\d+"))) {
+            result.error("invalid_song", "酷我歌曲标识无效", null)
+            return
+        }
+        executor.execute {
+            try {
+                val query = kuwoLyricQuery(songId)
+                val connection = (URL("http://newlyric.kuwo.cn/newlyric.lrc?$query").openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 15_000
+                    readTimeout = 15_000
+                    setRequestProperty("User-Agent", "Mozilla/5.0")
+                    setRequestProperty("Accept-Encoding", "identity")
+                }
+                if (connection.responseCode != 200) throw IllegalStateException("酷我歌词服务暂不可用")
+                val bytes = connection.inputStream.use { it.readBytes() }
+                connection.disconnect()
+                val lyric = decodeKuwoLyric(bytes)
+                if (lyric.isBlank() || !lyric.contains(Regex("\\[\\d{1,2}:"))) {
+                    throw IllegalStateException("酷我未返回可用歌词")
+                }
+                handler.post { result.success(lyric) }
+            } catch (error: Exception) {
+                handler.post { result.error("kuwo_lyric", error.message ?: "酷我歌词加载失败", null) }
+            }
+        }
+    }
+
+    private fun kuwoLyricQuery(songId: String): String {
+        val raw = "user=12345,web,web,web&requester=localhost&req=1&rid=MUSIC_$songId&lrcx=1".toByteArray()
+        val key = "yeelion".toByteArray()
+        // Node's Buffer.from(Uint16Array) copies each element's low byte.
+        val output = ByteArray(raw.size) { index ->
+            (raw[index].toInt() xor key[index % key.size].toInt()).toByte()
+        }
+        return URLEncoder.encode(
+            Base64.encodeToString(output, Base64.NO_WRAP),
+            "UTF-8",
+        )
+    }
+
+    private fun decodeKuwoLyric(payload: ByteArray): String {
+        val marker = "\r\n\r\n".toByteArray()
+        val start = payload.indices.firstOrNull { index ->
+            index + marker.size <= payload.size && marker.indices.all { payload[index + it] == marker[it] }
+        } ?: throw IllegalStateException("酷我歌词响应格式异常")
+        val inflated = InflaterInputStream(
+            ByteArrayInputStream(payload.copyOfRange(start + marker.size, payload.size)),
+        ).use { it.readBytes() }
+        val encoded = Base64.decode(String(inflated), Base64.DEFAULT)
+        val key = "yeelion".toByteArray()
+        val decoded = ByteArray(encoded.size) { index -> (encoded[index].toInt() xor key[index % key.size].toInt()).toByte() }
+        return decoded.toString(Charset.forName("GB18030"))
     }
 
     fun clear(result: MethodChannel.Result) {
@@ -240,9 +300,9 @@ class UserApiRunner(private val activity: Activity) {
         @JavascriptInterface
         fun randomBytes(size: Int): String {
             require(size in 1..4096) { "随机字节长度超出限制" }
-            return android.util.Base64.encodeToString(
+            return Base64.encodeToString(
                 ByteArray(size).also(SecureRandom()::nextBytes),
-                android.util.Base64.NO_WRAP,
+                Base64.NO_WRAP,
             )
         }
 
@@ -259,19 +319,37 @@ class UserApiRunner(private val activity: Activity) {
                     val options = JSONObject(rawOptions)
                     val method = options.optString("method", "get").uppercase()
                     if (method != "GET" && method != "POST") throw IllegalArgumentException("只允许 GET 或 POST 请求")
+                    if (options.has("formData")) throw IllegalArgumentException("当前受限运行时不支持 multipart 表单")
                     val connection = (URL(rawUrl).openConnection() as HttpURLConnection).apply {
                         requestMethod = method
                         connectTimeout = options.optInt("timeout", 15_000).coerceIn(1_000, 20_000)
                         readTimeout = connectTimeout
                         instanceFollowRedirects = false
+                        var hasContentType = false
                         options.optJSONObject("headers")?.keys()?.forEach { name ->
                             if (name.lowercase() !in setOf("host", "connection", "content-length")) {
                                 setRequestProperty(name, options.optJSONObject("headers")?.optString(name))
+                                if (name.equals("content-type", ignoreCase = true)) hasContentType = true
                             }
                         }
-                        val body = options.optString("body", "")
+                        val form = options.optJSONObject("form")
+                        val explicitBody = if (options.has("body")) {
+                            when (val rawBody = options.opt("body")) {
+                                is String -> rawBody
+                                is JSONObject, is org.json.JSONArray -> rawBody.toString()
+                                else -> ""
+                            }
+                        } else ""
+                        val body = if (explicitBody.isNotEmpty()) explicitBody
+                        else form?.keys()?.asSequence()?.joinToString("&") { key ->
+                                "${URLEncoder.encode(key, "UTF-8")}" +
+                                    "=${URLEncoder.encode(form?.optString(key) ?: "", "UTF-8")}"
+                            } ?: ""
                         if (method == "POST" && body.isNotEmpty()) {
                             require(body.toByteArray().size <= 64 * 1024) { "请求体超过大小限制" }
+                            if (form != null && !hasContentType) {
+                                setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+                            }
                             doOutput = true
                             outputStream.use { it.write(body.toByteArray()) }
                         }
@@ -316,19 +394,18 @@ class UserApiRunner(private val activity: Activity) {
                         return@post
                     }
                     val rawValue = data.opt("value")
-                    val value = when (rawValue) {
-                        is String -> rawValue
-                        is JSONObject -> rawValue.optJSONObject("data")
-                            ?.optString("url")
-                            ?.takeIf(String::isNotBlank)
-                            ?: rawValue.optString("url").takeIf(String::isNotBlank)
+                    val detail = when (rawValue) {
+                        is String -> JSONObject().put("url", rawValue)
+                        is JSONObject -> rawValue.optJSONObject("data") ?: rawValue
                         else -> null
                     } ?: throw IllegalArgumentException("音源未返回播放地址")
+                    val value = detail.optString("url").takeIf(String::isNotBlank)
+                        ?: throw IllegalArgumentException("音源未返回播放地址")
                     val uri = Uri.parse(value)
                     if (uri.scheme !in setOf("http", "https") || uri.host.isNullOrEmpty() || value.length > 8192) {
                         result.error("invalid_result", "音源未返回有效的 HTTP 播放地址", null)
                     } else {
-                        result.success(value)
+                        result.success(mapOf("url" to value, "type" to detail.optString("type")))
                     }
                 } catch (error: Exception) {
                     result.error("invalid_result", "音源未返回有效的 HTTP 播放地址", null)
@@ -343,7 +420,11 @@ class UserApiRunner(private val activity: Activity) {
                 try {
                     val data = JSONObject(rawResult)
                     if (!data.optBoolean("ok")) {
-                        result.error("invalid_result", "音源歌词获取失败", null)
+                        result.error(
+                            "source_error",
+                            data.optString("error", "音源歌词获取失败").take(1024),
+                            null,
+                        )
                         return@post
                     }
                     val value = data.opt("value")

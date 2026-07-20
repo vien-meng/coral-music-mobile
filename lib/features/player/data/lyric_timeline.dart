@@ -28,18 +28,24 @@ final class LyricWord {
 List<LyricLine> parseLyricTimeline(LyricPayload payload) {
   final translations = _parse(payload.tlyric);
   final romanizations = _parse(payload.rlyric);
-  final source = payload.lxlyric.contains(RegExp(r'<\d+,\d+>'))
-      ? payload.lxlyric
-      : payload.lyric;
+  final rawSource =
+      payload.lxlyric.isNotEmpty ? payload.lxlyric : payload.lyric;
+  final kuwoRelativeWords = RegExp(r'<-?\d+,-\d+').hasMatch(rawSource);
+  final source = _normalizeKuwoWordTiming(rawSource);
   final offset = _parseOffset(source);
   final originals = _parse(source).values.toList()
     ..sort((left, right) => left.at.compareTo(right.at));
   return originals.map(
     (line) {
-      final words = _parseWords(line.text, offset);
+      final words = _parseWords(
+        line.text,
+        offset + (kuwoRelativeWords ? line.at : Duration.zero),
+      );
       return LyricLine(
         at: line.at + offset,
-        text: words.isEmpty ? line.text : words.map((word) => word.text).join(),
+        text: words.isEmpty
+            ? _stripWordMarkers(line.text)
+            : words.map((word) => word.text).join(),
         translation: translations[line.at.inMilliseconds]?.text,
         romanization: romanizations[line.at.inMilliseconds]?.text,
         words: words,
@@ -55,10 +61,8 @@ List<LyricWord> _parseWords(String raw, Duration offset) {
   final words = <LyricWord>[];
   for (var index = 0; index < matches.length; index++) {
     final match = matches[index];
-    final text = raw.substring(
-      match.end,
-      index + 1 < matches.length ? matches[index + 1].start : raw.length,
-    );
+    final text = '${index == 0 ? raw.substring(0, match.start) : ''}'
+        '${raw.substring(match.end, index + 1 < matches.length ? matches[index + 1].start : raw.length)}';
     if (text.trim().isEmpty) continue;
     words.add(LyricWord(
       start: Duration(milliseconds: int.parse(match.group(1)!)) + offset,
@@ -67,6 +71,65 @@ List<LyricWord> _parseWords(String raw, Duration offset) {
     ));
   }
   return words;
+}
+
+String _stripWordMarkers(String raw) =>
+    raw.replaceAll(RegExp(r'<-?\d+,-?\d+(?:,-?\d+)?>'), '');
+
+/// Converts Kuwo's signed word offsets to the desktop-compatible LX form.
+///
+/// Kuwo encodes each word as `<offset,delta>` and calibrates it with `[kuwo:]`.
+/// The desktop client performs this conversion before rendering karaoke lyrics.
+String _normalizeKuwoWordTiming(String raw) {
+  final signedTag = RegExp(r'<-?\d+,-?\d+(?:,-?\d+)?>');
+  if (!signedTag.hasMatch(raw) || !RegExp(r'<-?\d+,-\d+').hasMatch(raw)) {
+    return raw;
+  }
+
+  var offset = 1;
+  var offset2 = 1;
+  return raw.split(RegExp(r'\r?\n')).map((line) {
+    final kuwo = RegExp(r'\[kuwo:\s*([^\]]+)]', caseSensitive: false)
+        .firstMatch(line)
+        ?.group(1);
+    if (kuwo != null) {
+      final value = int.tryParse(kuwo.trim(), radix: 8);
+      if (value != null) {
+        final first = value ~/ 10;
+        final second = value % 10;
+        if (first != 0 && second != 0) {
+          offset = first;
+          offset2 = second;
+        }
+      }
+    }
+    final tags = signedTag.allMatches(line).toList();
+    if (tags.isEmpty) return line;
+
+    final starts = <int>[];
+    final ends = <int>[];
+    for (final tag in tags) {
+      final first = int.parse(tag.group(0)!.split(RegExp(r'[<,>]'))[1]);
+      final second = int.parse(tag.group(0)!.split(RegExp(r'[<,>]'))[2]);
+      final start = ((first + second).abs() / (offset * 2)).round();
+      final end = ((first - second).abs() / (offset2 * 2)).round() + start;
+      if (ends.isNotEmpty && start < ends.last) {
+        ends[ends.length - 1] = start < starts.last ? starts.last : start;
+      }
+      starts.add(start);
+      ends.add(end);
+    }
+    final normalized = StringBuffer();
+    var cursor = 0;
+    for (var index = 0; index < tags.length; index++) {
+      final tag = tags[index];
+      normalized.write(line.substring(cursor, tag.start));
+      normalized.write('<${starts[index]},${ends[index] - starts[index]}>');
+      cursor = tag.end;
+    }
+    normalized.write(line.substring(cursor));
+    return normalized.toString();
+  }).join('\n');
 }
 
 Duration _parseOffset(String raw) {
