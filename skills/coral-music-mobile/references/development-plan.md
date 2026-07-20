@@ -230,10 +230,10 @@
 ### Phase 7：收口与发布（4–7 周）
 
 - `P7-01 [DOING]` Android/iOS/OpenHarmony 已注册 `coralmusic://`；Android 真机已成功由系统启动 Activity，B7-02 已增加 Android `audio/*` 系统分享接收、私有文件复制和“分享导入”列表衔接；B7-03 将分享消费移动至应用根部，保证所有导航页面均可接收；B7-04 已归一化 `coralmusic:///player` 与 `coralmusic://player` 等链接的 Flutter 路由落点。真实文件分享、iOS/鸿蒙系统回调与 Android 完整落点仍待继续。记录：`development-history/2026-07-20-111-p7-01-deep-link-registration.md`、`development-history/2026-07-20-112-p7-02-android-shared-audio-import.md`、`development-history/2026-07-20-115-p7-03-global-shared-audio-import.md`、`development-history/2026-07-20-119-p7-04-deep-link-route-normalization.md`。
-- `P7-02 [DOING]` 包名保持 `com.coral.music.mobile`，首个 Android 业务版本已锁定为 `1.0.0+1`；正式签名、图标、启动页、权限文案和隐私清单仍待完成。记录：`development-history/2026-07-20-143-p7-05-android-1-0-0-apk.md`。
+- `P7-02 [DOING]` 包名保持 `com.coral.music.mobile`，首个 Android 业务版本已锁定为 `1.0.0+1`；正式 JKS 已生成并接入 Gradle，图标、启动页、权限文案和隐私清单仍待完成。记录：`development-history/2026-07-20-143-p7-05-android-1-0-0-apk.md`。
 - `P7-03` 弱网、断网、网络切换、低内存、来电、耳机断开和进程终止测试。
 - `P7-04` 性能、无障碍、国际化、敏感信息和依赖漏洞检查。
-- `P7-05 [DOING]` 正在生成 Android `1.0.0` Release 模式 APK；当前仍为 debug 签名内测产物，TestFlight、AAB、HAP、正式签名和三端同版回归待继续。记录：`development-history/2026-07-20-143-p7-05-android-1-0-0-apk.md`。
+- `P7-05 [DOING]` Android `1.0.0+1` Release 模式 APK 已使用正式 JKS 签名并通过 `apksigner` 验证；TestFlight、AAB、HAP、正式签名包真机覆盖安装和三端同版回归待继续。记录：`development-history/2026-07-20-143-p7-05-android-1-0-0-apk.md`。
 - `P7-06` 商店素材、审核说明和动态脚本/后台音频能力说明。
 
 ## 任务依赖
