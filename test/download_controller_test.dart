@@ -75,4 +75,49 @@ void main() {
       await directory.delete(recursive: true);
     }
   });
+
+  test('only allows a strictly higher quality after download completes', () {
+    final completed = task(DownloadStatus.completed, '/tmp/test.mp3');
+
+    expect(
+      DownloadController.canEnqueueQuality(
+        [completed],
+        track,
+        AudioQuality.flac24bit,
+      ),
+      isTrue,
+    );
+    expect(
+      DownloadController.canEnqueueQuality(
+        [completed],
+        track,
+        null,
+      ),
+      isFalse,
+    );
+    expect(
+      DownloadController.canEnqueueQuality(
+        [completed],
+        track,
+        AudioQuality.flac,
+      ),
+      isFalse,
+    );
+    expect(
+      DownloadController.canEnqueueQuality(
+        [completed],
+        track,
+        AudioQuality.high320k,
+      ),
+      isFalse,
+    );
+    expect(
+      DownloadController.canEnqueueQuality(
+        [task(DownloadStatus.downloading, '/tmp/test.flac')],
+        track,
+        AudioQuality.flac24bit,
+      ),
+      isFalse,
+    );
+  });
 }

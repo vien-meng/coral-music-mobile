@@ -21,27 +21,24 @@ final downloadProvider =
 
 final class DownloadController extends StateNotifier<List<DownloadTask>> {
   DownloadController(this._resolver, this._store) : super(const []) {
-    unawaited(load());
+    _ready = load();
   }
 
   final PlaybackResolver _resolver;
   final LibraryStore _store;
+  late final Future<void> _ready;
   final _cancelTokens = <String, CancelToken>{};
   final _paused = <String>{};
   final _waiting = <DownloadTask>[];
   var _draining = false;
 
   Future<bool> enqueue(Track track, {AudioQuality? quality}) async {
+    await _ready;
     if (track.sourceKind != TrackSourceKind.online &&
         track.sourceKind != TrackSourceKind.webdav) {
       return false;
     }
-    if (state.any((task) =>
-        task.track.id == track.id &&
-        task.status != DownloadStatus.failed &&
-        task.status != DownloadStatus.cancelled)) {
-      return false;
-    }
+    if (!canEnqueueQuality(state, track, quality)) return false;
     final selectedQuality =
         quality ?? defaultPlaybackQuality(track.availableQualities);
     final id = '${track.id}:${DateTime.now().microsecondsSinceEpoch}';
@@ -57,6 +54,21 @@ final class DownloadController extends StateNotifier<List<DownloadTask>> {
     _schedule(task);
     return true;
   }
+
+  static bool canEnqueueQuality(
+    Iterable<DownloadTask> tasks,
+    Track track,
+    AudioQuality? quality,
+  ) =>
+      !tasks.any(
+        (task) =>
+            task.track.id == track.id &&
+            task.status != DownloadStatus.failed &&
+            task.status != DownloadStatus.cancelled &&
+            (task.status != DownloadStatus.completed ||
+                quality == null ||
+                task.quality.index <= quality.index),
+      );
 
   Future<({int added, int skipped})> enqueueAll(Iterable<Track> tracks) async {
     var added = 0;
@@ -205,6 +217,7 @@ final class DownloadController extends StateNotifier<List<DownloadTask>> {
       final offset = await File(temporary).length().onError((_, __) => 0);
       current = _task(task,
           status: DownloadStatus.downloading,
+          quality: playback.quality ?? task.quality,
           targetPath: target,
           progress: offset == 0 ? 0 : task.progress);
       _replace(current,
@@ -287,6 +300,7 @@ final class DownloadController extends StateNotifier<List<DownloadTask>> {
   DownloadTask _task(
     DownloadTask task, {
     required DownloadStatus status,
+    AudioQuality? quality,
     String? targetPath,
     double? progress,
     String? error,
@@ -294,7 +308,7 @@ final class DownloadController extends StateNotifier<List<DownloadTask>> {
       DownloadTask(
         id: task.id,
         track: task.track,
-        quality: task.quality,
+        quality: quality ?? task.quality,
         status: status,
         targetPath: targetPath ?? task.targetPath,
         createdAt: task.createdAt,

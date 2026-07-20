@@ -70,4 +70,13 @@ void main() {
     expect(
         lines.single.words.first.duration, const Duration(milliseconds: 176));
   });
+
+  test('keeps untimed lyrics as readable fallback lines', () {
+    expect(
+      parsePlainLyricLines(const LyricPayload(
+        lyric: '[ar:歌手]\n第一句\n[00:00.00]第二句\n<100,200>第三句',
+      )),
+      ['第一句', '第二句', '第三句'],
+    );
+  });
 }

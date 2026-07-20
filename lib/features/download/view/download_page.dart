@@ -4,8 +4,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/cover_image.dart';
 import '../../../app/app_theme.dart';
+import '../../../app/audio_quality_labels.dart';
+import '../../../app/cover_image.dart';
 import '../../../domain/music.dart';
 import '../../player/state/player_controller.dart';
 import '../state/download_controller.dart';
@@ -98,6 +99,23 @@ class _DownloadRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.read(downloadProvider.notifier);
     final isActive = task.status == DownloadStatus.downloading;
+    final fileName = task.targetPath.isEmpty
+        ? null
+        : File(task.targetPath).uri.pathSegments.last;
+    final extension = _extension(fileName);
+    final tasks = ref.watch(downloadProvider);
+    final upgrades = task.status == DownloadStatus.completed
+        ? AudioQuality.values
+            .where((quality) =>
+                quality.index < task.quality.index &&
+                task.track.availableQualities.contains(quality) &&
+                DownloadController.canEnqueueQuality(
+                  tasks,
+                  task.track,
+                  quality,
+                ))
+            .toList(growable: false)
+        : const <AudioQuality>[];
     return InkWell(
       borderRadius: BorderRadius.circular(12),
       onTap: task.status != DownloadStatus.completed || task.targetPath.isEmpty
@@ -131,12 +149,17 @@ class _DownloadRow extends ConsumerWidget {
           Expanded(
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(task.track.title,
+              Text(fileName ?? task.track.title,
                   maxLines: 1, overflow: TextOverflow.ellipsis),
               const SizedBox(height: 3),
               Text(
-                  task.error ??
-                      '${_label(task.status)} · ${(task.progress * 100).round()}%',
+                  [
+                    task.error ?? _label(task.status),
+                    if (task.status != DownloadStatus.completed)
+                      '${(task.progress * 100).round()}%',
+                    if (extension != null) extension,
+                    audioQualityLabel(task.quality),
+                  ].join(' · '),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall),
@@ -171,17 +194,49 @@ class _DownloadRow extends ConsumerWidget {
           else if (task.status == DownloadStatus.completed ||
               task.status == DownloadStatus.cancelled)
             Row(mainAxisSize: MainAxisSize.min, children: [
-              if (task.status == DownloadStatus.completed)
+              if (upgrades.isNotEmpty)
                 IconButton(
-                  tooltip: '导出文件',
-                  icon: const Icon(Icons.file_upload_outlined),
-                  onPressed: () => _export(context),
+                  tooltip: '升级音质',
+                  icon: const Icon(Icons.upgrade),
+                  onPressed: () => _upgrade(context, controller, upgrades),
                 ),
-              IconButton(
-                tooltip: '移除下载',
-                icon: const Icon(Icons.delete_outline),
-                onPressed: () => controller.remove(task),
-              ),
+              if (task.status == DownloadStatus.completed)
+                PopupMenuButton<_CompletedAction>(
+                  tooltip: '更多操作',
+                  icon: const Icon(Icons.more_horiz),
+                  onSelected: (action) {
+                    switch (action) {
+                      case _CompletedAction.export:
+                        _export(context);
+                      case _CompletedAction.remove:
+                        controller.remove(task);
+                    }
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: _CompletedAction.export,
+                      child: Row(children: [
+                        Icon(Icons.file_upload_outlined),
+                        SizedBox(width: 12),
+                        Text('导出文件'),
+                      ]),
+                    ),
+                    PopupMenuItem(
+                      value: _CompletedAction.remove,
+                      child: Row(children: [
+                        Icon(Icons.delete_outline),
+                        SizedBox(width: 12),
+                        Text('移除下载'),
+                      ]),
+                    ),
+                  ],
+                )
+              else
+                IconButton(
+                  tooltip: '移除下载',
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: () => controller.remove(task),
+                ),
             ])
           else
             const Icon(Icons.download_outlined),
@@ -198,6 +253,61 @@ class _DownloadRow extends ConsumerWidget {
         DownloadStatus.failed => '下载失败',
         DownloadStatus.cancelled => '已取消',
       };
+
+  String? _extension(String? fileName) {
+    if (fileName == null) return null;
+    final dot = fileName.lastIndexOf('.');
+    if (dot < 1 || dot == fileName.length - 1) return null;
+    return fileName.substring(dot + 1).toUpperCase();
+  }
+
+  Future<void> _upgrade(
+    BuildContext context,
+    DownloadController controller,
+    List<AudioQuality> qualities,
+  ) async {
+    final quality = await showModalBottomSheet<AudioQuality>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(sheetContext).height * .7,
+          ),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            ListTile(
+              title: const Text('升级下载音质'),
+              subtitle: Text('当前 ${audioQualityLabel(task.quality)}'),
+            ),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final item in qualities)
+                    ListTile(
+                      leading: const Icon(Icons.download_outlined),
+                      title: Text(audioQualityLabel(item)),
+                      subtitle: Text(audioQualityDescription(item)),
+                      onTap: () => Navigator.pop(sheetContext, item),
+                    ),
+                ],
+              ),
+            ),
+          ]),
+        ),
+      ),
+    );
+    if (quality == null) return;
+    final added = await controller.enqueue(task.track, quality: quality);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(added
+            ? '已加入 ${audioQualityLabel(quality)} 下载任务'
+            : '相同或更高音质已在下载列表中'),
+      ),
+    );
+  }
 
   Future<void> _export(BuildContext context) async {
     final source = File(task.targetPath);
@@ -228,6 +338,8 @@ class _DownloadRow extends ConsumerWidget {
     }
   }
 }
+
+enum _CompletedAction { export, remove }
 
 class _DownloadArtwork extends StatelessWidget {
   const _DownloadArtwork({required this.uri});

@@ -9,6 +9,7 @@ import '../../library/view/playlist_picker.dart';
 import '../../player/state/playback_queue_controller.dart';
 import '../../player/state/player_controller.dart';
 import '../state/search_controller.dart';
+import 'search_discovery.dart';
 
 class SearchPage extends ConsumerStatefulWidget {
   const SearchPage({super.key});
@@ -29,7 +30,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(searchProvider);
-    final hotTerms = ref.watch(kuwoHotSearchProvider);
+    final hotTerms = ref.watch(hotSearchProvider);
     return RefreshIndicator(
       color: CoralPalette.mint,
       onRefresh: ref.read(searchProvider.notifier).refresh,
@@ -68,7 +69,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
           ],
           const SizedBox(height: 22),
           if (state.tracks.isEmpty && state.query.isEmpty)
-            _DiscoverySearch(
+            SearchDiscovery(
               terms: hotTerms,
               history: state.history,
               onSelected: (term) {
@@ -77,7 +78,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                 setState(() {});
               },
               onClearHistory: ref.read(searchProvider.notifier).clearHistory,
-              onRetry: () => ref.invalidate(kuwoHotSearchProvider),
+              onRetry: () => ref.invalidate(hotSearchProvider),
             )
           else
             _SearchResults(
@@ -176,179 +177,6 @@ class _SearchHeader extends ConsumerWidget {
 }
 
 enum _SearchMenuAction { combined, kuwo, kugou, qq, netease, migu }
-
-class _DiscoverySearch extends StatelessWidget {
-  const _DiscoverySearch({
-    required this.terms,
-    required this.history,
-    required this.onSelected,
-    required this.onClearHistory,
-    required this.onRetry,
-  });
-
-  final AsyncValue<List<String>> terms;
-  final List<String> history;
-  final ValueChanged<String> onSelected;
-  final VoidCallback onClearHistory;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (history.isNotEmpty) ...[
-            Row(children: [
-              Text('最近搜索',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleLarge
-                      ?.copyWith(fontWeight: FontWeight.w800)),
-              const Spacer(),
-              IconButton(
-                tooltip: '清空搜索历史',
-                icon: const Icon(Icons.delete_outline),
-                onPressed: onClearHistory,
-              ),
-            ]),
-            const SizedBox(height: 4),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final term in history)
-                  ActionChip(
-                    label: Text(term),
-                    onPressed: () => onSelected(term),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 26),
-          ],
-          Text('热门搜索',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge
-                  ?.copyWith(fontWeight: FontWeight.w800)),
-          const SizedBox(height: 10),
-          terms.when(
-            loading: () => const Padding(
-              padding: EdgeInsets.symmetric(vertical: 32),
-              child: Center(child: CircularProgressIndicator()),
-            ),
-            error: (_, __) => Center(
-              child: TextButton.icon(
-                onPressed: onRetry,
-                icon: const Icon(Icons.refresh_rounded),
-                label: const Text('热搜词加载失败，点击重试'),
-              ),
-            ),
-            data: (items) => items.isEmpty
-                ? const _EmptySearchSection(message: '暂无热搜词')
-                : Column(
-                    children: [
-                      for (var index = 0; index < items.take(8).length; index++)
-                        _HotTermRow(
-                          rank: index + 1,
-                          term: items[index],
-                          onTap: () => onSelected(items[index]),
-                        ),
-                    ],
-                  ),
-          ),
-          const SizedBox(height: 26),
-          Text('推荐歌手',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge
-                  ?.copyWith(fontWeight: FontWeight.w800)),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 108,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: _artists.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 12),
-              itemBuilder: (context, index) {
-                final artist = _artists[index];
-                return SizedBox(
-                  width: 76,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(18),
-                    onTap: () => onSelected(artist.name),
-                    child: Column(
-                      children: [
-                        Container(
-                          width: 66,
-                          height: 66,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: LinearGradient(colors: artist.colors),
-                          ),
-                          child: const Icon(Icons.person_rounded,
-                              color: Colors.white),
-                        ),
-                        const SizedBox(height: 7),
-                        Text(artist.name,
-                            maxLines: 1, overflow: TextOverflow.ellipsis),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            '点击歌手卡片会直接发起真实歌曲搜索',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
-      );
-}
-
-class _HotTermRow extends StatelessWidget {
-  const _HotTermRow(
-      {required this.rank, required this.term, required this.onTap});
-
-  final int rank;
-  final String term;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Material(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(8),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(8),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 26,
-                  child: Text(
-                    '$rank',
-                    style: TextStyle(
-                      color: rank <= 3
-                          ? const Color(0xffff776c)
-                          : Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                Expanded(
-                    child: Text(term,
-                        maxLines: 1, overflow: TextOverflow.ellipsis)),
-                Icon(Icons.north_east_rounded,
-                    size: 17,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant),
-              ],
-            ),
-          ),
-        ),
-      );
-}
 
 class _SearchResults extends ConsumerWidget {
   const _SearchResults({required this.state, required this.onPlay});
@@ -560,17 +388,3 @@ class _Pagination extends ConsumerWidget {
         ),
       );
 }
-
-class _ArtistSuggestion {
-  const _ArtistSuggestion(this.name, this.colors);
-
-  final String name;
-  final List<Color> colors;
-}
-
-const _artists = [
-  _ArtistSuggestion('周杰伦', [CoralPalette.periwinkle, CoralPalette.player]),
-  _ArtistSuggestion('Taylor Swift', [CoralPalette.pink, CoralPalette.lilac]),
-  _ArtistSuggestion('陈奕迅', [CoralPalette.peach, CoralPalette.mint]),
-  _ArtistSuggestion('G.E.M.', [CoralPalette.sky, CoralPalette.mint]),
-];

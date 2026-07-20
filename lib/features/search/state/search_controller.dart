@@ -6,14 +6,14 @@ import '../../../domain/music.dart';
 import '../../library/data/library_store.dart';
 import '../../leaderboard/data/online_catalog_service.dart';
 import '../../leaderboard/state/leaderboard_controller.dart';
-import '../data/kuwo_hot_search_service.dart';
+import '../data/hot_search_service.dart';
 
-final kuwoHotSearchServiceProvider = Provider<KuwoHotSearchService>(
-  (ref) => KuwoHotSearchService(createHttpClient()),
+final hotSearchServiceProvider = Provider<HotSearchService>(
+  (ref) => HotSearchService(createHttpClient()),
 );
 
-final kuwoHotSearchProvider = FutureProvider<List<String>>(
-  (ref) => ref.watch(kuwoHotSearchServiceProvider).load(),
+final hotSearchProvider = FutureProvider<List<String>>(
+  (ref) => ref.watch(hotSearchServiceProvider).load(),
 );
 
 final searchProvider = StateNotifierProvider<SearchController, SearchState>(
