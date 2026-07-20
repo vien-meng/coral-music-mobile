@@ -17,6 +17,7 @@ final class LibraryState {
     this.selectedPlaylist,
     this.tracks = const [],
     this.favoriteOnlinePlaylists = const [],
+    this.favoriteAlbums = const [],
     this.favoriteRevision = 0,
     this.playlistFavoriteRevision = 0,
     this.isLoading = false,
@@ -27,6 +28,7 @@ final class LibraryState {
   final UserPlaylist? selectedPlaylist;
   final List<Track> tracks;
   final List<PlaylistDetail> favoriteOnlinePlaylists;
+  final List<FavoriteAlbum> favoriteAlbums;
   final int favoriteRevision;
   final int playlistFavoriteRevision;
   final bool isLoading;
@@ -37,6 +39,7 @@ final class LibraryState {
     UserPlaylist? selectedPlaylist,
     List<Track>? tracks,
     List<PlaylistDetail>? favoriteOnlinePlaylists,
+    List<FavoriteAlbum>? favoriteAlbums,
     int? favoriteRevision,
     int? playlistFavoriteRevision,
     bool? isLoading,
@@ -52,6 +55,7 @@ final class LibraryState {
         tracks: clearSelectedPlaylist ? const [] : tracks ?? this.tracks,
         favoriteOnlinePlaylists:
             favoriteOnlinePlaylists ?? this.favoriteOnlinePlaylists,
+        favoriteAlbums: favoriteAlbums ?? this.favoriteAlbums,
         favoriteRevision: favoriteRevision ?? this.favoriteRevision,
         playlistFavoriteRevision:
             playlistFavoriteRevision ?? this.playlistFavoriteRevision,
@@ -189,6 +193,7 @@ final class LibraryController extends StateNotifier<LibraryState> {
           ),
           tracks: await _store.listFavorites(),
           favoriteOnlinePlaylists: await _store.listFavoriteOnlinePlaylists(),
+          favoriteAlbums: await _store.listFavoriteAlbums(),
           isLoading: false,
           clearError: true,
         );
@@ -312,6 +317,32 @@ final class LibraryController extends StateNotifier<LibraryState> {
         error: AppFailure(
           code: AppFailureCode.unknown,
           message: '收藏歌单失败',
+          diagnostic: error.runtimeType.toString(),
+        ),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> toggleFavoriteAlbum(String name, List<Track> tracks) async {
+    if (state.isLoading) return false;
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final favorite = await _store.toggleFavoriteAlbum(name, tracks);
+      state = state.copyWith(
+        favoriteAlbums: state.selectedPlaylist?.id == LibraryStore.favoritesId
+            ? await _store.listFavoriteAlbums()
+            : null,
+        isLoading: false,
+        clearError: true,
+      );
+      return favorite;
+    } on Object catch (error) {
+      state = state.copyWith(
+        isLoading: false,
+        error: AppFailure(
+          code: AppFailureCode.unknown,
+          message: '收藏专辑失败',
           diagnostic: error.runtimeType.toString(),
         ),
       );

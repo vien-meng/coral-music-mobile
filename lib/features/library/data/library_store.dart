@@ -32,7 +32,7 @@ bool matchesIgnoredKeyword(Track track, String keyword) => [
 
 final class LibraryStore {
   static const _databaseName = 'coral_music.db';
-  static const _schemaVersion = 10;
+  static const _schemaVersion = 11;
   static const favoritesId = 'favorites';
 
   late final Future<Database> _database = _open();
@@ -113,6 +113,7 @@ final class LibraryStore {
       playlists: tracks,
       favorites: await listFavorites(),
       onlineFavorites: await listFavoriteOnlinePlaylists(),
+      favoriteAlbums: await listFavoriteAlbums(),
       ignoredTracks: await listIgnoredTracks(),
       ignoredKeywords: await listIgnoredKeywords(),
     ));
@@ -254,6 +255,13 @@ final class LibraryStore {
             },
             conflictAlgorithm: ConflictAlgorithm.ignore);
       }
+      for (final album in backup.favoriteAlbums) {
+        await transaction.insert(
+          'album_favorite',
+          _favoriteAlbumToRow(album, savedAt: now.millisecondsSinceEpoch),
+          conflictAlgorithm: ConflictAlgorithm.ignore,
+        );
+      }
       var ignoredCount = 0;
       for (final track in backup.ignoredTracks) {
         ignoredCount += await transaction.insert(
@@ -339,9 +347,11 @@ final class LibraryStore {
 
   Future<List<Track>> listLibraryTracks() async {
     final playlists = await listPlaylists();
+    final albums = await listFavoriteAlbums();
     final lists = await Future.wait([
       ...playlists.map((playlist) => listTracks(playlist.id)),
       listFavorites(),
+      ...albums.map((album) async => album.tracks),
     ]);
     final downloaded = (await Future.wait(
       (await listDownloadTasks())
@@ -666,6 +676,57 @@ final class LibraryStore {
     });
   }
 
+  Future<List<FavoriteAlbum>> listFavoriteAlbums() async {
+    final database = await _database;
+    final rows =
+        await database.query('album_favorite', orderBy: 'saved_at DESC');
+    return rows
+        .map(
+          (row) => FavoriteAlbum(
+            key: row['album_key']! as String,
+            name: row['name']! as String,
+            artist: row['artist']! as String,
+            coverUri: Uri.tryParse('${row['cover_uri'] ?? ''}'),
+            tracks: (jsonDecode(row['tracks_json']! as String) as List)
+                .whereType<String>()
+                .map(_trackFromSnapshot)
+                .toList(growable: false),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  Future<bool> toggleFavoriteAlbum(String name, List<Track> tracks) async {
+    if (name.trim().isEmpty || tracks.isEmpty) return false;
+    final database = await _database;
+    final album = _favoriteAlbum(name, tracks);
+    return database.transaction((transaction) async {
+      final exists = await transaction.query(
+        'album_favorite',
+        columns: const ['album_key'],
+        where: 'album_key = ?',
+        whereArgs: [album.key],
+        limit: 1,
+      );
+      if (exists.isNotEmpty) {
+        await transaction.delete(
+          'album_favorite',
+          where: 'album_key = ?',
+          whereArgs: [album.key],
+        );
+        return false;
+      }
+      await transaction.insert(
+        'album_favorite',
+        _favoriteAlbumToRow(
+          album,
+          savedAt: DateTime.now().millisecondsSinceEpoch,
+        ),
+      );
+      return true;
+    });
+  }
+
   Future<List<DownloadTask>> listDownloadTasks() async {
     final database = await _database;
     final rows =
@@ -806,6 +867,7 @@ final class LibraryStore {
           await _createV8(database);
           await _createV9(database);
           await _createV10(database);
+          await _createV11(database);
         },
         onUpgrade: (database, oldVersion, _) async {
           if (oldVersion < 1) await _createV1(database);
@@ -818,6 +880,7 @@ final class LibraryStore {
           if (oldVersion < 8) await _createV8(database);
           if (oldVersion < 9) await _createV9(database);
           if (oldVersion < 10) await _createV10(database);
+          if (oldVersion < 11) await _createV11(database);
         },
       );
 
@@ -916,6 +979,17 @@ final class LibraryStore {
     CREATE TABLE search_history (
       keyword TEXT PRIMARY KEY NOT NULL,
       searched_at INTEGER NOT NULL
+    )
+  ''');
+
+  Future<void> _createV11(DatabaseExecutor database) => database.execute('''
+    CREATE TABLE album_favorite (
+      album_key TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      artist TEXT NOT NULL,
+      cover_uri TEXT,
+      tracks_json TEXT NOT NULL,
+      saved_at INTEGER NOT NULL
     )
   ''');
 
@@ -1056,6 +1130,38 @@ final class LibraryStore {
 
   String _onlinePlaylistKey(OnlinePlaylist playlist) =>
       '${playlist.source.id}:${playlist.id}';
+
+  FavoriteAlbum _favoriteAlbum(String name, List<Track> tracks) {
+    final first = tracks.first;
+    final albumId =
+        '${first.extra['albumId'] ?? first.extra['albumMid'] ?? ''}'.trim();
+    final artist = first.artist.trim();
+    final key = albumId.isNotEmpty
+        ? '${first.sourceId}:$albumId'
+        : '${first.sourceId}:${name.trim().toLowerCase()}:${artist.toLowerCase()}';
+    return FavoriteAlbum(
+      key: key,
+      name: name.trim(),
+      artist: artist,
+      coverUri: first.coverUri,
+      tracks: tracks,
+    );
+  }
+
+  Map<String, Object?> _favoriteAlbumToRow(
+    FavoriteAlbum album, {
+    required int savedAt,
+  }) =>
+      {
+        'album_key': album.key,
+        'name': album.name,
+        'artist': album.artist,
+        'cover_uri': album.coverUri?.toString(),
+        'tracks_json': jsonEncode(
+          album.tracks.map(_trackSnapshot).toList(growable: false),
+        ),
+        'saved_at': savedAt,
+      };
 
   String _onlinePlaylistSnapshot(OnlinePlaylist playlist) => jsonEncode({
         'id': playlist.id,

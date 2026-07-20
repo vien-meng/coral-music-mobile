@@ -139,6 +139,22 @@ final class PlaylistDetail {
   final List<Track> tracks;
 }
 
+final class FavoriteAlbum {
+  const FavoriteAlbum({
+    required this.key,
+    required this.name,
+    required this.tracks,
+    this.artist = '',
+    this.coverUri,
+  });
+
+  final String key;
+  final String name;
+  final String artist;
+  final Uri? coverUri;
+  final List<Track> tracks;
+}
+
 final class UserPlaylist {
   const UserPlaylist({
     required this.id,

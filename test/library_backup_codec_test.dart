@@ -23,6 +23,9 @@ void main() {
       favorites: [track],
       onlineFavorites: [],
       ignoredTracks: [track],
+      favoriteAlbums: [
+        FavoriteAlbum(key: 'kw:album-1', name: '专辑', tracks: [track])
+      ],
     ));
     final decoded = LibraryBackupCodec.decode(raw);
 
@@ -30,6 +33,7 @@ void main() {
     expect(decoded.playlists.single.tracks.single.id, track.id);
     expect(decoded.favorites.single.id, track.id);
     expect(decoded.ignoredTracks.single.id, track.id);
+    expect(decoded.favoriteAlbums.single.tracks.single.id, track.id);
   });
 
   test('rejects another JSON document instead of treating it as a backup', () {

@@ -59,6 +59,7 @@ class _PlaylistSquare extends ConsumerWidget {
                   for (final source in const [
                     OnlineSource.kuwo,
                     OnlineSource.qq,
+                    OnlineSource.migu,
                   ])
                     CheckedPopupMenuItem(
                       value: source,
@@ -99,15 +100,15 @@ class _PlaylistSquare extends ConsumerWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
           child: TextField(
-            enabled: state.source != OnlineSource.qq,
+            enabled: state.source == OnlineSource.kuwo,
             textInputAction: TextInputAction.search,
-            onSubmitted: state.source == OnlineSource.qq
+            onSubmitted: state.source != OnlineSource.kuwo
                 ? null
                 : ref.read(songListProvider.notifier).submitSearch,
             decoration: InputDecoration(
-              hintText: state.source == OnlineSource.qq
-                  ? 'QQ 歌单关键词搜索暂未接入'
-                  : '搜索歌单（清空并搜索可返回广场）',
+              hintText: state.source == OnlineSource.kuwo
+                  ? '搜索歌单（清空并搜索可返回广场）'
+                  : '${state.source.label}歌单关键词搜索暂未接入',
               prefixIcon: Icon(Icons.search_outlined),
               isDense: true,
             ),

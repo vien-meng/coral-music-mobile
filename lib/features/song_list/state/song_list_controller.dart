@@ -4,6 +4,7 @@ import '../../../core/app_failure.dart';
 import '../../../core/http_client.dart';
 import '../../../domain/music.dart';
 import '../data/kuwo_playlist_service.dart';
+import '../data/migu_playlist_service.dart';
 import '../data/qq_playlist_service.dart';
 
 final playlistCatalogServicesProvider =
@@ -13,6 +14,7 @@ final playlistCatalogServicesProvider =
     return {
       OnlineSource.kuwo: KuwoPlaylistService(dio),
       OnlineSource.qq: QqPlaylistService(dio),
+      OnlineSource.migu: MiguPlaylistService(dio),
     };
   },
 );

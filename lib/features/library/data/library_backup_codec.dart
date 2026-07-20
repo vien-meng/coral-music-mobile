@@ -9,12 +9,14 @@ final class LibraryBackup {
     required this.favorites,
     required this.onlineFavorites,
     required this.ignoredTracks,
+    this.favoriteAlbums = const [],
     this.ignoredKeywords = const [],
   });
 
   final List<ImportedPlaylist> playlists;
   final List<Track> favorites;
   final List<PlaylistDetail> onlineFavorites;
+  final List<FavoriteAlbum> favoriteAlbums;
   final List<Track> ignoredTracks;
   final List<String> ignoredKeywords;
 
@@ -44,6 +46,7 @@ final class LibraryBackupCodec {
               .toList(growable: false),
           'onlineFavorites':
               backup.onlineFavorites.map(_onlineFavorite).toList(),
+          'favoriteAlbums': backup.favoriteAlbums.map(_favoriteAlbum).toList(),
           'ignoredTracks': backup.ignoredTracks
               .map(PlaylistTransferCodec.encodeTrack)
               .toList(growable: false),
@@ -61,12 +64,14 @@ final class LibraryBackupCodec {
     final playlists = _playlists(data['playlists']);
     final favorites = _tracks(data['favorites']);
     final onlineFavorites = _onlineFavorites(data['onlineFavorites']);
+    final favoriteAlbums = _favoriteAlbums(data['favoriteAlbums']);
     final ignoredTracks = _tracks(data['ignoredTracks']);
     final ignoredKeywords = _keywords(data['ignoredKeywords']);
     return LibraryBackup(
       playlists: playlists,
       favorites: favorites,
       onlineFavorites: onlineFavorites,
+      favoriteAlbums: favoriteAlbums,
       ignoredTracks: ignoredTracks,
       ignoredKeywords: ignoredKeywords,
     );
@@ -150,6 +155,39 @@ final class LibraryBackupCodec {
           tracks: _tracks(item['tracks']),
         ),
       );
+    }
+    return result;
+  }
+
+  static Map<String, Object?> _favoriteAlbum(FavoriteAlbum album) => {
+        'key': album.key,
+        'name': album.name,
+        'artist': album.artist,
+        'coverUri': album.coverUri?.toString(),
+        'tracks': album.tracks
+            .map(PlaylistTransferCodec.encodeTrack)
+            .toList(growable: false),
+      };
+
+  static List<FavoriteAlbum> _favoriteAlbums(Object? raw) {
+    if (raw is! List) return const [];
+    final result = <FavoriteAlbum>[];
+    final keys = <String>{};
+    for (final item in raw) {
+      if (item is! Map) continue;
+      final key = '${item['key'] ?? ''}'.trim();
+      final name = '${item['name'] ?? ''}'.trim();
+      final tracks = _tracks(item['tracks']);
+      if (key.isEmpty || name.isEmpty || tracks.isEmpty || !keys.add(key)) {
+        continue;
+      }
+      result.add(FavoriteAlbum(
+        key: key,
+        name: name,
+        artist: '${item['artist'] ?? ''}',
+        coverUri: Uri.tryParse('${item['coverUri'] ?? ''}'),
+        tracks: tracks,
+      ));
     }
     return result;
   }

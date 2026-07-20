@@ -158,6 +158,7 @@ class _PreviewCard extends StatelessWidget {
               const SizedBox(height: 6),
               Text('歌曲收藏 ${backup.favorites.length} · '
                   '歌单收藏 ${backup.onlineFavorites.length} · '
+                  '专辑收藏 ${backup.favoriteAlbums.length} · '
                   '不感兴趣 ${backup.ignoredTracks.length}'),
             ],
           ),

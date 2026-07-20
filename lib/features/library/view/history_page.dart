@@ -7,6 +7,7 @@ import '../../../domain/music.dart';
 import '../../player/state/playback_queue_controller.dart';
 import '../../player/state/player_controller.dart';
 import '../data/library_store.dart';
+import '../state/library_controller.dart';
 
 final playbackHistoryProvider = FutureProvider<List<PlayHistoryEntry>>(
   (ref) => ref.watch(libraryStoreProvider).listHistory(),
@@ -56,6 +57,7 @@ class HistoryPage extends ConsumerWidget {
             const _CategoryList(
               label: '专辑',
               groupBy: _album,
+              canFavoriteAlbum: true,
             ),
             const _CategoryList(
               label: '类型',
@@ -162,10 +164,15 @@ class _HistoryList extends ConsumerWidget {
 }
 
 class _CategoryList extends ConsumerWidget {
-  const _CategoryList({required this.label, required this.groupBy});
+  const _CategoryList({
+    required this.label,
+    required this.groupBy,
+    this.canFavoriteAlbum = false,
+  });
 
   final String label;
   final String Function(Track) groupBy;
+  final bool canFavoriteAlbum;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -224,16 +231,25 @@ class _CategoryList extends ConsumerWidget {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (context) => _GroupSheet(name: name, tracks: tracks),
+      builder: (context) => _GroupSheet(
+        name: name,
+        tracks: tracks,
+        canFavoriteAlbum: canFavoriteAlbum,
+      ),
     );
   }
 }
 
 class _GroupSheet extends ConsumerWidget {
-  const _GroupSheet({required this.name, required this.tracks});
+  const _GroupSheet({
+    required this.name,
+    required this.tracks,
+    this.canFavoriteAlbum = false,
+  });
 
   final String name;
   final List<Track> tracks;
+  final bool canFavoriteAlbum;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) => SafeArea(
@@ -243,24 +259,41 @@ class _GroupSheet extends ConsumerWidget {
             ListTile(
               title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
               subtitle: Text('${tracks.length} 首歌曲'),
-              trailing: IconButton(
-                tooltip: '播放全部',
-                icon: const Icon(Icons.play_arrow_outlined),
-                onPressed: () async {
-                  final playable = await ref
-                      .read(libraryStoreProvider)
-                      .filterIgnored(tracks);
-                  if (playable.isEmpty) return;
-                  ref.read(playbackQueueProvider.notifier).replaceQueue(
-                        playable,
-                        contextId: 'category:$name',
-                      );
-                  await ref
-                      .read(playerProvider.notifier)
-                      .playTrack(playable.first);
-                  if (context.mounted) Navigator.pop(context);
-                },
-              ),
+              trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                if (canFavoriteAlbum)
+                  IconButton(
+                    tooltip: '收藏或取消收藏专辑',
+                    icon: const Icon(Icons.bookmark_add_outlined),
+                    onPressed: () async {
+                      final favorite = await ref
+                          .read(libraryProvider.notifier)
+                          .toggleFavoriteAlbum(name, tracks);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text(favorite ? '已收藏专辑' : '已取消收藏专辑'),
+                        ));
+                      }
+                    },
+                  ),
+                IconButton(
+                  tooltip: '播放全部',
+                  icon: const Icon(Icons.play_arrow_outlined),
+                  onPressed: () async {
+                    final playable = await ref
+                        .read(libraryStoreProvider)
+                        .filterIgnored(tracks);
+                    if (playable.isEmpty) return;
+                    ref.read(playbackQueueProvider.notifier).replaceQueue(
+                          playable,
+                          contextId: 'category:$name',
+                        );
+                    await ref
+                        .read(playerProvider.notifier)
+                        .playTrack(playable.first);
+                    if (context.mounted) Navigator.pop(context);
+                  },
+                ),
+              ]),
             ),
             const Divider(height: 1),
             Expanded(

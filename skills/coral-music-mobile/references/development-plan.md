@@ -64,6 +64,7 @@
 | B3-15 迁移 QQ 音乐歌曲搜索　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-20-123-b3-15-qq-music-search.md` |
 | B3-16 迁移酷狗音乐歌曲搜索　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-20-124-b3-16-kugou-music-search.md` |
 | B3-17 迁移 QQ 音乐歌单广场与详情　　　　　　　　　　 | DOING　  | `development-history/2026-07-20-125-b3-17-qq-playlist-plaza.md` |
+| B3-18 迁移咪咕音乐歌单广场与详情　　　　　　　　　　 | DOING　  | `development-history/2026-07-20-126-b3-18-migu-playlist-plaza.md` |
 | B4-14 队列追加与安全删除　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-040-b4-14-queue-editing.md`　　　　　　　　  |
 | B4-15 队列拖动排序　　　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-16-041-b4-15-queue-reorder.md`　　　　　　　　  |
 | B5-01 三端 SQLite 可行性与列表 Schema v1　　　　　　 | DOING　  | `development-history/2026-07-16-042-b5-01-sqlite-list-schema.md`　　　　　　 |
@@ -79,6 +80,7 @@
 | B5-11 本地音频导入、目录扫描与播放闭环　　　　　　　 | DOING　  | `development-history/2026-07-20-090-b5-11-local-audio-import.md`　　　　 |
 | B5-12 在线歌曲收藏入口　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-17-083-b5-12-online-track-favorite-actions.md` |
 | B5-13 在线歌单收藏快照　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-20-087-b5-13-online-playlist-favorite-snapshots.md` |
+| B5-19 本地专辑收藏快照　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-20-127-b5-19-local-album-favorites.md` |
 | B6-01 在线歌曲下载队列　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-20-088-b6-01-online-download-queue.md` |
 | B6-02 歌单下载全部　　　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-20-089-b6-02-playlist-download-all.md` |
 | B6-18 默认播放音质设置　　　　　　　　　　　　　　　 | DOING　  | `development-history/2026-07-20-122-b6-18-default-playback-quality-setting.md` |
@@ -158,7 +160,7 @@
 - `P2-01 [DOING]` 已提取酷我榜单 fixture；搜索、歌单和其余来源待迁移。
 - `P2-02 [DOING]` 已建立五源枚举、酷我与 QQ 真实榜单，B3-07 已接入咪咕；B3-08 正在验证网易云最小 HTTPS 切片，酷狗桌面端点 TLS 不可用而阻塞。
 - `P2-03 [DOING]` 已完成酷我/酷狗/QQ/网易云/咪咕歌曲搜索、分页、错误重试、旧响应隔离和酷我热搜词；B3-12 已补酷我歌单搜索，B3-13 已完成 SQLite 本机搜索历史、去重、清空和一键复搜，B3-14 至 B3-16 已将 QQ、酷狗纳入综合搜索并保持单源失败隔离。记录：`development-history/2026-07-20-117-b3-13-search-history.md`、`development-history/2026-07-20-118-b3-14-combined-search.md`、`development-history/2026-07-20-123-b3-15-qq-music-search.md`、`development-history/2026-07-20-124-b3-16-kugou-music-search.md`。
-- `P2-04 [DOING]` B3-05/B3-10 已实现酷我热门歌单、HTTPS 分类标签、排序、搜索、详情和播放入口；B3-17 已接入 QQ 热门/最新歌单与详情，QQ HTTP 搜索/分类端点不进入移动端。B5-13 已实现本地收藏快照，B6-02 已实现歌单下载全部；其余来源待后续。记录：`development-history/2026-07-20-087-b5-13-online-playlist-favorite-snapshots.md`、`development-history/2026-07-20-125-b3-17-qq-playlist-plaza.md`。
+- `P2-04 [DOING]` B3-05/B3-10 已实现酷我热门歌单、HTTPS 分类标签、排序、搜索、详情和播放入口；B3-17/B3-18 已接入 QQ 与咪咕的热门/最新或推荐歌单、标签（咪咕）和详情。QQ/咪咕的旧 HTTP 或额外签名关键词搜索不进入移动端。B5-13 已实现本地收藏快照，B6-02 已实现歌单下载全部；网易云与酷狗待后续。记录：`development-history/2026-07-20-087-b5-13-online-playlist-favorite-snapshots.md`、`development-history/2026-07-20-125-b3-17-qq-playlist-plaza.md`、`development-history/2026-07-20-126-b3-18-migu-playlist-plaza.md`。
 - `P2-05 [DOING]` 已实现酷我分页榜单及 QQ 当前榜单目录/详情，支持来源切换和跨导航状态；其余来源待迁移，跨来源缓存待后续。
 - `P2-06 [DOING]` 已实现榜单/搜索旧响应隔离、图片惰性列表和错误重试；取消与持久缓存待后续。
 - `P2-07 [DOING]` 已实现酷我/QQ 榜单播放全部及歌曲点击替换内存队列；歌单待迁移。
@@ -185,7 +187,7 @@
 - `P4-03 [DOING]` B5-17 已实现桌面端 `playListPart_v2` 单列表 JSON 的导入导出；导入新建列表并复用 SQLite 主键去重，WebDAV/User API 凭据不会写入文件。重复检测与批量清理待 B5-18。记录：`development-history/2026-07-20-106-b5-17-playlist-import-export.md`。
 - `P4-04 [DOING]` B5-11 已接入系统文件选择与目录递归扫描、格式过滤、CUE、同目录 LRC 与 MP3/AAC ID3、FLAC、WAV、M4A、Ogg/Opus 的共享标签/封面读取，并写入现有列表、队列与 `AudioEngine`；目录授权恢复和三端真实格式验收待完成。记录：`development-history/2026-07-20-090-b5-11-local-audio-import.md`。
 - `P4-05 [DOING]` 已完成 CUE 单文件分轨：解析 INDEX 01、持久化起止位置、从分轨起点播放、边界自动切歌并避免整轨重复导入；可解析 FLAC/MP3 文件总时长会补齐末曲时长和边界。mp3/flac/wav/m4a/aac/ogg/opus 的三端真机格式矩阵与后台回归待继续。记录：`development-history/2026-07-20-102-b5-15-cue-single-file-tracks.md`。
-- `P4-06 [DOING]` B5-04/B5-12 已实现歌曲收藏及播放详情、搜索、排行榜和歌单详情入口；B5-13 已保存在线歌单本地收藏快照。B5-05/B5-14 已实现播放历史及按艺术家、专辑、类型、年份的本地曲目分类；类型/年份只使用 B5-11 已读取的真实标签，B5-16 已将完成下载歌曲纳入同一媒体库；专辑收藏和三端媒体库回归待继续。记录：`development-history/2026-07-20-087-b5-13-online-playlist-favorite-snapshots.md`、`development-history/2026-07-20-095-b5-14-library-artist-album-categories.md`、`development-history/2026-07-20-103-b5-16-download-library-integration.md`。
+- `P4-06 [DOING]` B5-04/B5-12 已实现歌曲收藏及播放详情、搜索、排行榜和歌单详情入口；B5-13 已保存在线歌单本地收藏快照，B5-19 已保存专辑本地快照。B5-05/B5-14 已实现播放历史及按艺术家、专辑、类型、年份的本地曲目分类；类型/年份只使用 B5-11 已读取的真实标签，B5-16 已将完成下载歌曲纳入同一媒体库；三端媒体库回归待继续。记录：`development-history/2026-07-20-087-b5-13-online-playlist-favorite-snapshots.md`、`development-history/2026-07-20-095-b5-14-library-artist-album-categories.md`、`development-history/2026-07-20-103-b5-16-download-library-integration.md`、`development-history/2026-07-20-127-b5-19-local-album-favorites.md`。
 - `P4-07` 实现不感兴趣规则并接入自动播放过滤。
 
 退出门槛：1000 首列表操作稳定；本地文件从导入、歌词到后台播放全链路通过。

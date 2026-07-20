@@ -307,6 +307,7 @@ class _PlaylistTracksState extends ConsumerState<_PlaylistTracks> {
     final isLoading = library.isLoading;
     final isFavorites = playlist.id == LibraryStore.favoritesId;
     final favoritePlaylists = library.favoriteOnlinePlaylists;
+    final favoriteAlbums = library.favoriteAlbums;
     final canReorder = !isFavorites &&
         !isLoading &&
         _selectedTrackIds.isEmpty &&
@@ -448,8 +449,10 @@ class _PlaylistTracksState extends ConsumerState<_PlaylistTracks> {
         ),
         Expanded(
           child: isFavorites
-              ? tracks.isEmpty && favoritePlaylists.isEmpty
-                  ? const _EmptyLibrary(message: '还没有收藏歌曲或歌单。')
+              ? tracks.isEmpty &&
+                      favoritePlaylists.isEmpty &&
+                      favoriteAlbums.isEmpty
+                  ? const _EmptyLibrary(message: '还没有收藏歌曲、歌单或专辑。')
                   : ListView(
                       padding: const EdgeInsets.only(bottom: 20),
                       children: [
@@ -460,6 +463,14 @@ class _PlaylistTracksState extends ConsumerState<_PlaylistTracks> {
                           ),
                           for (final detail in favoritePlaylists)
                             _favoritePlaylistTile(detail),
+                        ],
+                        if (favoriteAlbums.isNotEmpty) ...[
+                          const Padding(
+                            padding: EdgeInsets.fromLTRB(16, 16, 16, 4),
+                            child: Text('收藏专辑'),
+                          ),
+                          for (final album in favoriteAlbums)
+                            _favoriteAlbumTile(album),
                         ],
                         if (tracks.isNotEmpty) ...[
                           const Padding(
@@ -543,6 +554,36 @@ class _PlaylistTracksState extends ConsumerState<_PlaylistTracks> {
                 await ref
                     .read(playerProvider.notifier)
                     .playTrack(detail.tracks.first);
+              },
+      );
+
+  Widget _favoriteAlbumTile(FavoriteAlbum album) => ListTile(
+        leading: _LibraryTrackArtwork(uri: album.coverUri),
+        title: Text(album.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+        subtitle: Text(
+          [album.artist, '${album.tracks.length} 首']
+              .where((item) => item.isNotEmpty)
+              .join(' · '),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: IconButton(
+          tooltip: '取消收藏专辑',
+          onPressed: () => ref
+              .read(libraryProvider.notifier)
+              .toggleFavoriteAlbum(album.name, album.tracks),
+          icon: const Icon(Icons.bookmark_remove_outlined),
+        ),
+        onTap: album.tracks.isEmpty
+            ? null
+            : () async {
+                ref.read(playbackQueueProvider.notifier).replaceQueue(
+                      album.tracks,
+                      contextId: 'favorite-album:${album.key}',
+                    );
+                await ref
+                    .read(playerProvider.notifier)
+                    .playTrack(album.tracks.first);
               },
       );
 
