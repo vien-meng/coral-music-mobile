@@ -21,8 +21,11 @@ void main() {
       [AudioQuality.flac, AudioQuality.high320k, AudioQuality.standard128k],
     );
     expect(result.items.first.extra['mediaMid'], '002Y0Eb148Eyan');
+    expect(result.items.first.coverUri.toString(),
+        'https://y.gtimg.cn/music/photo_new/T002R500x500M000000pKXff1doeOd.jpg');
     expect(result.items.last.availableQualities, [AudioQuality.flac24bit]);
-    expect(result.items.last.coverUri.toString(), contains('T001singer2'));
+    expect(result.items.last.coverUri.toString(),
+        'https://y.gtimg.cn/music/photo_new/T001R500x500M000singer2.jpg');
   });
 
   test('normalizes QQ search tracks and preserves result pagination', () {
@@ -66,6 +69,8 @@ void main() {
     expect(result.items.single.duration, const Duration(seconds: 215));
     expect(result.items.single.availableQualities,
         [AudioQuality.flac, AudioQuality.high320k]);
+    expect(result.items.single.coverUri.toString(),
+        'https://y.gtimg.cn/music/photo_new/T002R500x500M000album-mid.jpg');
     expect(result.items.single.extra['mediaMid'], 'media-mid');
   });
 }

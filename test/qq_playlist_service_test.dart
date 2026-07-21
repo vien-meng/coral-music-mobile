@@ -40,6 +40,40 @@ void main() {
     expect(playlist.coverUri.toString(), 'https://cover.example.com/cover.jpg');
   });
 
+  test('normalizes QQ playlist search entries', () {
+    final result = QqPlaylistService.parseSearch(
+      {
+        'code': 0,
+        'data': {
+          'sum': 44,
+          'list': [
+            {
+              'dissid': 'search-list',
+              'dissname': '搜索歌单',
+              'creator': {'name': '创建者'},
+              'introduction': '简介<br>换行',
+              'song_count': 12,
+              'listennum': 12000,
+              'imgurl': 'http://cover.example.com/search.jpg',
+            },
+          ],
+        },
+      },
+      page: 2,
+    );
+
+    expect(result.page, 2);
+    expect(result.pageSize, 30);
+    expect(result.total, 44);
+    final playlist = result.items.single;
+    expect(playlist.id, 'search-list');
+    expect(playlist.author, '创建者');
+    expect(playlist.description, '简介\n换行');
+    expect(playlist.trackCount, 12);
+    expect(
+        playlist.coverUri.toString(), 'https://cover.example.com/search.jpg');
+  });
+
   test('normalizes QQ playlist detail tracks and qualities', () {
     const fallback = OnlinePlaylist(
       id: '123',
@@ -86,6 +120,8 @@ void main() {
     expect(track.id, 'online:tx:song-mid');
     expect(track.artist, '歌手');
     expect(track.duration, const Duration(minutes: 3));
+    expect(track.coverUri.toString(),
+        'https://y.gtimg.cn/music/photo_new/T002R500x500M000album-mid.jpg');
     expect(
         track.availableQualities, [AudioQuality.flac, AudioQuality.high320k]);
     expect(track.extra['mediaMid'], 'media-mid');

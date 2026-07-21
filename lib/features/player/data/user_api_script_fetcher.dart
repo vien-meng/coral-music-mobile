@@ -6,7 +6,7 @@ import 'package:dio/dio.dart';
 import '../../../core/app_failure.dart';
 import '../../../core/http_client.dart';
 
-final class UserApiScriptFetcher {
+class UserApiScriptFetcher {
   UserApiScriptFetcher(this._dio);
 
   final Dio _dio;

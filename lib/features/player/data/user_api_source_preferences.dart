@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-final class UserApiSourcePreferences {
+class UserApiSourcePreferences {
   UserApiSourcePreferences([FlutterSecureStorage? storage])
       : _storage = storage ?? const FlutterSecureStorage();
 

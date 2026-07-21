@@ -67,8 +67,9 @@ final class QqLeaderboardParser {
         continue;
       }
       final album = value['album'];
-      final albumInfo =
-          album is Map<String, Object?> ? album : const <String, Object?>{};
+      final albumInfo = album is Map
+          ? Map<String, Object?>.from(album)
+          : const <String, Object?>{};
       final singers = value['singer'];
       final singerList = singers is List<Object?> ? singers : const <Object?>[];
       final singerNames = singerList
@@ -81,11 +82,6 @@ final class QqLeaderboardParser {
           .whereType<Map<String, Object?>>()
           .map((item) => '${item['mid'] ?? ''}'.trim())
           .firstWhere((mid) => mid.isNotEmpty, orElse: () => '');
-      final coverId = albumMid.isNotEmpty
-          ? 'T002$albumMid'
-          : singerMid.isEmpty
-              ? ''
-              : 'T001$singerMid';
       tracks.add(
         Track(
           sourceKind: TrackSourceKind.online,
@@ -95,10 +91,7 @@ final class QqLeaderboardParser {
           artist: singerNames,
           album: '${albumInfo['name'] ?? ''}'.trim(),
           duration: _seconds(value['interval']),
-          coverUri: coverId.isEmpty
-              ? null
-              : Uri.parse(
-                  'https://y.gtimg.cn/music/photo_new/${coverId}R500x500M000.jpg'),
+          coverUri: _cover(albumInfo, albumMid, singerMid),
           availableQualities: _qualities(value['file']),
           extra: {
             'songId': value['id'],
@@ -119,6 +112,24 @@ final class QqLeaderboardParser {
   static Duration? _seconds(Object? value) {
     final seconds = int.tryParse('$value');
     return seconds == null ? null : Duration(seconds: seconds);
+  }
+
+  static Uri? _cover(
+    Map<String, Object?> album,
+    String albumMid,
+    String singerMid,
+  ) {
+    final raw = '${album['picurl'] ?? album['pic'] ?? ''}'.trim();
+    final direct = Uri.tryParse(raw);
+    if (direct != null && direct.host.isNotEmpty) {
+      return direct.scheme == 'http' ? direct.replace(scheme: 'https') : direct;
+    }
+    final type = albumMid.isNotEmpty ? 'T002' : 'T001';
+    final id = albumMid.isNotEmpty ? albumMid : singerMid;
+    return id.isEmpty
+        ? null
+        : Uri.parse(
+            'https://y.gtimg.cn/music/photo_new/${type}R500x500M000$id.jpg');
   }
 
   static List<AudioQuality> _qualities(Object? value) {

@@ -151,10 +151,8 @@ final class MethodChannelUserApiRunner implements UserApiRunner {
   @override
   Future<LyricPayload?> resolveLyric(Track track) async {
     final manifest = _manifest;
-    // Desktop dispatches lyric by source action. Some current LX scripts only
-    // advertise a local lyric capability, while still handling online actions.
-    if (manifest == null ||
-        !manifest.musicUrlSources.contains(track.sourceId)) {
+    // Lyrics are a separate source capability; musicUrl support is not enough.
+    if (manifest == null || !manifest.lyricSources.contains(track.sourceId)) {
       return null;
     }
     try {
@@ -237,6 +235,18 @@ final class MethodChannelUserApiRunner implements UserApiRunner {
       };
     }
 
+    final qualities = [
+      for (final quality in track.availableQualities)
+        {'type': _qualityName(quality), ...metadataFor(quality)},
+    ];
+    final qualitys = {
+      for (final quality in track.availableQualities)
+        _qualityName(quality): metadataFor(quality),
+    };
+    final lrcUrl = track.extra['lrcUrl'];
+    final mrcUrl = track.extra['mrcUrl'];
+    final trcUrl = track.extra['trcUrl'];
+
     final meta = <String, Object?>{
       'songId': songId,
       'albumName': track.album ?? '',
@@ -246,14 +256,8 @@ final class MethodChannelUserApiRunner implements UserApiRunner {
       'strMediaMid': track.extra['mediaMid'],
       'hash': track.extra['hash'],
       'copyrightId': track.extra['copyrightId'] ?? songId,
-      'qualitys': [
-        for (final quality in track.availableQualities)
-          {'type': _qualityName(quality), ...metadataFor(quality)},
-      ],
-      '_qualitys': {
-        for (final quality in track.availableQualities)
-          _qualityName(quality): metadataFor(quality),
-      },
+      'qualitys': qualities,
+      '_qualitys': qualitys,
     };
     return {
       // Desktop User API scripts consume this MusicInfo shape.
@@ -266,10 +270,18 @@ final class MethodChannelUserApiRunner implements UserApiRunner {
       // These fields keep compatibility with older scripts that predate meta.
       'songmid': track.sourceTrackId,
       'albumName': track.album ?? '',
+      'img': track.coverUri?.toString() ?? '',
+      'typeUrl': const <String, Object?>{},
       'albumId': meta['albumId'],
       'albumMid': meta['albumMid'],
       'songId': songId,
       'strMediaMid': meta['strMediaMid'],
+      'copyrightId': meta['copyrightId'],
+      'lrcUrl': lrcUrl,
+      'mrcUrl': mrcUrl,
+      'trcUrl': trcUrl,
+      'types': qualities,
+      '_types': qualitys,
     };
   }
 

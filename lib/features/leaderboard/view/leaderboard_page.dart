@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/cover_image.dart';
+import '../../../app/online_source_menu.dart';
 import '../../../app/app_theme.dart';
 import '../../../domain/music.dart';
 import '../../download/view/download_track_button.dart';
@@ -10,6 +12,7 @@ import '../../library/view/favorite_track_button.dart';
 import '../../library/view/playlist_picker.dart';
 import '../../player/state/playback_queue_controller.dart';
 import '../../player/state/player_controller.dart';
+import '../../player/state/user_api_debug_controller.dart';
 import '../state/leaderboard_controller.dart';
 
 class LeaderboardPage extends ConsumerStatefulWidget {
@@ -180,73 +183,34 @@ class _TopBar extends ConsumerWidget {
   final LeaderboardState state;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => Row(
-        children: [
-          Text('发现',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -.6,
-                  )),
-          const Spacer(),
-          _SourceMenu(state: state),
-          const _NotificationMenu(),
-        ],
-      );
-}
-
-class _SourceMenu extends ConsumerWidget {
-  const _SourceMenu({required this.state});
-
-  final LeaderboardState state;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) => MenuAnchor(
-        style: _topBarMenuStyle(context),
-        menuChildren: [
-          const _MenuHeading(title: '音乐平台'),
-          for (final source in const [
-            OnlineSource.kuwo,
-            OnlineSource.qq,
-            OnlineSource.migu,
-            OnlineSource.netease,
-          ])
-            MenuItemButton(
-              leadingIcon: Icon(
-                _sourceIcon(source),
-                size: 20,
-                color: source == state.source
-                    ? Theme.of(context).colorScheme.primary
-                    : null,
-              ),
-              trailingIcon: source == state.source
-                  ? Icon(
-                      Icons.check_rounded,
-                      size: 18,
-                      color: Theme.of(context).colorScheme.primary,
-                    )
-                  : const SizedBox(width: 18),
-              onPressed: () {
-                if (source != state.source) {
-                  ref.read(leaderboardProvider.notifier).selectSource(source);
-                }
-              },
-              child: SizedBox(width: 126, child: Text(source.label)),
-            ),
-        ],
-        builder: (context, controller, _) => IconButton(
-          tooltip: '切换音乐来源',
-          onPressed: state.isLoading
-              ? null
-              : () =>
-                  controller.isOpen ? controller.close() : controller.open(),
-          icon: Icon(
-            Icons.library_music_outlined,
-            color: controller.isOpen
-                ? Theme.of(context).colorScheme.primary
-                : null,
-          ),
+  Widget build(BuildContext context, WidgetRef ref) {
+    const candidates = [
+      OnlineSource.kuwo,
+      OnlineSource.kugou,
+      OnlineSource.qq,
+      OnlineSource.migu,
+      OnlineSource.netease,
+    ];
+    final supported = ref.watch(userApiDebugProvider.select((userApi) =>
+        userApi.activeSource?.musicUrlSources ?? const <String>{}));
+    return Row(
+      children: [
+        Text('发现',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -.6,
+                )),
+        const Spacer(),
+        OnlineSourceMenu(
+          activeSource: state.source,
+          isLoading: state.isLoading,
+          sources: supportedOnlineSources(candidates, supported),
+          onSelected: ref.read(leaderboardProvider.notifier).selectSource,
         ),
-      );
+        const _NotificationMenu(),
+      ],
+    );
+  }
 }
 
 class _NotificationMenu extends StatelessWidget {
@@ -254,9 +218,9 @@ class _NotificationMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => MenuAnchor(
-        style: _topBarMenuStyle(context),
+        style: onlineSourceMenuStyle(context),
         menuChildren: [
-          const _MenuHeading(title: '消息通知'),
+          const OnlineSourceMenuHeading(title: '消息通知'),
           SizedBox(
             width: 220,
             child: Padding(
@@ -294,47 +258,6 @@ class _NotificationMenu extends StatelessWidget {
         ),
       );
 }
-
-class _MenuHeading extends StatelessWidget {
-  const _MenuHeading({required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-        width: 220,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: Text(
-            title,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-          ),
-        ),
-      );
-}
-
-MenuStyle _topBarMenuStyle(BuildContext context) => MenuStyle(
-      backgroundColor:
-          WidgetStatePropertyAll(Theme.of(context).colorScheme.surface),
-      elevation: const WidgetStatePropertyAll(6),
-      padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(vertical: 4)),
-      shape: WidgetStatePropertyAll(
-        RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-          side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-        ),
-      ),
-    );
-
-IconData _sourceIcon(OnlineSource source) => switch (source) {
-      OnlineSource.kuwo => Icons.graphic_eq_rounded,
-      OnlineSource.qq => Icons.chat_bubble_outline_rounded,
-      OnlineSource.migu => Icons.headphones_rounded,
-      OnlineSource.netease => Icons.album_outlined,
-      OnlineSource.kugou => Icons.music_note_rounded,
-    };
 
 class _QuickActions extends StatelessWidget {
   const _QuickActions({
@@ -484,15 +407,14 @@ class _HeroArtwork extends StatelessWidget {
         size: 34,
       ),
     );
-    if (uri == null) return fallback;
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
-      child: Image.network(
-        uri.toString(),
+      child: CoverImage(
+        uri: uri,
+        fallback: fallback,
         width: 78,
         height: 78,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => fallback,
       ),
     );
   }
@@ -625,14 +547,14 @@ class _BoardCover extends StatelessWidget {
         color: Colors.white,
       ),
     );
-    if (uri == null) return fallback;
     return ClipRRect(
       borderRadius: BorderRadius.circular(9),
-      child: Image.network(uri.toString(),
+      child: CoverImage(
+          uri: uri,
+          fallback: fallback,
           width: double.infinity,
           height: 74,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => fallback),
+          fit: BoxFit.cover),
     );
   }
 }
@@ -731,15 +653,14 @@ class _TrackArtwork extends StatelessWidget {
       ),
       child: const Icon(Icons.music_note_rounded, color: Colors.white),
     );
-    if (uri == null) return placeholder;
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),
-      child: Image.network(
-        uri.toString(),
+      child: CoverImage(
+        uri: uri,
+        fallback: placeholder,
         width: 48,
         height: 48,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => placeholder,
       ),
     );
   }

@@ -3,8 +3,10 @@ package com.coral.music.mobile
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.Manifest
 import android.database.Cursor
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.OpenableColumns
 import java.io.File
@@ -17,10 +19,12 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity: AudioServiceActivity() {
     companion object {
         private const val MAX_SHARED_AUDIO_BYTES = 2L * 1024 * 1024 * 1024
+        private const val DIRECTORY_READ_PERMISSION_REQUEST = 4001
     }
 
     private lateinit var userApiRunner: UserApiRunner
     private var sharedAudioChannel: MethodChannel? = null
+    private var directoryReadResult: MethodChannel.Result? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // AudioServiceActivity connects its engine during Activity creation; the
@@ -71,6 +75,51 @@ class MainActivity: AudioServiceActivity() {
                 }
                 result.success(consumeSharedAudio())
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "coral_music/local_audio")
+            .setMethodCallHandler { call, result ->
+                if (call.method != "ensureDirectoryReadAccess") {
+                    result.notImplemented()
+                    return@setMethodCallHandler
+                }
+                ensureDirectoryReadAccess(result)
+            }
+    }
+
+    private fun ensureDirectoryReadAccess(result: MethodChannel.Result) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            result.success(true)
+            return
+        }
+        val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_AUDIO
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+        if (checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED) {
+            result.success(true)
+            return
+        }
+        if (directoryReadResult != null) {
+            result.error("permission_request_active", "正在等待媒体访问授权", null)
+            return
+        }
+        directoryReadResult = result
+        requestPermissions(arrayOf(permission), DIRECTORY_READ_PERMISSION_REQUEST)
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        if (requestCode == DIRECTORY_READ_PERMISSION_REQUEST) {
+            directoryReadResult?.success(
+                grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED,
+            )
+            directoryReadResult = null
+            return
+        }
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
     }
 
     override fun onNewIntent(intent: Intent) {

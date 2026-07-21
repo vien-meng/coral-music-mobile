@@ -83,6 +83,10 @@ final class NeteaseCatalogService implements OnlineCatalogService {
           'offset': '${(page - 1) * 30}',
           'limit': '30',
         }),
+        options: Options(headers: const {
+          'Referer': 'https://music.163.com/',
+          'Cookie': 'os=pc;',
+        }),
       );
       return _parseSearch(response.data, page);
     } on DioException catch (error) {

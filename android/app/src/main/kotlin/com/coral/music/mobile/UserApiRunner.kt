@@ -23,6 +23,7 @@ import java.security.SecureRandom
 import java.util.UUID
 import java.util.concurrent.Executors
 import java.util.zip.InflaterInputStream
+import kotlin.math.roundToInt
 
 class UserApiRunner(private val activity: Activity) {
     private val handler = Handler(Looper.getMainLooper())
@@ -122,17 +123,8 @@ class UserApiRunner(private val activity: Activity) {
         }
         executor.execute {
             try {
-                val query = kuwoLyricQuery(songId)
-                val connection = (URL("http://newlyric.kuwo.cn/newlyric.lrc?$query").openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 15_000
-                    readTimeout = 15_000
-                    setRequestProperty("User-Agent", "Mozilla/5.0")
-                    setRequestProperty("Accept-Encoding", "identity")
-                }
-                if (connection.responseCode != 200) throw IllegalStateException("酷我歌词服务暂不可用")
-                val bytes = connection.inputStream.use { it.readBytes() }
-                connection.disconnect()
-                val lyric = decodeKuwoLyric(bytes)
+                val lyric = runCatching { fetchKuwoCompressedLyric(songId) }
+                    .getOrElse { fetchKuwoJsonLyric(songId) }
                 if (lyric.isBlank() || !lyric.contains(Regex("\\[\\d{1,2}:"))) {
                     throw IllegalStateException("酷我未返回可用歌词")
                 }
@@ -141,6 +133,63 @@ class UserApiRunner(private val activity: Activity) {
                 handler.post { result.error("kuwo_lyric", error.message ?: "酷我歌词加载失败", null) }
             }
         }
+    }
+
+    private fun fetchKuwoCompressedLyric(songId: String): String {
+        val query = kuwoLyricQuery(songId)
+        val connection = (URL("http://newlyric.kuwo.cn/newlyric.lrc?$query").openConnection() as HttpURLConnection).apply {
+            connectTimeout = 15_000
+            readTimeout = 15_000
+            setRequestProperty("User-Agent", "Mozilla/5.0")
+            setRequestProperty("Accept-Encoding", "identity")
+        }
+        return try {
+            if (connection.responseCode != 200) throw IllegalStateException("酷我歌词服务暂不可用")
+            decodeKuwoLyric(connection.inputStream.use { it.readBytes() })
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun fetchKuwoJsonLyric(songId: String): String {
+        val connection = (URL("https://m.kuwo.cn/newh5/singles/songinfoandlrc?musicId=$songId")
+            .openConnection() as HttpURLConnection).apply {
+            connectTimeout = 15_000
+            readTimeout = 15_000
+            setRequestProperty("User-Agent", "Mozilla/5.0")
+        }
+        return try {
+            if (connection.responseCode != 200) throw IllegalStateException("酷我歌词服务暂不可用")
+            val data = JSONObject(connection.inputStream.use { it.readBytes() }.toString(Charsets.UTF_8))
+                .optJSONObject("data") ?: throw IllegalStateException("酷我歌词响应格式异常")
+            val list = data.optJSONArray("lrclist")
+                ?: throw IllegalStateException("酷我歌词响应格式异常")
+            buildString {
+                for (index in 0 until list.length()) {
+                    val line = list.optJSONObject(index) ?: continue
+                    val text = line.optString("lineLyric", line.optString("text"))
+                    if (text.isBlank()) continue
+                    append('[')
+                    append(formatKuwoTime(line.opt("time")))
+                    append(']')
+                    append(text.trim())
+                    append('\n')
+                }
+            }
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun formatKuwoTime(raw: Any?): String {
+        val value = raw?.toString()?.trim().orEmpty()
+        if (value.contains(':')) return value
+        val milliseconds = ((value.toDoubleOrNull() ?: throw IllegalStateException("酷我歌词时间无效")) * 1000)
+            .roundToInt()
+        val minutes = milliseconds / 60_000
+        val seconds = (milliseconds / 1000) % 60
+        val fraction = milliseconds % 1000
+        return "%02d:%02d.%03d".format(minutes, seconds, fraction)
     }
 
     private fun kuwoLyricQuery(songId: String): String {

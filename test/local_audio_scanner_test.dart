@@ -58,6 +58,40 @@ void main() {
       await directory.delete(recursive: true);
     }
   });
+
+  test('recognizes the local audio extensions used for import testing',
+      () async {
+    final directory = await Directory.systemTemp.createTemp('coral-audio-');
+    const extensions = [
+      'dsf',
+      'dff',
+      'flac',
+      'wav',
+      'mp3',
+      'm4a',
+      'aac',
+      'ac3',
+      'aif',
+      'alac',
+      'm4r',
+      'ogg',
+      'opus',
+      'wma',
+    ];
+    try {
+      for (final extension in extensions) {
+        await File('${directory.path}/sample.$extension').writeAsBytes([0]);
+      }
+
+      final result = await LocalAudioScanner().scanDirectory(directory.path);
+
+      expect(result.tracks, hasLength(extensions.length));
+      expect(result.skipped, isEmpty);
+      expect(result.errorMessage, isNull);
+    } finally {
+      await directory.delete(recursive: true);
+    }
+  });
 }
 
 List<int> _textFrame(String id, String value) => [

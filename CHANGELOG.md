@@ -2,6 +2,97 @@
 
 All notable changes to 珊瑚音乐移动端 (Coral Music Mobile) will be documented in this file.
 
+## [1.0.0] - 2026-07-21
+
+### 启动音源恢复与平台切换隔离
+
+- `UserApiDebugController` 启动恢复改为单例 Future，多次请求只复用同一个，不触发第二次脚本加载
+- `PlaybackResolver` 在线取链前等待启动恢复完成，本地/下载/WebDAV 仍直连
+- 发现页目录平台切换仅调用 `LeaderboardController.selectSource()`，不接触 User API 运行时
+
+### 首次启动默认落雪音源
+
+- 无保存来源时自动加载已验证的公开 LX User API URL 并保存为当前来源
+- 已保存来源优先恢复，默认源不覆盖用户选择；默认源失败不阻塞应用
+
+### 独立歌词服务链路
+
+- 歌词获取不再依赖 User API 是否支持 `lyric` action
+- 链路调整为：本地 LRC → 内置来源服务 → LRCLIB 独立搜索 → 会话缓存
+- `resolveLyric()` 仅在 manifest 明确声明 `lyric` action 时才调用
+- 酷我内置通道保留压缩协议，响应格式变化时回退 HTTPS JSON 端点
+- 新增 `SourceLyricService`：QQ 使用 `fcg_query_lyric_new`，网易云使用歌曲歌词接口，咪咕读取 MRC URL，酷狗按候选/下载 LRC 协议
+
+### QQ 与咪咕歌单关键词搜索
+
+- QQ 使用桌面端 `client_music_search_songlist` HTTPS 协议
+- 咪咕复用现有 HTTPS 搜索 MD5 签名规则
+- 歌单广场搜索框不再按来源禁用
+
+### QQ 与咪咕封面地址归一化
+
+- QQ 统一使用桌面端 `T002R500x500M000{albumMid}.jpg` / `T001R500x500M000{singerMid}.jpg` 格式
+- QQ 歌单 `qpic.y.qq.com` 请求携带 QQ Referer
+- 咪咕搜索相对 `img1`-`img3` 路径补全为 `d.musicapp.migu.cn` HTTPS 地址
+
+### QQ/咪咕播放与歌词兜底
+
+- User API 传递完整桌面脚本字段（`strMediaMid`、`types/_types`、`copyrightId`、`lrcUrl/mrcUrl/trcUrl`、`img`、`typeUrl`），保留已有 `meta` 结构
+- 咪咕来源歌词优先读取 MRC，失败后继续 LrcLib
+- LrcLib 精确查询失败转关键词搜索，先歌名+歌手，未命中再仅歌名，按相似度选择最近候选
+
+### 多来源回归修复
+
+- 退出播放器时清除文本焦点，避免下层搜索框恢复输入法
+- 网易云搜索补 `Referer` 与 PC cookie，酷狗搜索补网页 `Referer`/`Origin`
+- QQ 解析优先使用响应直接封面地址，咪咕兼容 `imgItems` 和 `img1`-`img3`
+
+### 在线封面加载与播放队列
+
+- `CoverImage` 统一使用浏览器 User-Agent，HTTP/协议相对地址归一为 HTTPS
+- 按 CDN 主机补齐 QQ/网易云/酷我/咪咕/酷狗 Referer
+- 排行榜、搜索、歌单详情和播放队列移除裸 `Image.network`，统一复用 `CoverImage`
+- 播放队列改为紧凑头部、52px 封面、当前播放标识和来源信息
+- 首页/搜索/歌单广场按当前音源 `musicUrlSources` 过滤平台菜单
+
+### 搜索页音乐平台菜单统一
+
+- 提取 `OnlineSourceMenu`，首页和搜索页共用菜单表面、图标、勾选态
+- 搜索页保留综合搜索和全部搜索来源
+
+### 酷我歌单详情 ID 路由修复
+
+- `digest-8` 直接请求 `nplserver`，其它 `digest-*` 先通过 `qukudata` 解析真实 `sourceid` 再请求详情
+
+### Android 本地目录授权与格式扫描
+
+- Android 声明 `READ_MEDIA_AUDIO`（13+）和 `READ_EXTERNAL_STORAGE`（12-），按需请求一次权限
+- 新增 `coral_music/local_audio` MethodChannel，目录不可访问时显示错误而非"已导入 0 首"
+- 扩展名补齐 `dsf`、`dff`、`ac3`、`aif`、`m4r`、`wma`
+
+### 本地歌词在线兜底与格式矩阵
+
+- FLAC 可扫描、读取 Vorbis 标签/嵌入封面并直接交给音频引擎
+- 本地无 LRC 时按歌名和歌手调用独立歌词服务（LrcLib），下载和 WebDAV 不发起该请求
+
+### 空列表本地音频导入
+
+- "我的列表"页工具栏直接提供文件导入入口，不再依赖已打开列表
+- 首次有效导入创建并打开"本地音乐"列表，无有效音频时不创建空列表
+
+## [1.0.0] - 2026-07-20(04)
+
+### 独立歌词服务链路（初始）
+
+- `lyricProvider` 移除 `userApiRunnerProvider` 依赖，链路改为本地 LRC → 内置来源服务 → LRCLIB → 会话缓存
+- `resolveLyric()` 仅在 manifest 声明 `lyric` action 时才调用
+- 酷我内置通道保留 `newlyric.lrc` 压缩协议，回退 HTTPS `songinfoandlrc` JSON 端点
+- LRCLIB 精确匹配后继续关键词候选搜索，优先同歌手和同步歌词
+
+### 酷我歌单详情 ID 路由（初始）
+
+- `digest-8` 直接请求 `nplserver`，其它 `digest-*` 先通过 `qukudata` 解析真实 `sourceid`
+
 ## [1.0.0] - 2026-07-20(03)
 
 ### 列表动作反馈与子页面返回

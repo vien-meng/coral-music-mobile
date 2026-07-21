@@ -127,7 +127,7 @@ final class MiguCatalogService implements OnlineCatalogService {
             'sign': signature,
             'channel': '0146921'
           }));
-      return _parseSearch(response.data, page);
+      return parseSearch(response.data, page);
     } on DioException catch (error) {
       throw mapDioException(error);
     } on AppFailure {
@@ -171,7 +171,10 @@ final class MiguCatalogService implements OnlineCatalogService {
         availableQualities: _qualities(object['newRateFormats']),
         extra: {
           'albumId': object['albumId'],
-          'copyrightId': object['copyrightId']
+          'copyrightId': object['copyrightId'],
+          'lrcUrl': object['lyricUrl'] ?? object['lrcUrl'],
+          'mrcUrl': object['mrcUrl'] ?? object['mrcurl'],
+          'trcUrl': object['trcUrl'],
         },
       ));
     }
@@ -179,7 +182,7 @@ final class MiguCatalogService implements OnlineCatalogService {
         items: tracks, page: 1, pageSize: tracks.length, total: tracks.length);
   }
 
-  static PageResult<Track> _parseSearch(Object? raw, int page) {
+  static PageResult<Track> parseSearch(Object? raw, int page) {
     final result = raw is Map ? raw['songResultData'] : null;
     final groups = result is Map ? result['resultList'] : null;
     if (groups is! List) {
@@ -209,12 +212,14 @@ final class MiguCatalogService implements OnlineCatalogService {
                 : '',
             album: '${song['album'] ?? ''}',
             duration: duration == null ? null : Duration(seconds: duration),
-            coverUri: Uri.tryParse(
-                '${song['img3'] ?? song['img2'] ?? song['img1'] ?? ''}'),
+            coverUri: _searchCover(song),
             availableQualities: _qualities(song['audioFormats']),
             extra: {
               'albumId': song['albumId'],
-              'copyrightId': song['copyrightId']
+              'copyrightId': song['copyrightId'],
+              'lrcUrl': song['lyricUrl'] ?? song['lrcUrl'],
+              'mrcUrl': song['mrcUrl'] ?? song['mrcurl'],
+              'trcUrl': song['trcUrl'],
             }));
       }
     }
@@ -245,6 +250,25 @@ final class MiguCatalogService implements OnlineCatalogService {
     if (raw is! List || raw.isEmpty || raw.first is! Map) return null;
     final uri = Uri.tryParse('${(raw.first as Map)['img'] ?? ''}');
     return uri?.scheme == 'http' ? uri!.replace(scheme: 'https') : uri;
+  }
+
+  static Uri? _searchCover(Map song) {
+    final direct = song['img3'] ?? song['img2'] ?? song['img1'];
+    final images = song['imgItems'];
+    final nested = images is List && images.isNotEmpty && images.first is Map
+        ? (images.first as Map)['img']
+        : null;
+    final raw = '${direct ?? nested ?? ''}'.trim();
+    if (raw.isEmpty) return null;
+    final uri = Uri.tryParse(raw);
+    if (uri == null) return null;
+    if (uri.host.isEmpty) {
+      return Uri.https(
+        'd.musicapp.migu.cn',
+        raw.startsWith('/') ? raw : '/$raw',
+      );
+    }
+    return uri.scheme == 'http' ? uri.replace(scheme: 'https') : uri;
   }
 
   static List<AudioQuality> _qualities(Object? raw) {

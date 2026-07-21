@@ -164,26 +164,20 @@ final class KuwoPlaylistService implements PlaylistCatalogService {
 
   @override
   Future<PlaylistDetail> getPlaylistDetail(OnlinePlaylist playlist) async {
-    final playlistId = playlist.id.split('__').last;
-    if (playlistId.isEmpty) {
-      throw const AppFailure(
-        code: AppFailureCode.invalidData,
-        message: '歌单标识无效',
-      );
-    }
-    final uri = Uri.https('nplserver.kuwo.cn', '/pl.svc', {
-      'op': 'getlistinfo',
-      'pid': playlistId,
-      'pn': '0',
-      'rn': '1000',
-      'encode': 'utf8',
-      'keyset': 'pl2012',
-      'identity': 'kuwo',
-      'pcmp4': '1',
-      'vipver': 'MUSIC_9.0.5.0_W1',
-      'newver': '1',
-    });
     try {
+      final playlistId = await _resolveDetailPid(playlist.id);
+      final uri = Uri.https('nplserver.kuwo.cn', '/pl.svc', {
+        'op': 'getlistinfo',
+        'pid': playlistId,
+        'pn': '0',
+        'rn': '1000',
+        'encode': 'utf8',
+        'keyset': 'pl2012',
+        'identity': 'kuwo',
+        'pcmp4': '1',
+        'vipver': 'MUSIC_9.0.5.0_W1',
+        'newver': '1',
+      });
       final response = await _dio.getUri<Object?>(uri);
       return _parseDetail(response.data, playlist);
     } on DioException catch (error) {
@@ -197,6 +191,46 @@ final class KuwoPlaylistService implements PlaylistCatalogService {
         diagnostic: error.runtimeType.toString(),
       );
     }
+  }
+
+  Future<String> _resolveDetailPid(String playlistId) async {
+    final parts = playlistId.split('__');
+    final id = parts.last.trim();
+    if (id.isEmpty) {
+      throw const AppFailure(
+        code: AppFailureCode.invalidData,
+        message: '歌单标识无效',
+      );
+    }
+    final digest = parts.length > 1 && parts.first.startsWith('digest-')
+        ? parts.first.substring('digest-'.length)
+        : '';
+    if (digest.isEmpty || digest == '8') return id;
+
+    final response = await _dio.getUri<Object?>(
+      Uri.https('qukudata.kuwo.cn', '/q.k', {
+        'op': 'query',
+        'cont': 'ninfo',
+        'node': id,
+        'pn': '0',
+        'rn': '1',
+        'fmt': 'json',
+        'src': 'mbox',
+        'level': '2',
+      }),
+    );
+    final children = _map(response.data)['child'];
+    final first = children is List && children.isNotEmpty
+        ? _map(children.first)
+        : const <Object?, Object?>{};
+    final sourceId = '${first['sourceid'] ?? ''}'.trim();
+    if (sourceId.isEmpty) {
+      throw const AppFailure(
+        code: AppFailureCode.invalidData,
+        message: '歌单详情标识解析失败',
+      );
+    }
+    return sourceId;
   }
 
   static PageResult<OnlinePlaylist> _parsePopular(Object? raw, int page) {

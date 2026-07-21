@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/cover_image.dart';
+import '../../../app/online_source_menu.dart';
 import '../../../app/app_theme.dart';
 import '../../../domain/music.dart';
 import '../../download/view/download_track_button.dart';
@@ -8,6 +10,7 @@ import '../../library/view/favorite_track_button.dart';
 import '../../library/view/playlist_picker.dart';
 import '../../player/state/playback_queue_controller.dart';
 import '../../player/state/player_controller.dart';
+import '../../player/state/user_api_debug_controller.dart';
 import '../state/search_controller.dart';
 import 'search_discovery.dart';
 
@@ -113,70 +116,39 @@ class _SearchHeader extends ConsumerWidget {
   final SearchState state;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => Row(
-        children: [
-          Text('搜索',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -.6,
-                  )),
-          const Spacer(),
-          PopupMenuButton<_SearchMenuAction>(
-            enabled: !state.isLoading,
-            tooltip: '切换搜索来源',
-            onSelected: (action) {
-              switch (action) {
-                case _SearchMenuAction.combined:
-                  ref.read(searchProvider.notifier).selectCombined();
-                case _SearchMenuAction.kuwo:
-                  ref
-                      .read(searchProvider.notifier)
-                      .selectSource(OnlineSource.kuwo);
-                case _SearchMenuAction.kugou:
-                  ref
-                      .read(searchProvider.notifier)
-                      .selectSource(OnlineSource.kugou);
-                case _SearchMenuAction.qq:
-                  ref
-                      .read(searchProvider.notifier)
-                      .selectSource(OnlineSource.qq);
-                case _SearchMenuAction.netease:
-                  ref
-                      .read(searchProvider.notifier)
-                      .selectSource(OnlineSource.netease);
-                case _SearchMenuAction.migu:
-                  ref
-                      .read(searchProvider.notifier)
-                      .selectSource(OnlineSource.migu);
-              }
-            },
-            itemBuilder: (context) => [
-              CheckedPopupMenuItem(
-                value: _SearchMenuAction.combined,
-                checked: state.isCombined,
-                child: const Text('综合搜索'),
-              ),
-              const PopupMenuDivider(),
-              for (final entry in const [
-                (_SearchMenuAction.kuwo, OnlineSource.kuwo),
-                (_SearchMenuAction.kugou, OnlineSource.kugou),
-                (_SearchMenuAction.qq, OnlineSource.qq),
-                (_SearchMenuAction.netease, OnlineSource.netease),
-                (_SearchMenuAction.migu, OnlineSource.migu),
-              ])
-                CheckedPopupMenuItem(
-                  value: entry.$1,
-                  checked: entry.$2 == state.source && !state.isCombined,
-                  child: Text(entry.$2.label),
-                ),
-            ],
-            icon: const Icon(Icons.library_music_outlined),
-          ),
-        ],
-      );
+  Widget build(BuildContext context, WidgetRef ref) {
+    const candidates = [
+      OnlineSource.kuwo,
+      OnlineSource.kugou,
+      OnlineSource.qq,
+      OnlineSource.netease,
+      OnlineSource.migu,
+    ];
+    final supported = ref.watch(userApiDebugProvider.select((userApi) =>
+        userApi.activeSource?.musicUrlSources ?? const <String>{}));
+    final sources = supportedOnlineSources(candidates, supported);
+    return Row(
+      children: [
+        Text('搜索',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -.6,
+                )),
+        const Spacer(),
+        OnlineSourceMenu(
+          activeSource: state.source,
+          isLoading: state.isLoading,
+          isCombined: state.isCombined,
+          onSelectCombined: sources.length == candidates.length
+              ? ref.read(searchProvider.notifier).selectCombined
+              : null,
+          sources: sources,
+          onSelected: ref.read(searchProvider.notifier).selectSource,
+        ),
+      ],
+    );
+  }
 }
-
-enum _SearchMenuAction { combined, kuwo, kugou, qq, netease, migu }
 
 class _SearchResults extends ConsumerWidget {
   const _SearchResults({required this.state, required this.onPlay});
@@ -303,15 +275,14 @@ class _SearchArtwork extends StatelessWidget {
       ),
       child: const Icon(Icons.music_note_rounded, color: Colors.white),
     );
-    if (uri == null) return fallback;
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),
-      child: Image.network(
-        uri.toString(),
+      child: CoverImage(
+        uri: uri,
+        fallback: fallback,
         width: 48,
         height: 48,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => fallback,
       ),
     );
   }

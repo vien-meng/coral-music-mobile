@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,6 +19,10 @@ final userApiDebugProvider =
     UserApiSourcePreferences(),
   ),
 );
+
+const defaultUserApiSourceName = '落雪音源';
+const defaultUserApiSourceUrl =
+    'https://raw.githubusercontent.com/pdone/lx-music-source/main/lx/latest.js';
 
 final class UserApiDebugState {
   const UserApiDebugState({
@@ -125,15 +128,21 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
         _playbackResolver = playbackResolver,
         _preferences = preferences ?? UserApiSourcePreferences(),
         super(const UserApiDebugState()) {
-    unawaited(restorePersisted());
+    _startupRestore = _restorePersisted();
+    _playbackResolver?.setUserApiInitialization(_startupRestore);
   }
 
   final UserApiRunner _runner;
   final UserApiScriptFetcher _fetcher;
   final PlaybackResolver? _playbackResolver;
   final UserApiSourcePreferences _preferences;
+  late final Future<void> _startupRestore;
 
-  Future<void> restorePersisted() async {
+  /// Returns the single launch restore operation instead of starting another
+  /// WebView load while the first one is still in flight.
+  Future<void> restorePersisted() => _startupRestore;
+
+  Future<void> _restorePersisted() async {
     ({String name, Uri url})? saved;
     try {
       saved = await _preferences.read();
@@ -141,8 +150,15 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
       // ponytail: persisted URL sources are optional; unavailable secure storage must not break in-memory imports.
       return;
     }
-    if (saved == null || state.sources.isNotEmpty) return;
-    await importUrl(saved.name, saved.url.toString(), persist: false);
+    if (state.sources.isNotEmpty) return;
+    if (saved != null) {
+      await importUrl(saved.name, saved.url.toString(), persist: false);
+      return;
+    }
+    await importUrl(
+      defaultUserApiSourceName,
+      defaultUserApiSourceUrl,
+    );
   }
 
   Future<void> importUrl(String name, String rawUrl,

@@ -1,25 +1,28 @@
-import 'package:coral_music_mobile/core/app_failure.dart';
+import 'dart:io';
+
 import 'package:coral_music_mobile/domain/music.dart';
-import 'package:coral_music_mobile/features/player/data/user_api_runner.dart';
 import 'package:coral_music_mobile/features/player/state/lyric_controller.dart';
-import 'package:coral_music_mobile/features/player/state/player_controller.dart';
-import 'package:coral_music_mobile/features/player/state/user_api_debug_controller.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('never queries User API lyrics for non-online tracks', () async {
-    final runner = _Runner();
+  test('keeps downloads and WebDAV tracks offline when lyrics are absent',
+      () async {
+    var fallbackRequests = 0;
     final container = ProviderContainer(
-      overrides: [userApiRunnerProvider.overrideWithValue(runner)],
+      overrides: [
+        lyricFallbackProvider.overrideWithValue((_) async {
+          fallbackRequests++;
+          return null;
+        }),
+      ],
     );
     addTearDown(container.dispose);
 
     for (final source in [
-      TrackSourceKind.local,
       TrackSourceKind.download,
       TrackSourceKind.webdav,
     ]) {
@@ -37,32 +40,68 @@ void main() {
       expect(lyric, isNull);
     }
 
-    expect(runner.lyricRequests, 0);
+    expect(fallbackRequests, 0);
   });
 
-  test('falls back to User API when the native Kuwo lyric channel is absent',
+  test('prefers an LRC beside a local track before independent lookup',
       () async {
-    final runner = _Runner();
+    final directory = await Directory.systemTemp.createTemp('coral-lyric-');
+    addTearDown(() => directory.delete(recursive: true));
+    final song = File('${directory.path}/song.flac');
+    await song.writeAsBytes(const []);
+    await File('${directory.path}/song.lrc').writeAsString('[00:01.00]本地歌词');
+    var fallbackRequests = 0;
     final container = ProviderContainer(
-      overrides: [userApiRunnerProvider.overrideWithValue(runner)],
+      overrides: [
+        lyricFallbackProvider.overrideWithValue((_) async {
+          fallbackRequests++;
+          return null;
+        }),
+      ],
     );
     addTearDown(container.dispose);
 
-    final lyric = await container.read(
-      lyricProvider(const Track(
-        sourceKind: TrackSourceKind.online,
-        sourceId: 'kw',
-        sourceTrackId: '1',
-        title: '在线歌曲',
-        artist: '测试歌手',
-      )).future,
-    );
+    final lyric = await container.read(lyricProvider(Track(
+      sourceKind: TrackSourceKind.local,
+      sourceId: 'device',
+      sourceTrackId: song.path,
+      title: '歌曲',
+      artist: '歌手',
+      localUri: song.uri,
+    )).future);
 
-    expect(runner.lyricRequests, 1);
-    expect(lyric?.lyric, '[00:01.00]不应请求');
+    expect(lyric?.lyric, '[00:01.00]本地歌词');
+    expect(fallbackRequests, 0);
   });
 
-  test('falls back to User API when built-in Kuwo lyrics fail', () async {
+  test('searches an independent lyric service for a local track without LRC',
+      () async {
+    var fallbackRequests = 0;
+    final container = ProviderContainer(
+      overrides: [
+        lyricFallbackProvider.overrideWithValue((track) async {
+          fallbackRequests++;
+          expect(track.title, '本地歌曲');
+          expect(track.artist, '本地歌手');
+          return const LyricPayload(lyric: '[00:01.00]搜索到的歌词');
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final lyric = await container.read(lyricProvider(const Track(
+      sourceKind: TrackSourceKind.local,
+      sourceId: 'device',
+      sourceTrackId: 'local-song',
+      title: '本地歌曲',
+      artist: '本地歌手',
+    )).future);
+
+    expect(lyric?.lyric, '[00:01.00]搜索到的歌词');
+    expect(fallbackRequests, 1);
+  });
+
+  test('falls back to an independent lyric service when Kuwo fails', () async {
     const channel = MethodChannel('coral_music/user_api');
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (_) {
@@ -71,9 +110,14 @@ void main() {
     addTearDown(() => TestDefaultBinaryMessengerBinding
         .instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null));
-    final runner = _Runner();
+
     final container = ProviderContainer(
-      overrides: [userApiRunnerProvider.overrideWithValue(runner)],
+      overrides: [
+        sourceLyricProvider.overrideWithValue((_) async => null),
+        lyricFallbackProvider.overrideWithValue(
+          (_) async => const LyricPayload(lyric: '[00:01.00]独立歌词'),
+        ),
+      ],
     );
     addTearDown(container.dispose);
 
@@ -85,14 +129,22 @@ void main() {
       artist: '测试歌手',
     )).future);
 
-    expect(lyric?.lyric, '[00:01.00]不应请求');
-    expect(runner.lyricRequests, 1);
+    expect(lyric?.lyric, '[00:01.00]独立歌词');
   });
 
-  test('keeps the last successful lyric when a refresh fails', () async {
-    final runner = _Runner();
+  test('keeps the last successful lyric when an independent refresh fails',
+      () async {
+    var requests = 0;
     final container = ProviderContainer(
-      overrides: [userApiRunnerProvider.overrideWithValue(runner)],
+      overrides: [
+        sourceLyricProvider.overrideWithValue((_) async => null),
+        lyricFallbackProvider.overrideWithValue((_) async {
+          requests++;
+          return requests == 1
+              ? const LyricPayload(lyric: '[00:01.00]缓存歌词')
+              : null;
+        }),
+      ],
     );
     addTearDown(container.dispose);
     const track = Track(
@@ -104,70 +156,36 @@ void main() {
     );
 
     final first = await container.read(lyricProvider(track).future);
-    runner.failLyrics = true;
     final second = await container.refresh(lyricProvider(track).future);
 
     expect(second?.lyric, first?.lyric);
-    expect(runner.lyricRequests, 2);
+    expect(requests, 2);
   });
 
-  test('reloads the current track lyric after the active source changes',
-      () async {
-    final runner = _Runner();
+  test('uses a source lyric before querying the public fallback', () async {
+    var fallbackRequests = 0;
     final container = ProviderContainer(
-      overrides: [userApiRunnerProvider.overrideWithValue(runner)],
+      overrides: [
+        sourceLyricProvider.overrideWithValue(
+          (_) async => const LyricPayload(lyric: '[00:01.00]来源歌词'),
+        ),
+        lyricFallbackProvider.overrideWithValue((_) async {
+          fallbackRequests++;
+          return null;
+        }),
+      ],
     );
     addTearDown(container.dispose);
-    const track = Track(
+
+    final lyric = await container.read(lyricProvider(const Track(
       sourceKind: TrackSourceKind.online,
-      sourceId: 'kw',
-      sourceTrackId: 'source-change',
+      sourceId: 'tx',
+      sourceTrackId: 'source-lyric',
       title: '在线歌曲',
       artist: '测试歌手',
-    );
-    final source = container.read(userApiDebugProvider.notifier);
+    )).future);
 
-    await source.importScript('版本一', 'kw-v1');
-    final first = await container.read(lyricProvider(track).future);
-    await source.importScript('版本二', 'kw-v2');
-    final second = await container.read(lyricProvider(track).future);
-
-    expect(first?.lyric, '[00:01.00]kw-v1');
-    expect(second?.lyric, '[00:01.00]kw-v2');
-    expect(runner.lyricRequests, 2);
+    expect(lyric?.lyric, '[00:01.00]来源歌词');
+    expect(fallbackRequests, 0);
   });
-}
-
-final class _Runner implements UserApiRunner {
-  var lyricRequests = 0;
-  String? loadedScript;
-  var failLyrics = false;
-
-  @override
-  Future<void> clear() async {}
-
-  @override
-  Future<UserApiManifest> load(String script) async {
-    loadedScript = script;
-    return const UserApiManifest({'kw'});
-  }
-
-  @override
-  Future<LyricPayload?> resolveLyric(Track track) async {
-    lyricRequests++;
-    if (failLyrics) {
-      throw const AppFailure(
-        code: AppFailureCode.noNetwork,
-        message: '网络暂时不可用',
-      );
-    }
-    return LyricPayload(lyric: '[00:01.00]${loadedScript ?? '不应请求'}');
-  }
-
-  @override
-  Future<ResolvedPlaybackUrl> resolveMusicUrl(
-    Track track,
-    AudioQuality quality,
-  ) async =>
-      ResolvedPlaybackUrl(Uri.parse('https://example.com/audio.mp3'));
 }

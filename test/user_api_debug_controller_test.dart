@@ -1,9 +1,13 @@
 import 'dart:convert';
 
+import 'package:coral_music_mobile/core/app_failure.dart';
 import 'package:coral_music_mobile/domain/music.dart';
 import 'package:coral_music_mobile/features/player/data/playback_resolver.dart';
 import 'package:coral_music_mobile/features/player/data/user_api_runner.dart';
+import 'package:coral_music_mobile/features/player/data/user_api_script_fetcher.dart';
+import 'package:coral_music_mobile/features/player/data/user_api_source_preferences.dart';
 import 'package:coral_music_mobile/features/player/state/user_api_debug_controller.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -12,7 +16,7 @@ void main() {
   test('imports, activates and removes session-only User API sources',
       () async {
     final runner = _Runner();
-    final controller = UserApiDebugController(runner);
+    final controller = _sessionController(runner);
 
     await controller.importScript('酷我音源', 'kw-script');
     await controller.importScript('QQ 音源', 'qq-script');
@@ -33,7 +37,7 @@ void main() {
 
   test('uses public script header details instead of a generated source name',
       () async {
-    final controller = UserApiDebugController(_Runner());
+    final controller = _sessionController(_Runner());
 
     await controller.importScript('', '''
 /*!
@@ -58,7 +62,12 @@ kw-script
   test('clears cached URLs after the active source changes', () async {
     final runner = _Runner();
     final resolver = PlaybackResolver(runner);
-    final controller = UserApiDebugController(runner, null, resolver);
+    final controller = UserApiDebugController(
+      runner,
+      null,
+      resolver,
+      _UnavailablePreferences(),
+    );
     const track = Track(
       sourceKind: TrackSourceKind.online,
       sourceId: 'kw',
@@ -76,7 +85,7 @@ kw-script
   });
 
   test('imports UTF-8 script bytes and rejects an oversized file', () async {
-    final controller = UserApiDebugController(_Runner());
+    final controller = _sessionController(_Runner());
 
     await controller.importBytes('文件音源', utf8.encode('kw-script'));
     expect(controller.state.activeSource?.name, '文件音源');
@@ -84,6 +93,113 @@ kw-script
     await controller.importBytes('', List.filled(256 * 1024 + 1, 0));
     expect(controller.state.error?.message, '音源脚本超过大小限制');
   });
+
+  test('loads and saves the default LX source when no source is configured',
+      () async {
+    final preferences = _Preferences();
+    final fetcher = _Fetcher('kw-default-script');
+    final controller = UserApiDebugController(
+      _Runner(),
+      fetcher,
+      null,
+      preferences,
+    );
+
+    await controller.restorePersisted();
+
+    expect(controller.state.activeSource?.name, defaultUserApiSourceName);
+    expect(fetcher.urls, [Uri.parse(defaultUserApiSourceUrl)]);
+    expect(preferences.saved, [
+      (name: defaultUserApiSourceName, url: Uri.parse(defaultUserApiSourceUrl)),
+    ]);
+  });
+
+  test('restores the saved source instead of replacing it with the default',
+      () async {
+    final saved = (name: '我的音源', url: Uri.parse('https://example.com/me.js'));
+    final preferences = _Preferences(saved);
+    final fetcher = _Fetcher('kw-saved-script');
+    final controller = UserApiDebugController(
+      _Runner(),
+      fetcher,
+      null,
+      preferences,
+    );
+
+    await controller.restorePersisted();
+
+    expect(controller.state.activeSource?.name, saved.name);
+    expect(fetcher.urls, [saved.url]);
+    expect(preferences.saved, isEmpty);
+  });
+
+  test('a default source failure completes startup restore without a source',
+      () async {
+    final controller = UserApiDebugController(
+      _Runner(),
+      _FailingFetcher(),
+      null,
+      _Preferences(),
+    );
+
+    await controller.restorePersisted();
+
+    expect(controller.state.activeSource, isNull);
+    expect(controller.state.error?.message, '默认音源不可用');
+  });
+}
+
+UserApiDebugController _sessionController(_Runner runner) =>
+    UserApiDebugController(runner, null, null, _UnavailablePreferences());
+
+final class _UnavailablePreferences extends UserApiSourcePreferences {
+  @override
+  Future<({String name, Uri url})?> read() =>
+      Future.error(StateError('No persisted source for this test.'));
+
+  @override
+  Future<void> clear() async {}
+}
+
+final class _Preferences extends UserApiSourcePreferences {
+  _Preferences([this.value]);
+
+  final ({String name, Uri url})? value;
+  final saved = <({String name, Uri url})>[];
+
+  @override
+  Future<({String name, Uri url})?> read() async => value;
+
+  @override
+  Future<void> save(String name, Uri url) async {
+    saved.add((name: name, url: url));
+  }
+
+  @override
+  Future<void> clear() async {}
+}
+
+final class _Fetcher extends UserApiScriptFetcher {
+  _Fetcher(this.script) : super(Dio());
+
+  final String script;
+  final urls = <Uri>[];
+
+  @override
+  Future<String> fetch(Uri uri) async {
+    urls.add(uri);
+    return script;
+  }
+}
+
+final class _FailingFetcher extends UserApiScriptFetcher {
+  _FailingFetcher() : super(Dio());
+
+  @override
+  Future<String> fetch(Uri uri) async => throw const AppFailure(
+        code: AppFailureCode.noNetwork,
+        message: '默认音源不可用',
+      );
 }
 
 final class _Runner implements UserApiRunner {

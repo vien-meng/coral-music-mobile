@@ -10,8 +10,15 @@ final class PlaybackResolver {
   final UserApiRunner _userApiRunner;
   final WebDavCredentials _webDavCredentials;
   final _cachedUrls = <String, _CachedPlaybackUrl>{};
+  Future<void>? _userApiInitialization;
 
   static const _urlCacheLifetime = Duration(minutes: 15);
+
+  /// The persisted User API script loads asynchronously at launch. Online
+  /// requests must not race the WebView reset performed by that load.
+  void setUserApiInitialization(Future<void> initialization) {
+    _userApiInitialization = initialization;
+  }
 
   Future<ResolvedPlaybackUrl> resolve(
     Track track, {
@@ -38,6 +45,7 @@ final class PlaybackResolver {
         message: '该来源缺少播放地址',
       );
     }
+    await _userApiInitialization;
     final resolvedQuality =
         quality ?? defaultPlaybackQuality(track.availableQualities);
     final key = _cacheKey(track, resolvedQuality);

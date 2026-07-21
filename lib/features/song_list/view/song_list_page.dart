@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/app_theme.dart';
+import '../../../app/cover_image.dart';
+import '../../../app/online_source_menu.dart';
 import '../../../domain/music.dart';
 import '../../library/view/favorite_track_button.dart';
 import '../../library/view/playlist_picker.dart';
@@ -12,6 +14,7 @@ import '../../download/state/download_controller.dart';
 import '../../download/view/download_track_button.dart';
 import '../../player/state/playback_queue_controller.dart';
 import '../../player/state/player_controller.dart';
+import '../../player/state/user_api_debug_controller.dart';
 import '../state/song_list_controller.dart';
 
 class SongListPage extends ConsumerStatefulWidget {
@@ -45,6 +48,13 @@ class _PlaylistSquare extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tags = ref.watch(songListTagsProvider);
+    const candidates = [
+      OnlineSource.kuwo,
+      OnlineSource.qq,
+      OnlineSource.migu,
+    ];
+    final supported = ref.watch(userApiDebugProvider.select((userApi) =>
+        userApi.activeSource?.musicUrlSources ?? const <String>{}));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -54,23 +64,11 @@ class _PlaylistSquare extends ConsumerWidget {
             children: [
               Text('歌单广场', style: Theme.of(context).textTheme.titleLarge),
               const Spacer(),
-              PopupMenuButton<OnlineSource>(
-                enabled: !state.isLoading,
-                tooltip: '切换歌单来源',
+              OnlineSourceMenu(
+                activeSource: state.source,
+                isLoading: state.isLoading,
+                sources: supportedOnlineSources(candidates, supported),
                 onSelected: ref.read(songListProvider.notifier).selectSource,
-                itemBuilder: (context) => [
-                  for (final source in const [
-                    OnlineSource.kuwo,
-                    OnlineSource.qq,
-                    OnlineSource.migu,
-                  ])
-                    CheckedPopupMenuItem(
-                      value: source,
-                      checked: source == state.source,
-                      child: Text(source.label),
-                    ),
-                ],
-                icon: const Icon(Icons.library_music_outlined),
               ),
               PopupMenuButton<String>(
                 enabled: !state.isLoading,
@@ -103,15 +101,10 @@ class _PlaylistSquare extends ConsumerWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
           child: TextField(
-            enabled: state.source == OnlineSource.kuwo,
             textInputAction: TextInputAction.search,
-            onSubmitted: state.source != OnlineSource.kuwo
-                ? null
-                : ref.read(songListProvider.notifier).submitSearch,
+            onSubmitted: ref.read(songListProvider.notifier).submitSearch,
             decoration: InputDecoration(
-              hintText: state.source == OnlineSource.kuwo
-                  ? '搜索歌单（清空并搜索可返回广场）'
-                  : '${state.source.label}歌单关键词搜索暂未接入',
+              hintText: '搜索歌单（清空并搜索可返回广场）',
               prefixIcon: Icon(Icons.search_outlined),
               isDense: true,
             ),
@@ -464,13 +457,12 @@ class _PlaylistCover extends StatelessWidget {
       ),
       child: const Center(child: Icon(Icons.queue_music, size: 44)),
     );
-    if (playlist.coverUri == null) return fallback;
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),
-      child: Image.network(
-        playlist.coverUri.toString(),
+      child: CoverImage(
+        uri: playlist.coverUri,
+        fallback: fallback,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => fallback,
       ),
     );
   }
@@ -492,15 +484,14 @@ class _PlaylistTrackArtwork extends StatelessWidget {
       ),
       child: const Icon(Icons.music_note_rounded, color: Colors.white),
     );
-    if (uri == null) return fallback;
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),
-      child: Image.network(
-        uri.toString(),
+      child: CoverImage(
+        uri: uri,
+        fallback: fallback,
         width: 38,
         height: 38,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => fallback,
       ),
     );
   }
