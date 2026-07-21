@@ -7,6 +7,7 @@ import '../../../core/app_failure.dart';
 import '../../../core/http_client.dart';
 import '../../../domain/music.dart';
 import 'online_catalog_service.dart';
+import 'migu_track_support.dart';
 
 final class MiguCatalogService implements OnlineCatalogService {
   MiguCatalogService(this._dio);
@@ -127,7 +128,7 @@ final class MiguCatalogService implements OnlineCatalogService {
             'sign': signature,
             'channel': '0146921'
           }));
-      return _parseSearch(response.data, page);
+      return parseSearch(response.data, page);
     } on DioException catch (error) {
       throw mapDioException(error);
     } on AppFailure {
@@ -168,10 +169,15 @@ final class MiguCatalogService implements OnlineCatalogService {
         album: '${object['album'] ?? ''}'.trim(),
         duration: _duration('${object['length'] ?? ''}'),
         coverUri: _cover(object['albumImgs']),
-        availableQualities: _qualities(object['newRateFormats']),
+        availableQualities: miguAudioQualities(object['newRateFormats']),
         extra: {
+          'songId': object['songId'],
           'albumId': object['albumId'],
-          'copyrightId': object['copyrightId']
+          'copyrightId': object['copyrightId'],
+          'qualityMeta': miguQualityMeta(object['newRateFormats']),
+          'lrcUrl': object['lyricUrl'] ?? object['lrcUrl'],
+          'mrcUrl': object['mrcUrl'] ?? object['mrcurl'],
+          'trcUrl': object['trcUrl'],
         },
       ));
     }
@@ -179,7 +185,7 @@ final class MiguCatalogService implements OnlineCatalogService {
         items: tracks, page: 1, pageSize: tracks.length, total: tracks.length);
   }
 
-  static PageResult<Track> _parseSearch(Object? raw, int page) {
+  static PageResult<Track> parseSearch(Object? raw, int page) {
     final result = raw is Map ? raw['songResultData'] : null;
     final groups = result is Map ? result['resultList'] : null;
     if (groups is! List) {
@@ -209,12 +215,16 @@ final class MiguCatalogService implements OnlineCatalogService {
                 : '',
             album: '${song['album'] ?? ''}',
             duration: duration == null ? null : Duration(seconds: duration),
-            coverUri: Uri.tryParse(
-                '${song['img3'] ?? song['img2'] ?? song['img1'] ?? ''}'),
-            availableQualities: _qualities(song['audioFormats']),
+            coverUri: _searchCover(song),
+            availableQualities: miguAudioQualities(song['audioFormats']),
             extra: {
+              'songId': song['songId'],
               'albumId': song['albumId'],
-              'copyrightId': song['copyrightId']
+              'copyrightId': song['copyrightId'],
+              'qualityMeta': miguQualityMeta(song['audioFormats']),
+              'lrcUrl': song['lyricUrl'] ?? song['lrcUrl'],
+              'mrcUrl': song['mrcUrl'] ?? song['mrcurl'],
+              'trcUrl': song['trcUrl'],
             }));
       }
     }
@@ -247,23 +257,23 @@ final class MiguCatalogService implements OnlineCatalogService {
     return uri?.scheme == 'http' ? uri!.replace(scheme: 'https') : uri;
   }
 
-  static List<AudioQuality> _qualities(Object? raw) {
-    final values = <AudioQuality>{};
-    if (raw is List) {
-      for (final item in raw.whereType<Map>()) {
-        switch (item['formatType']) {
-          case 'PQ':
-            values.add(AudioQuality.standard128k);
-          case 'HQ':
-            values.add(AudioQuality.high320k);
-          case 'SQ':
-            values.add(AudioQuality.flac);
-          case 'ZQ':
-            values.add(AudioQuality.flac24bit);
-        }
-      }
+  static Uri? _searchCover(Map song) {
+    final direct = song['img3'] ?? song['img2'] ?? song['img1'];
+    final images = song['imgItems'];
+    final nested = images is List && images.isNotEmpty && images.first is Map
+        ? (images.first as Map)['img']
+        : null;
+    final raw = '${direct ?? nested ?? ''}'.trim();
+    if (raw.isEmpty) return null;
+    final uri = Uri.tryParse(raw);
+    if (uri == null) return null;
+    if (uri.host.isEmpty) {
+      return Uri.https(
+        'd.musicapp.migu.cn',
+        raw.startsWith('/') ? raw : '/$raw',
+      );
     }
-    return AudioQuality.values.where(values.contains).toList(growable: false);
+    return uri.scheme == 'http' ? uri.replace(scheme: 'https') : uri;
   }
 
   AppFailure _unsupported(String feature) =>

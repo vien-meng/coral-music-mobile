@@ -12,6 +12,7 @@ import '../../../domain/music.dart';
 import '../../player/state/playback_queue_controller.dart';
 import '../../player/state/player_controller.dart';
 import '../data/library_store.dart';
+import '../data/local_audio_directory_access.dart';
 import '../data/local_audio_scanner.dart';
 import '../data/playlist_duplicates.dart';
 import '../state/library_controller.dart';
@@ -39,11 +40,14 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(libraryProvider);
-    if (state.selectedPlaylist case final playlist?) {
-      return _PlaylistTracks(
-        playlist: playlist,
-        tracks: state.tracks,
-        showBack: !widget.favoritesOnly,
+    final playlist = state.selectedPlaylist;
+    if (playlist != null) {
+      return Scaffold(
+        body: _PlaylistTracks(
+          playlist: playlist,
+          tracks: state.tracks,
+          showBack: !widget.favoritesOnly,
+        ),
       );
     }
     return Scaffold(
@@ -72,6 +76,12 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                   onPressed:
                       state.isLoading ? null : () => _importPlaylist(context),
                   icon: const Icon(Icons.file_upload_outlined),
+                ),
+                IconButton(
+                  tooltip: '导入本地音频',
+                  onPressed:
+                      state.isLoading ? null : () => _importLocalAudio(context),
+                  icon: const Icon(Icons.audio_file_outlined),
                 ),
                 IconButton(
                   tooltip: '刷新',
@@ -176,16 +186,17 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     BuildContext context, {
     UserPlaylist? playlist,
   }) async {
-    final controller = TextEditingController(text: playlist?.name);
+    var value = playlist?.name ?? '';
     final name = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(playlist == null ? '新建列表' : '重命名列表'),
-        content: TextField(
-          controller: controller,
+        content: TextFormField(
+          initialValue: value,
           autofocus: true,
           textInputAction: TextInputAction.done,
-          onSubmitted: (value) => Navigator.pop(context, value),
+          onChanged: (input) => value = input,
+          onFieldSubmitted: (input) => Navigator.pop(context, input),
           decoration: const InputDecoration(hintText: '列表名称'),
         ),
         actions: [
@@ -194,13 +205,13 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
             child: const Text('取消'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text),
+            onPressed: () => Navigator.pop(context, value),
             child: const Text('保存'),
           ),
         ],
       ),
     );
-    controller.dispose();
+    if (!mounted) return;
     final normalized = name?.trim();
     if (normalized == null || normalized.isEmpty) return;
     final library = ref.read(libraryProvider.notifier);
@@ -277,6 +288,28 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
         );
       }
     }
+  }
+
+  Future<void> _importLocalAudio(BuildContext context) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.audio,
+      allowMultiple: true,
+    );
+    final paths = result?.paths.whereType<String>().toList() ?? const [];
+    if (paths.isEmpty) return;
+    final imported = await ref.read(libraryProvider.notifier).importSharedAudio(
+          paths,
+          playlistName: '本地音乐',
+          openPlaylist: true,
+        );
+    if (!context.mounted || imported == null) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(
+        imported.skipped == 0
+            ? '已导入 ${imported.added} 首本地音频'
+            : '已导入 ${imported.added} 首，跳过 ${imported.skipped} 项',
+      ),
+    ));
   }
 }
 
@@ -611,6 +644,13 @@ class _PlaylistTracksState extends ConsumerState<_PlaylistTracks> {
     );
     if (directory == null) return;
     final scan = directory ? await _scanDirectory() : await _scanFiles();
+    if (scan.errorMessage case final message?) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(message)));
+      }
+      return;
+    }
     var added = 0;
     for (final track in scan.tracks) {
       if (await ref
@@ -687,9 +727,17 @@ class _PlaylistTracksState extends ConsumerState<_PlaylistTracks> {
 
   Future<LocalAudioScanResult> _scanDirectory() async {
     final path = await FilePicker.platform.getDirectoryPath();
-    return path == null
-        ? const LocalAudioScanResult(tracks: [], skipped: [])
-        : LocalAudioScanner().scanDirectory(path);
+    if (path == null) {
+      return const LocalAudioScanResult(tracks: [], skipped: []);
+    }
+    if (!await LocalAudioDirectoryAccess.ensure()) {
+      return const LocalAudioScanResult(
+        tracks: [],
+        skipped: [],
+        errorMessage: '未获得音乐和音频访问权限，无法扫描目录',
+      );
+    }
+    return LocalAudioScanner().scanDirectory(path);
   }
 
   bool _matchesFilter(Track track) {

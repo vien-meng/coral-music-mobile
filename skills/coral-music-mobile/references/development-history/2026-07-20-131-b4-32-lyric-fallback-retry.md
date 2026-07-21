@@ -17,3 +17,4 @@
 - 歌词页重试改用显式 `ref.refresh(...future)`；加载时显示“正在重新加载歌词”，空结果和失败均显示 SnackBar 反馈。
 - `test/lyric_controller_test.dart` 增加酷我内置失败转 User API、刷新失败保留缓存；`test/lyric_timeline_test.dart` 增加无时间戳正文解析。
 - 本次改动文件 `dart analyze` 无问题，`git diff --check` 通过。`flutter test test/lyric_controller_test.dart test/lyric_timeline_test.dart` 因工作区外 SDK 缓存授权服务返回 503 未执行，状态保持 `DOING`。
+- 2026-07-20 后续 B4-35 已按桌面端职责边界将歌词从 User API 取链中分离，本记录中的“酷我内置源 -> User API”顺序不再是当前实现。记录：`2026-07-20-144-b4-35-independent-lyric-services.md`。

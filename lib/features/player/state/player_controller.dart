@@ -394,7 +394,9 @@ final class PlayerController extends StateNotifier<PlayerState> {
 
   Future<void> setQuality(AudioQuality quality) {
     final track = state.track;
-    if (track == null || !track.availableQualities.contains(quality)) {
+    if (track == null ||
+        (track.sourceKind != TrackSourceKind.online &&
+            !track.availableQualities.contains(quality))) {
       return Future.value();
     }
     return playTrack(

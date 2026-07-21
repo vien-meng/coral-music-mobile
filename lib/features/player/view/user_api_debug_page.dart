@@ -41,7 +41,7 @@ class _UserApiDebugPageState extends ConsumerState<UserApiDebugPage> {
         Text('音源管理', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 6),
         Text(
-          '通过 HTTPS 地址导入受限音源脚本。脚本只在本次会话保留，不会写入本地数据库。',
+          '内置落雪音源会在应用启动时加载；可继续导入和管理其他音源。',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: scheme.onSurfaceVariant,
               ),
@@ -98,12 +98,16 @@ class _UserApiDebugPageState extends ConsumerState<UserApiDebugPage> {
                     label: Text(userApi.isLoading ? '正在验证音源…' : '导入并启用'),
                   ),
                 ),
-                const SizedBox(height: 4),
-                TextButton.icon(
-                  onPressed:
-                      userApi.isLoading ? null : () => _importFile(controller),
-                  icon: const Icon(Icons.upload_file_outlined),
-                  label: const Text('从本地文件导入 .js 音源'),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: userApi.isLoading
+                        ? null
+                        : () => _importFile(controller),
+                    icon: const Icon(Icons.upload_file_outlined),
+                    label: const Text('导入 JS 文件'),
+                  ),
                 ),
               ],
             ),
@@ -127,7 +131,9 @@ class _UserApiDebugPageState extends ConsumerState<UserApiDebugPage> {
                       source.originUrl != null
                   ? () => controller.refresh(source.id)
                   : null,
-              onRemove: () => controller.remove(source.id),
+              onRemove: isDefaultUserApiSource(source)
+                  ? null
+                  : () => controller.remove(source.id),
             ),
             const SizedBox(height: 10),
           ],
@@ -247,7 +253,7 @@ class _SourceDetailsCard extends StatelessWidget {
   final bool loading;
   final VoidCallback onActivate;
   final VoidCallback? onRefresh;
-  final VoidCallback onRemove;
+  final VoidCallback? onRemove;
 
   @override
   Widget build(BuildContext context) {
@@ -304,11 +310,12 @@ class _SourceDetailsCard extends StatelessWidget {
                       onPressed: loading ? null : onRefresh,
                       icon: const Icon(Icons.refresh_outlined),
                     ),
-                  IconButton(
-                    tooltip: '移除音源',
-                    onPressed: loading ? null : onRemove,
-                    icon: const Icon(Icons.delete_outline),
-                  ),
+                  if (onRemove != null)
+                    IconButton(
+                      tooltip: '移除音源',
+                      onPressed: loading ? null : onRemove,
+                      icon: const Icon(Icons.delete_outline),
+                    ),
                 ],
               ),
               if (source.info.description != null) ...[
@@ -384,14 +391,9 @@ class _InlineError extends StatelessWidget {
 }
 
 List<String> _capabilities(UserApiSource source) {
-  final keys = {...source.musicUrlSources, ...source.lyricSources}.toList()
-    ..sort();
+  final keys = source.musicUrlSources.toList()..sort();
   return [
-    for (final key in keys)
-      '${_sourceName(key)} · ${[
-        if (source.musicUrlSources.contains(key)) '播放',
-        if (source.lyricSources.contains(key)) '歌词',
-      ].join(' / ')}',
+    for (final key in keys) '${_sourceName(key)} · 播放',
   ];
 }
 

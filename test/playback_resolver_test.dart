@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:coral_music_mobile/domain/music.dart';
 import 'package:coral_music_mobile/features/player/data/playback_resolver.dart';
 import 'package:coral_music_mobile/features/player/data/user_api_runner.dart';
@@ -70,6 +72,39 @@ void main() {
 
     expect(runner.resolveCount, 0);
   });
+
+  test('passes local FLAC URIs directly to the audio engine', () async {
+    final runner = _Runner();
+    final resolver = PlaybackResolver(runner);
+    final uri = await resolver.resolve(Track(
+      sourceKind: TrackSourceKind.local,
+      sourceId: 'device',
+      sourceTrackId: '/music/测试.flac',
+      title: '测试 FLAC',
+      artist: '测试歌手',
+      localUri: Uri.file('/music/测试.flac'),
+    ));
+
+    expect(uri.uri.scheme, 'file');
+    expect(uri.uri.path, '/music/测试.flac');
+    expect(runner.resolveCount, 0);
+  });
+
+  test('waits for persisted User API initialization before resolving online',
+      () async {
+    final runner = _Runner();
+    final resolver = PlaybackResolver(runner);
+    final ready = Completer<void>();
+    resolver.setUserApiInitialization(ready.future);
+
+    final resolving = resolver.resolve(track);
+    await Future<void>.delayed(Duration.zero);
+    expect(runner.resolveCount, 0);
+
+    ready.complete();
+    await resolving;
+    expect(runner.resolveCount, 1);
+  });
 }
 
 final class _Runner implements UserApiRunner {
@@ -78,9 +113,6 @@ final class _Runner implements UserApiRunner {
 
   @override
   Future<void> clear() async {}
-
-  @override
-  Future<LyricPayload?> resolveLyric(Track track) async => null;
 
   @override
   Future<UserApiManifest> load(String script) async =>

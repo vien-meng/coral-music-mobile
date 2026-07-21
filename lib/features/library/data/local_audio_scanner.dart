@@ -6,10 +6,15 @@ import 'cue_parser.dart';
 import 'local_audio_metadata.dart';
 
 final class LocalAudioScanResult {
-  const LocalAudioScanResult({required this.tracks, required this.skipped});
+  const LocalAudioScanResult({
+    required this.tracks,
+    required this.skipped,
+    this.errorMessage,
+  });
 
   final List<Track> tracks;
   final List<String> skipped;
+  final String? errorMessage;
 }
 
 final class LocalAudioScanner {
@@ -23,7 +28,13 @@ final class LocalAudioScanner {
     'opus',
     'ape',
     'aiff',
-    'alac'
+    'aif',
+    'alac',
+    'ac3',
+    'dsf',
+    'dff',
+    'm4r',
+    'wma',
   };
   static const _coverNames = {
     'cover.jpg',
@@ -61,7 +72,11 @@ final class LocalAudioScanner {
   Future<LocalAudioScanResult> scanDirectory(String path) async {
     final directory = Directory(path);
     if (!await directory.exists()) {
-      return LocalAudioScanResult(tracks: const [], skipped: [path]);
+      return LocalAudioScanResult(
+        tracks: const [],
+        skipped: [path],
+        errorMessage: '无法访问所选目录',
+      );
     }
     final tracks = <Track>[];
     final skipped = <String>[];
@@ -94,6 +109,11 @@ final class LocalAudioScanner {
       }
     } on FileSystemException {
       skipped.add(path);
+      return LocalAudioScanResult(
+        tracks: tracks,
+        skipped: skipped,
+        errorMessage: '无法读取所选目录，请授予音乐和音频访问权限后重试',
+      );
     }
     return LocalAudioScanResult(tracks: tracks, skipped: skipped);
   }

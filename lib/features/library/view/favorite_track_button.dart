@@ -106,6 +106,7 @@ class _FavoriteOnlinePlaylistButtonState
     extends ConsumerState<FavoriteOnlinePlaylistButton> {
   late Future<bool> _favorite;
   late final ProviderSubscription<int> _subscription;
+  var _isToggling = false;
 
   @override
   void initState() {
@@ -145,18 +146,105 @@ class _FavoriteOnlinePlaylistButtonState
         future: _favorite,
         builder: (context, snapshot) => IconButton(
           tooltip: snapshot.data == true ? '取消收藏歌单' : '收藏歌单',
-          onPressed: snapshot.connectionState != ConnectionState.done
+          onPressed:
+              snapshot.connectionState != ConnectionState.done || _isToggling
+                  ? null
+                  : () async {
+                      final previous = snapshot.data == true;
+                      setState(() {
+                        _isToggling = true;
+                        _favorite = Future.value(!previous);
+                      });
+                      final favorite = await ref
+                          .read(libraryProvider.notifier)
+                          .toggleFavoriteOnlinePlaylist(widget.detail);
+                      if (!mounted) return;
+                      final error = ref.read(libraryProvider).error;
+                      setState(() {
+                        _isToggling = false;
+                        _favorite = error == null
+                            ? Future.value(favorite)
+                            : _loadFavorite();
+                      });
+                    },
+          icon: Icon(
+            snapshot.data == true ? Icons.bookmark : Icons.bookmark_border,
+            color: snapshot.data == true
+                ? Theme.of(context).colorScheme.primary
+                : null,
+          ),
+        ),
+      );
+}
+
+class FavoriteAlbumButton extends ConsumerStatefulWidget {
+  const FavoriteAlbumButton({
+    required this.name,
+    required this.tracks,
+    super.key,
+  });
+
+  final String name;
+  final List<Track> tracks;
+
+  @override
+  ConsumerState<FavoriteAlbumButton> createState() =>
+      _FavoriteAlbumButtonState();
+}
+
+class _FavoriteAlbumButtonState extends ConsumerState<FavoriteAlbumButton> {
+  late Future<bool> _favorite;
+  var _isToggling = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _favorite = _loadFavorite();
+  }
+
+  @override
+  void didUpdateWidget(covariant FavoriteAlbumButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.name != widget.name || oldWidget.tracks != widget.tracks) {
+      _favorite = _loadFavorite();
+    }
+  }
+
+  Future<bool> _loadFavorite() =>
+      ref.read(libraryProvider.notifier).isFavoriteAlbum(
+            widget.name,
+            widget.tracks,
+          );
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<bool>(
+        future: _favorite,
+        builder: (context, snapshot) => IconButton(
+          tooltip: snapshot.data == true ? '取消收藏专辑' : '收藏专辑',
+          onPressed: snapshot.connectionState != ConnectionState.done ||
+                  _isToggling ||
+                  widget.tracks.isEmpty
               ? null
               : () async {
+                  final previous = snapshot.data == true;
+                  setState(() {
+                    _isToggling = true;
+                    _favorite = Future.value(!previous);
+                  });
                   final favorite = await ref
                       .read(libraryProvider.notifier)
-                      .toggleFavoriteOnlinePlaylist(widget.detail);
-                  if (mounted) {
-                    setState(() => _favorite = Future.value(favorite));
-                  }
+                      .toggleFavoriteAlbum(widget.name, widget.tracks);
+                  if (!mounted) return;
+                  final error = ref.read(libraryProvider).error;
+                  setState(() {
+                    _isToggling = false;
+                    _favorite = error == null
+                        ? Future.value(favorite)
+                        : _loadFavorite();
+                  });
                 },
           icon: Icon(
-            Icons.bookmark_border,
+            snapshot.data == true ? Icons.bookmark : Icons.bookmark_border,
             color: snapshot.data == true
                 ? Theme.of(context).colorScheme.primary
                 : null,

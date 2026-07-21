@@ -35,7 +35,10 @@ void main() {
         .setMockMethodCallHandler(channel, (call) async {
       if (call.method == 'load') {
         return <String, Object?>{
-          'musicUrlSources': ['kg']
+          'musicUrlSources': ['kg'],
+          'musicUrlQualities': {
+            'kg': ['128k', 'flac', 'hires', 'master'],
+          },
         };
       }
       if (call.method == 'resolveMusicUrl') {
@@ -53,7 +56,13 @@ void main() {
     );
 
     final runner = MethodChannelUserApiRunner();
-    await runner.load('source');
+    final manifest = await runner.load('source');
+    expect(manifest.musicUrlQualities['kg'], {
+      AudioQuality.standard128k,
+      AudioQuality.flac,
+      AudioQuality.hires,
+      AudioQuality.master,
+    });
     final playbackUrl = await runner.resolveMusicUrl(
       const Track(
         sourceKind: TrackSourceKind.online,
@@ -88,20 +97,19 @@ void main() {
     });
   });
 
-  test('normalizes a desktop-shaped User API lyric payload', () async {
+  test('keeps QQ and Migu desktop fields at the User API boundary', () async {
     const channel = MethodChannel('coral_music/user_api');
+    final requests = <Map<Object?, Object?>>[];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
       if (call.method == 'load') {
         return <String, Object?>{
-          'musicUrlSources': ['kw'],
-          'lyricSources': ['kw'],
+          'musicUrlSources': ['tx', 'mg'],
         };
       }
-      if (call.method == 'resolveLyric') {
-        return '''
-          {"data":{"lyric":"[00:01.00]原文","lxlyric":"[00:01.00]<1000,200>原文","tlyric":"[00:01.00]Translation","rlyric":"[00:01.00]yuan wen"}}
-        ''';
+      if (call.method == 'resolveMusicUrl') {
+        requests.add(call.arguments as Map<Object?, Object?>);
+        return 'https://media.example.com/audio.mp3';
       }
       return null;
     });
@@ -112,54 +120,61 @@ void main() {
 
     final runner = MethodChannelUserApiRunner();
     await runner.load('source');
-    final lyric = await runner.resolveLyric(
+    await runner.resolveMusicUrl(
       const Track(
         sourceKind: TrackSourceKind.online,
-        sourceId: 'kw',
-        sourceTrackId: '1',
-        title: '测试歌曲',
-        artist: '测试歌手',
+        sourceId: 'tx',
+        sourceTrackId: 'qq-mid',
+        title: 'QQ 歌曲',
+        artist: 'QQ 歌手',
+        availableQualities: [AudioQuality.flac, AudioQuality.high320k],
+        extra: {
+          'songId': 12,
+          'albumMid': 'album-mid',
+          'mediaMid': 'media-mid',
+          'qualityMeta': {
+            'flac': {'size': 30000000},
+            '320k': {'size': 8000000},
+          },
+        },
       ),
+      AudioQuality.flac,
+    );
+    await runner.resolveMusicUrl(
+      const Track(
+        sourceKind: TrackSourceKind.online,
+        sourceId: 'mg',
+        sourceTrackId: 'migu-song',
+        title: '咪咕歌曲',
+        artist: '咪咕歌手',
+        availableQualities: [AudioQuality.flac],
+        extra: {
+          'copyrightId': 'copyright-id',
+          'qualityMeta': {
+            'flac': {'size': 30000000},
+          },
+          'lrcUrl': 'https://example.com/song.lrc',
+          'mrcUrl': 'https://example.com/song.mrc',
+          'trcUrl': 'https://example.com/song.trc',
+        },
+      ),
+      AudioQuality.standard128k,
     );
 
-    expect(lyric?.lyric, '[00:01.00]原文');
-    expect(lyric?.lxlyric, '[00:01.00]<1000,200>原文');
-    expect(lyric?.tlyric, '[00:01.00]Translation');
-    expect(lyric?.rlyric, '[00:01.00]yuan wen');
-  });
-
-  test('tries online lyrics when a source only advertises musicUrl', () async {
-    const channel = MethodChannel('coral_music/user_api');
-    var lyricRequested = false;
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(channel, (call) async {
-      if (call.method == 'load') {
-        return <String, Object?>{
-          'musicUrlSources': ['kw']
-        };
-      }
-      if (call.method == 'resolveLyric') {
-        lyricRequested = true;
-        return '{"lyric":"[00:01.00]原文"}';
-      }
-      return null;
-    });
-    addTearDown(
-      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(channel, null),
-    );
-
-    final runner = MethodChannelUserApiRunner();
-    await runner.load('source');
-    final lyric = await runner.resolveLyric(const Track(
-      sourceKind: TrackSourceKind.online,
-      sourceId: 'kw',
-      sourceTrackId: '1',
-      title: '测试歌曲',
-      artist: '测试歌手',
-    ));
-
-    expect(lyricRequested, isTrue);
-    expect(lyric?.lyric, '[00:01.00]原文');
+    final qq = requests[0]['musicInfo']! as Map<Object?, Object?>;
+    expect(qq['strMediaMid'], 'media-mid');
+    expect(qq['songId'], 12);
+    expect(qq['types'], [
+      {'type': 'flac', 'size': 30000000},
+      {'type': '320k', 'size': 8000000},
+    ]);
+    final migu = requests[1]['musicInfo']! as Map<Object?, Object?>;
+    expect(migu['songmid'], 'migu-song');
+    expect(migu['copyrightId'], 'copyright-id');
+    expect(migu['types'], [
+      {'type': 'flac', 'size': 30000000},
+    ]);
+    expect(migu['mrcUrl'], 'https://example.com/song.mrc');
+    expect(migu['trcUrl'], 'https://example.com/song.trc');
   });
 }

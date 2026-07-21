@@ -1,15 +1,14 @@
-import 'dart:convert';
-
 import 'package:flutter/services.dart';
 
 import '../../../core/app_failure.dart';
 import '../../../domain/music.dart';
 
 final class UserApiManifest {
-  const UserApiManifest(this.musicUrlSources, {this.lyricSources = const {}});
+  const UserApiManifest(this.musicUrlSources,
+      [this.musicUrlQualities = const {}]);
 
   final Set<String> musicUrlSources;
-  final Set<String> lyricSources;
+  final Map<String, Set<AudioQuality>> musicUrlQualities;
 }
 
 final class ResolvedPlaybackUrl {
@@ -25,7 +24,6 @@ abstract interface class UserApiRunner {
   Future<void> clear();
   Future<ResolvedPlaybackUrl> resolveMusicUrl(
       Track track, AudioQuality quality);
-  Future<LyricPayload?> resolveLyric(Track track);
 }
 
 final class MethodChannelUserApiRunner implements UserApiRunner {
@@ -49,17 +47,26 @@ final class MethodChannelUserApiRunner implements UserApiRunner {
           (result?['musicUrlSources'] as List<Object?>? ?? const <Object?>[])
               .whereType<String>()
               .toSet();
-      final lyricSources =
-          (result?['lyricSources'] as List<Object?>? ?? const <Object?>[])
-              .whereType<String>()
-              .toSet();
       if (sources.isEmpty) {
         throw const AppFailure(
           code: AppFailureCode.invalidData,
           message: '音源脚本未声明可用的 musicUrl 来源',
         );
       }
-      return _manifest = UserApiManifest(sources, lyricSources: lyricSources);
+      final qualities = <String, Set<AudioQuality>>{};
+      final rawQualities = result?['musicUrlQualities'];
+      if (rawQualities is Map) {
+        for (final entry in rawQualities.entries) {
+          final source = '${entry.key}'.trim();
+          if (source.isEmpty || entry.value is! List) continue;
+          final values = (entry.value as List)
+              .map((value) => _qualityFromName('$value'))
+              .whereType<AudioQuality>()
+              .toSet();
+          if (values.isNotEmpty) qualities[source] = values;
+        }
+      }
+      return _manifest = UserApiManifest(sources, qualities);
     } on PlatformException catch (error) {
       throw AppFailure(
         code: AppFailureCode.invalidData,
@@ -148,57 +155,6 @@ final class MethodChannelUserApiRunner implements UserApiRunner {
     }
   }
 
-  @override
-  Future<LyricPayload?> resolveLyric(Track track) async {
-    final manifest = _manifest;
-    // Desktop dispatches lyric by source action. Some current LX scripts only
-    // advertise a local lyric capability, while still handling online actions.
-    if (manifest == null ||
-        !manifest.musicUrlSources.contains(track.sourceId)) {
-      return null;
-    }
-    try {
-      final raw = await _channel.invokeMethod<String>('resolveLyric', {
-        'source': track.sourceId,
-        'musicInfo': _legacyMusicInfo(track),
-      });
-      if (raw == null || raw.length > 256 * 1024) {
-        throw const AppFailure(
-          code: AppFailureCode.invalidData,
-          message: '音源未返回有效歌词',
-        );
-      }
-      final value = jsonDecode(raw);
-      final data = value is Map<String, dynamic> && value['data'] is Map
-          ? value['data'] as Map<Object?, Object?>
-          : value is Map
-              ? value
-              : <Object?, Object?>{'lyric': value};
-      return LyricPayload(
-        lyric: data['lyric'] as String? ?? '',
-        lxlyric: data['lxlyric'] as String? ?? '',
-        tlyric: data['tlyric'] as String? ?? '',
-        rlyric: data['rlyric'] as String? ?? '',
-      );
-    } on PlatformException catch (error) {
-      throw AppFailure(
-        code: AppFailureCode.invalidData,
-        message: error.message ?? '音源歌词获取失败',
-        diagnostic: error.code,
-      );
-    } on FormatException {
-      throw const AppFailure(
-        code: AppFailureCode.invalidData,
-        message: '音源未返回有效歌词',
-      );
-    } on MissingPluginException {
-      throw const AppFailure(
-        code: AppFailureCode.invalidData,
-        message: '当前平台尚未验证受限音源脚本运行时',
-      );
-    }
-  }
-
   static String _qualityName(AudioQuality quality) => switch (quality) {
         AudioQuality.flac24bit => 'flac24bit',
         AudioQuality.flac => 'flac',
@@ -237,6 +193,18 @@ final class MethodChannelUserApiRunner implements UserApiRunner {
       };
     }
 
+    final qualities = [
+      for (final quality in track.availableQualities)
+        {'type': _qualityName(quality), ...metadataFor(quality)},
+    ];
+    final qualitys = {
+      for (final quality in track.availableQualities)
+        _qualityName(quality): metadataFor(quality),
+    };
+    final lrcUrl = track.extra['lrcUrl'];
+    final mrcUrl = track.extra['mrcUrl'];
+    final trcUrl = track.extra['trcUrl'];
+
     final meta = <String, Object?>{
       'songId': songId,
       'albumName': track.album ?? '',
@@ -246,14 +214,8 @@ final class MethodChannelUserApiRunner implements UserApiRunner {
       'strMediaMid': track.extra['mediaMid'],
       'hash': track.extra['hash'],
       'copyrightId': track.extra['copyrightId'] ?? songId,
-      'qualitys': [
-        for (final quality in track.availableQualities)
-          {'type': _qualityName(quality), ...metadataFor(quality)},
-      ],
-      '_qualitys': {
-        for (final quality in track.availableQualities)
-          _qualityName(quality): metadataFor(quality),
-      },
+      'qualitys': qualities,
+      '_qualitys': qualitys,
     };
     return {
       // Desktop User API scripts consume this MusicInfo shape.
@@ -266,10 +228,18 @@ final class MethodChannelUserApiRunner implements UserApiRunner {
       // These fields keep compatibility with older scripts that predate meta.
       'songmid': track.sourceTrackId,
       'albumName': track.album ?? '',
+      'img': track.coverUri?.toString() ?? '',
+      'typeUrl': const <String, Object?>{},
       'albumId': meta['albumId'],
       'albumMid': meta['albumMid'],
       'songId': songId,
       'strMediaMid': meta['strMediaMid'],
+      'copyrightId': meta['copyrightId'],
+      'lrcUrl': lrcUrl,
+      'mrcUrl': mrcUrl,
+      'trcUrl': trcUrl,
+      'types': qualities,
+      '_types': qualitys,
     };
   }
 

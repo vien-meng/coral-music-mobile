@@ -46,6 +46,38 @@ void main() {
     expect(result.hasNext, isFalse);
   });
 
+  test('normalizes Migu playlist search entries', () {
+    final result = MiguPlaylistService.parseSearch(
+      {
+        'songListResultData': {
+          'totalCount': 51,
+          'result': [
+            {
+              'id': 'search-list',
+              'name': '搜索歌单',
+              'userName': '创建者',
+              'musicNum': 18,
+              'playNum': 20000,
+              'musicListPicUrl': 'http://cover.example.com/search.jpg',
+            },
+          ],
+        },
+      },
+      page: 2,
+    );
+
+    expect(result.page, 2);
+    expect(result.pageSize, 30);
+    expect(result.total, 51);
+    final playlist = result.items.single;
+    expect(playlist.id, 'search-list');
+    expect(playlist.author, '创建者');
+    expect(playlist.trackCount, 18);
+    expect(playlist.playCount, '2.0万');
+    expect(
+        playlist.coverUri.toString(), 'https://cover.example.com/search.jpg');
+  });
+
   test('normalizes Migu playlist detail tracks and qualities', () {
     const fallback = OnlinePlaylist(
       id: 'playlist-1',

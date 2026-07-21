@@ -63,9 +63,15 @@ class _PlaybackRestoreState extends ConsumerState<_PlaybackRestore> {
       fireImmediately: false,
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(ref.read(playerProvider.notifier).restoreLastPlayback());
+      unawaited(_restorePlayback());
       unawaited(SharedAudioReceiver.install(ref));
     });
+  }
+
+  Future<void> _restorePlayback() async {
+    await ref.read(userApiDebugProvider.notifier).restorePersisted();
+    if (!mounted) return;
+    await ref.read(playerProvider.notifier).restoreLastPlayback();
   }
 
   Future<void> _importSharedAudio(List<String> paths) async {

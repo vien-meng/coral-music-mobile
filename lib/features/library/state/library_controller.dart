@@ -228,15 +228,22 @@ final class LibraryController extends StateNotifier<LibraryState> {
   }
 
   Future<({int added, int skipped})?> importSharedAudio(
-    List<String> paths,
-  ) async {
+    List<String> paths, {
+    String playlistName = '分享导入',
+    bool openPlaylist = false,
+  }) async {
     if (paths.isEmpty || state.isLoading) return null;
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      var playlists = await _store.listPlaylists();
-      var target = playlists.where((item) => item.name == '分享导入').firstOrNull;
-      target ??= await _store.createPlaylist('分享导入');
       final scan = await LocalAudioScanner().scanFiles(paths);
+      if (scan.tracks.isEmpty) {
+        state = state.copyWith(isLoading: false, clearError: true);
+        return (added: 0, skipped: scan.skipped.length);
+      }
+      final playlists = await _store.listPlaylists();
+      final target =
+          playlists.where((item) => item.name == playlistName).firstOrNull ??
+              await _store.createPlaylist(playlistName);
       var added = 0;
       for (final track in scan.tracks) {
         if (await _store.addTrack(target.id, track)) added++;
@@ -244,7 +251,8 @@ final class LibraryController extends StateNotifier<LibraryState> {
       final selected = state.selectedPlaylist;
       state = state.copyWith(
         playlists: await _store.listPlaylists(),
-        tracks: selected?.id == target.id
+        selectedPlaylist: openPlaylist ? target : null,
+        tracks: openPlaylist || selected?.id == target.id
             ? await _store.listTracks(target.id)
             : null,
         isLoading: false,
@@ -256,7 +264,7 @@ final class LibraryController extends StateNotifier<LibraryState> {
         isLoading: false,
         error: AppFailure(
           code: AppFailureCode.unknown,
-          message: '系统分享音频导入失败',
+          message: '本地音频导入失败',
           diagnostic: error.runtimeType.toString(),
         ),
       );
@@ -348,6 +356,9 @@ final class LibraryController extends StateNotifier<LibraryState> {
       return false;
     }
   }
+
+  Future<bool> isFavoriteAlbum(String name, List<Track> tracks) =>
+      _store.isFavoriteAlbum(name, tracks);
 
   Future<void> removeTrack(String trackId) => _run(() async {
         final playlist = state.selectedPlaylist;

@@ -9,8 +9,9 @@ Future<void> showPlayerQualitySheet(
   BuildContext context,
   WidgetRef ref,
   Track track,
-  AudioQuality selected,
-) {
+  AudioQuality selected, {
+  Iterable<AudioQuality>? qualities,
+}) {
   final controller = ref.read(playerProvider.notifier);
   return showModalBottomSheet<void>(
     context: context,
@@ -47,7 +48,7 @@ Future<void> showPlayerQualitySheet(
                 shrinkWrap: true,
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                 children: [
-                  for (final quality in track.availableQualities)
+                  for (final quality in qualities ?? track.availableQualities)
                     ListTile(
                       dense: true,
                       shape: RoundedRectangleBorder(

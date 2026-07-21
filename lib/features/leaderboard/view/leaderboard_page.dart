@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/cover_image.dart';
+import '../../../app/online_source_menu.dart';
 import '../../../app/app_theme.dart';
 import '../../../domain/music.dart';
 import '../../download/view/download_track_button.dart';
@@ -10,6 +12,8 @@ import '../../library/view/favorite_track_button.dart';
 import '../../library/view/playlist_picker.dart';
 import '../../player/state/playback_queue_controller.dart';
 import '../../player/state/player_controller.dart';
+import '../../player/state/user_api_debug_controller.dart';
+import '../../song_list/state/song_list_controller.dart';
 import '../state/leaderboard_controller.dart';
 
 class LeaderboardPage extends ConsumerStatefulWidget {
@@ -30,78 +34,93 @@ class _LeaderboardPageState extends ConsumerState<LeaderboardPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(leaderboardProvider);
-    return RefreshIndicator(
-      color: CoralPalette.mint,
-      onRefresh: ref.read(leaderboardProvider.notifier).refresh,
-      child: ListView(
-        key: const Key('leaderboard-tracks'),
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
-        children: [
-          _TopBar(state: state),
-          const SizedBox(height: 18),
-          _DiscoveryHero(state: state),
-          const SizedBox(height: 16),
-          _QuickActions(
-            onDailyRecommendation: _loadDailyRecommendation,
-            onRadio: _startRadio,
-          ),
-          const SizedBox(height: 28),
-          _SectionHeader(
-            title: '推荐歌单',
-            trailing: state.isLoading
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : TextButton.icon(
-                    onPressed: () =>
-                        ref.read(leaderboardProvider.notifier).refresh(),
-                    icon: const Icon(Icons.refresh_rounded, size: 17),
-                    label: const Text('换一换'),
-                  ),
-          ),
-          const SizedBox(height: 8),
-          if (state.boards.isEmpty && state.isLoading)
-            const _BoardLoading()
-          else if (state.boards.isNotEmpty)
-            _BoardStrip(state: state)
-          else
-            _InlineMessage(message: state.error?.message ?? '暂无可用榜单'),
-          const SizedBox(height: 28),
-          _SectionHeader(
-            title: state.activeBoard?.name ?? '热门歌曲',
-            subtitle: state.activeBoard == null ? null : '${state.total} 首歌曲',
-            trailing: OutlinedButton.icon(
-              onPressed: state.tracks.isEmpty ? null : () => _playAll(state),
-              icon: const Icon(Icons.play_arrow_rounded, size: 18),
-              label: const Text('播放全部'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Theme.of(context).colorScheme.onSurface,
-                padding: const EdgeInsets.symmetric(horizontal: 14),
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+          child: Column(
+            children: [
+              _TopBar(state: state),
+              const SizedBox(height: 18),
+              _DiscoveryHero(state: state),
+              const SizedBox(height: 16),
+              _QuickActions(
+                onDailyRecommendation: _loadDailyRecommendation,
+                onRadio: _startRadio,
+                onSongList: _openSongList,
               ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: RefreshIndicator(
+            color: CoralPalette.mint,
+            onRefresh: ref.read(leaderboardProvider.notifier).refresh,
+            child: ListView(
+              key: const Key('leaderboard-tracks'),
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
+              children: [
+                _SectionHeader(
+                  title: '推荐歌单',
+                  trailing: state.isLoading
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : TextButton.icon(
+                          onPressed: () =>
+                              ref.read(leaderboardProvider.notifier).refresh(),
+                          icon: const Icon(Icons.refresh_rounded, size: 17),
+                          label: const Text('换一换'),
+                        ),
+                ),
+                const SizedBox(height: 8),
+                if (state.boards.isEmpty && state.isLoading)
+                  const _BoardLoading()
+                else if (state.boards.isNotEmpty)
+                  _BoardStrip(state: state)
+                else
+                  _InlineMessage(message: state.error?.message ?? '暂无可用榜单'),
+                const SizedBox(height: 28),
+                _SectionHeader(
+                  title: state.activeBoard?.name ?? '热门歌曲',
+                  subtitle:
+                      state.activeBoard == null ? null : '${state.total} 首歌曲',
+                  trailing: OutlinedButton.icon(
+                    onPressed:
+                        state.tracks.isEmpty ? null : () => _playAll(state),
+                    icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                    label: const Text('播放全部'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Theme.of(context).colorScheme.onSurface,
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                if (state.error != null)
+                  _ErrorCard(
+                    message: state.error!.message,
+                    onRetry: ref.read(leaderboardProvider.notifier).refresh,
+                  )
+                else if (state.isLoading && state.tracks.isEmpty)
+                  const _TrackLoading()
+                else if (state.tracks.isEmpty)
+                  const _InlineMessage(message: '这里暂时没有歌曲')
+                else
+                  for (var index = 0; index < state.tracks.length; index++)
+                    _TrackTile(
+                      track: state.tracks[index],
+                      rank: index + 1,
+                      onTap: () => _playTrack(state, index),
+                    ),
+                if (state.tracks.isNotEmpty) _Pagination(state: state),
+              ],
             ),
           ),
-          const SizedBox(height: 10),
-          if (state.error != null)
-            _ErrorCard(
-              message: state.error!.message,
-              onRetry: ref.read(leaderboardProvider.notifier).refresh,
-            )
-          else if (state.isLoading && state.tracks.isEmpty)
-            const _TrackLoading()
-          else if (state.tracks.isEmpty)
-            const _InlineMessage(message: '这里暂时没有歌曲')
-          else
-            for (var index = 0; index < state.tracks.length; index++)
-              _TrackTile(
-                track: state.tracks[index],
-                rank: index + 1,
-                onTap: () => _playTrack(state, index),
-              ),
-          if (state.tracks.isNotEmpty) _Pagination(state: state),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -170,6 +189,11 @@ class _LeaderboardPageState extends ConsumerState<LeaderboardPage> {
     if (mounted) _showMessage('音乐电台已开始随机播放');
   }
 
+  void _openSongList() {
+    ref.read(songListProvider.notifier).closeDetail();
+    context.go('/song-list');
+  }
+
   void _showMessage(String message) => ScaffoldMessenger.of(context)
       .showSnackBar(SnackBar(content: Text(message)));
 }
@@ -180,73 +204,34 @@ class _TopBar extends ConsumerWidget {
   final LeaderboardState state;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => Row(
-        children: [
-          Text('发现',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -.6,
-                  )),
-          const Spacer(),
-          _SourceMenu(state: state),
-          const _NotificationMenu(),
-        ],
-      );
-}
-
-class _SourceMenu extends ConsumerWidget {
-  const _SourceMenu({required this.state});
-
-  final LeaderboardState state;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) => MenuAnchor(
-        style: _topBarMenuStyle(context),
-        menuChildren: [
-          const _MenuHeading(title: '音乐平台'),
-          for (final source in const [
-            OnlineSource.kuwo,
-            OnlineSource.qq,
-            OnlineSource.migu,
-            OnlineSource.netease,
-          ])
-            MenuItemButton(
-              leadingIcon: Icon(
-                _sourceIcon(source),
-                size: 20,
-                color: source == state.source
-                    ? Theme.of(context).colorScheme.primary
-                    : null,
-              ),
-              trailingIcon: source == state.source
-                  ? Icon(
-                      Icons.check_rounded,
-                      size: 18,
-                      color: Theme.of(context).colorScheme.primary,
-                    )
-                  : const SizedBox(width: 18),
-              onPressed: () {
-                if (source != state.source) {
-                  ref.read(leaderboardProvider.notifier).selectSource(source);
-                }
-              },
-              child: SizedBox(width: 126, child: Text(source.label)),
-            ),
-        ],
-        builder: (context, controller, _) => IconButton(
-          tooltip: '切换音乐来源',
-          onPressed: state.isLoading
-              ? null
-              : () =>
-                  controller.isOpen ? controller.close() : controller.open(),
-          icon: Icon(
-            Icons.library_music_outlined,
-            color: controller.isOpen
-                ? Theme.of(context).colorScheme.primary
-                : null,
-          ),
+  Widget build(BuildContext context, WidgetRef ref) {
+    const candidates = [
+      OnlineSource.kuwo,
+      OnlineSource.kugou,
+      OnlineSource.qq,
+      OnlineSource.migu,
+      OnlineSource.netease,
+    ];
+    final supported = ref.watch(userApiDebugProvider.select((userApi) =>
+        userApi.activeSource?.musicUrlSources ?? const <String>{}));
+    return Row(
+      children: [
+        Text('发现',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -.6,
+                )),
+        const Spacer(),
+        OnlineSourceMenu(
+          activeSource: state.source,
+          isLoading: state.isLoading,
+          sources: supportedOnlineSources(candidates, supported),
+          onSelected: ref.read(leaderboardProvider.notifier).selectSource,
         ),
-      );
+        const _NotificationMenu(),
+      ],
+    );
+  }
 }
 
 class _NotificationMenu extends StatelessWidget {
@@ -254,9 +239,9 @@ class _NotificationMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => MenuAnchor(
-        style: _topBarMenuStyle(context),
+        style: onlineSourceMenuStyle(context),
         menuChildren: [
-          const _MenuHeading(title: '消息通知'),
+          const OnlineSourceMenuHeading(title: '消息通知'),
           SizedBox(
             width: 220,
             child: Padding(
@@ -295,55 +280,16 @@ class _NotificationMenu extends StatelessWidget {
       );
 }
 
-class _MenuHeading extends StatelessWidget {
-  const _MenuHeading({required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-        width: 220,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: Text(
-            title,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-          ),
-        ),
-      );
-}
-
-MenuStyle _topBarMenuStyle(BuildContext context) => MenuStyle(
-      backgroundColor:
-          WidgetStatePropertyAll(Theme.of(context).colorScheme.surface),
-      elevation: const WidgetStatePropertyAll(6),
-      padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(vertical: 4)),
-      shape: WidgetStatePropertyAll(
-        RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-          side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-        ),
-      ),
-    );
-
-IconData _sourceIcon(OnlineSource source) => switch (source) {
-      OnlineSource.kuwo => Icons.graphic_eq_rounded,
-      OnlineSource.qq => Icons.chat_bubble_outline_rounded,
-      OnlineSource.migu => Icons.headphones_rounded,
-      OnlineSource.netease => Icons.album_outlined,
-      OnlineSource.kugou => Icons.music_note_rounded,
-    };
-
 class _QuickActions extends StatelessWidget {
   const _QuickActions({
     required this.onDailyRecommendation,
     required this.onRadio,
+    required this.onSongList,
   });
 
   final VoidCallback onDailyRecommendation;
   final VoidCallback onRadio;
+  final VoidCallback onSongList;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -356,7 +302,7 @@ class _QuickActions extends StatelessWidget {
           _QuickAction(
             icon: Icons.grid_view_outlined,
             label: '歌单广场',
-            onTap: () => context.go('/song-list'),
+            onTap: onSongList,
           ),
           _QuickAction(
             icon: Icons.radio_rounded,
@@ -484,15 +430,14 @@ class _HeroArtwork extends StatelessWidget {
         size: 34,
       ),
     );
-    if (uri == null) return fallback;
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
-      child: Image.network(
-        uri.toString(),
+      child: CoverImage(
+        uri: uri,
+        fallback: fallback,
         width: 78,
         height: 78,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => fallback,
       ),
     );
   }
@@ -625,14 +570,14 @@ class _BoardCover extends StatelessWidget {
         color: Colors.white,
       ),
     );
-    if (uri == null) return fallback;
     return ClipRRect(
       borderRadius: BorderRadius.circular(9),
-      child: Image.network(uri.toString(),
+      child: CoverImage(
+          uri: uri,
+          fallback: fallback,
           width: double.infinity,
           height: 74,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => fallback),
+          fit: BoxFit.cover),
     );
   }
 }
@@ -731,15 +676,14 @@ class _TrackArtwork extends StatelessWidget {
       ),
       child: const Icon(Icons.music_note_rounded, color: Colors.white),
     );
-    if (uri == null) return placeholder;
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),
-      child: Image.network(
-        uri.toString(),
+      child: CoverImage(
+        uri: uri,
+        fallback: placeholder,
         width: 48,
         height: 48,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => placeholder,
       ),
     );
   }

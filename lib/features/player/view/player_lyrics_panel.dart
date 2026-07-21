@@ -340,7 +340,7 @@ class _LyricEmpty extends StatelessWidget {
           children: [
             const Text('暂无可用歌词'),
             const SizedBox(height: 6),
-            const Text('当前音源未提供可用歌词'),
+            const Text('独立歌词服务未找到匹配结果'),
             const SizedBox(height: 12),
             TextButton.icon(
               onPressed: onRetry,

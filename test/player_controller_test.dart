@@ -542,9 +542,6 @@ final class _FakeUserApiRunner implements UserApiRunner {
   Future<void> clear() async {}
 
   @override
-  Future<LyricPayload?> resolveLyric(Track track) async => null;
-
-  @override
   Future<ResolvedPlaybackUrl> resolveMusicUrl(
     Track track,
     AudioQuality quality,
@@ -564,9 +561,6 @@ final class _DeferredUserApiRunner implements UserApiRunner {
   void complete(Track track, Uri uri) =>
       (_responses[track.id] ??= Completer<ResolvedPlaybackUrl>())
           .complete(ResolvedPlaybackUrl(uri));
-
-  @override
-  Future<LyricPayload?> resolveLyric(Track track) async => null;
 
   @override
   Future<UserApiManifest> load(String script) async =>
@@ -591,9 +585,6 @@ final class _FailingTrackRunner implements UserApiRunner {
   @override
   Future<UserApiManifest> load(String script) async =>
       const UserApiManifest({'kw'});
-
-  @override
-  Future<LyricPayload?> resolveLyric(Track track) async => null;
 
   @override
   Future<ResolvedPlaybackUrl> resolveMusicUrl(
@@ -623,9 +614,6 @@ final class _QualityFallbackRunner implements UserApiRunner {
       const UserApiManifest({'kw'});
 
   @override
-  Future<LyricPayload?> resolveLyric(Track track) async => null;
-
-  @override
   Future<ResolvedPlaybackUrl> resolveMusicUrl(
     Track track,
     AudioQuality quality,
@@ -650,9 +638,6 @@ final class _ActualQualityRunner implements UserApiRunner {
   @override
   Future<UserApiManifest> load(String script) async =>
       const UserApiManifest({'kw'});
-
-  @override
-  Future<LyricPayload?> resolveLyric(Track track) async => null;
 
   @override
   Future<ResolvedPlaybackUrl> resolveMusicUrl(

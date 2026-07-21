@@ -4,7 +4,9 @@ import 'package:dio/dio.dart';
 
 import '../../../core/app_failure.dart';
 import '../../../core/http_client.dart';
+import '../../../core/response_json.dart';
 import '../../../domain/music.dart';
+import '../../leaderboard/data/qq_track_support.dart';
 import 'kuwo_playlist_service.dart';
 
 final class QqPlaylistService implements PlaylistCatalogService {
@@ -80,11 +82,44 @@ final class QqPlaylistService implements PlaylistCatalogService {
   Future<PageResult<OnlinePlaylist>> searchPlaylists(
     String query,
     int page,
-  ) async =>
+  ) async {
+    final keyword = query.trim();
+    if (keyword.isEmpty || page < 1) {
       throw const AppFailure(
         code: AppFailureCode.invalidData,
-        message: 'QQ 音乐歌单搜索暂未接入',
+        message: 'QQ 音乐歌单搜索参数无效',
       );
+    }
+    final uri =
+        Uri.https('c.y.qq.com', '/soso/fcgi-bin/client_music_search_songlist', {
+      'page_no': '${page - 1}',
+      'num_per_page': '$_pageSize',
+      'format': 'json',
+      'query': keyword,
+      'remoteplace': 'txt.yqq.playlist',
+      'inCharset': 'utf8',
+      'outCharset': 'utf-8',
+    });
+    try {
+      final response = await _dio.getUri<Object?>(uri,
+          options: Options(headers: {
+            'Referer': 'https://y.qq.com/',
+            'User-Agent':
+                'Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; WOW64; Trident/5.0)',
+          }));
+      return parseSearch(response.data, page: page);
+    } on DioException catch (error) {
+      throw mapDioException(error);
+    } on AppFailure {
+      rethrow;
+    } on Object catch (error) {
+      throw AppFailure(
+        code: AppFailureCode.invalidData,
+        message: 'QQ 音乐歌单搜索数据解析失败',
+        diagnostic: error.runtimeType.toString(),
+      );
+    }
+  }
 
   @override
   Future<PlaylistDetail> getPlaylistDetail(OnlinePlaylist playlist) async {
@@ -174,17 +209,56 @@ final class QqPlaylistService implements PlaylistCatalogService {
     );
   }
 
+  static PageResult<OnlinePlaylist> parseSearch(
+    Object? raw, {
+    required int page,
+  }) {
+    final response = decodeJsonMap(raw);
+    final data = response['data'];
+    final items = data is Map ? data['list'] : null;
+    if ('${response['code']}' != '0' || data is! Map || items is! List) {
+      throw const AppFailure(
+        code: AppFailureCode.invalidData,
+        message: 'QQ 音乐歌单搜索数据格式异常',
+      );
+    }
+    final playlists = <OnlinePlaylist>[];
+    final ids = <String>{};
+    for (final item in items.whereType<Map>()) {
+      final id = '${item['dissid'] ?? ''}'.trim();
+      final name = '${item['dissname'] ?? ''}'.trim();
+      if (id.isEmpty || name.isEmpty || !ids.add(id)) continue;
+      final creator = item['creator'];
+      playlists.add(OnlinePlaylist(
+        id: id,
+        source: OnlineSource.qq,
+        name: name,
+        author: creator is Map ? '${creator['name'] ?? ''}'.trim() : '',
+        description: _description(item['introduction']),
+        trackCount: int.tryParse('${item['song_count'] ?? ''}') ?? 0,
+        playCount: _formatCount(item['listennum']),
+        coverUri: _httpsUri(item['imgurl']),
+      ));
+    }
+    return PageResult(
+      items: playlists,
+      page: page,
+      pageSize: _pageSize,
+      total: int.tryParse('${data['sum'] ?? ''}') ?? playlists.length,
+    );
+  }
+
   static PlaylistDetail parseDetail(
     Object? raw, {
     required OnlinePlaylist fallback,
   }) {
-    final response = raw is Map ? raw : null;
-    final list = response?['cdlist'];
+    final response = decodeJsonMap(raw);
+    final list = response['cdlist'];
     final detail = list is List && list.isNotEmpty && list.first is Map
         ? list.first as Map
         : null;
     final songs = detail?['songlist'];
-    if (response?['code'] != 0 || detail == null || songs is! List) {
+    if ('${response['code']}' != '0' || detail == null || songs is! List) {
       throw const AppFailure(
         code: AppFailureCode.invalidData,
         message: 'QQ 音乐歌单详情格式异常',
@@ -224,6 +298,7 @@ final class QqPlaylistService implements PlaylistCatalogService {
           'songId': song['id'],
           'albumMid': albumMid,
           'mediaMid': fileMap['media_mid'],
+          'qualityMeta': qqQualityMeta(fileMap),
         },
       ));
     }
@@ -244,20 +319,8 @@ final class QqPlaylistService implements PlaylistCatalogService {
     );
   }
 
-  static List<AudioQuality> _qualities(Map<Object?, Object?> file) {
-    final available = <AudioQuality>{};
-    if (_positive(file['size_hires'])) available.add(AudioQuality.flac24bit);
-    if (_positive(file['size_flac'])) available.add(AudioQuality.flac);
-    if (_positive(file['size_320mp3'])) available.add(AudioQuality.high320k);
-    if (_positive(file['size_128mp3'])) {
-      available.add(AudioQuality.standard128k);
-    }
-    return AudioQuality.values
-        .where(available.contains)
-        .toList(growable: false);
-  }
-
-  static bool _positive(Object? value) => (int.tryParse('$value') ?? 0) > 0;
+  static List<AudioQuality> _qualities(Map<Object?, Object?> file) =>
+      qqAudioQualities(file);
 
   static Duration? _duration(Object? value) {
     final seconds = int.tryParse('$value');
@@ -265,14 +328,12 @@ final class QqPlaylistService implements PlaylistCatalogService {
   }
 
   static Uri? _trackCover(String albumMid, String singerMid) {
-    final id = albumMid.isNotEmpty
-        ? 'T002$albumMid'
-        : singerMid.isEmpty
-            ? ''
-            : 'T001$singerMid';
+    final type = albumMid.isNotEmpty ? 'T002' : 'T001';
+    final id = albumMid.isNotEmpty ? albumMid : singerMid;
     return id.isEmpty
         ? null
-        : Uri.parse('https://y.gtimg.cn/music/photo_new/${id}R500x500M000.jpg');
+        : Uri.parse(
+            'https://y.gtimg.cn/music/photo_new/${type}R500x500M000$id.jpg');
   }
 
   static Uri? _httpsUri(Object? value) {

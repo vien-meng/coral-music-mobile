@@ -24,7 +24,16 @@ class _PlayerDetailPageState extends ConsumerState<PlayerDetailPage> {
   var _isClosing = false;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) FocusManager.instance.primaryFocus?.unfocus();
+    });
+  }
+
+  @override
   void dispose() {
+    FocusManager.instance.primaryFocus?.unfocus();
     _pageController.dispose();
     super.dispose();
   }

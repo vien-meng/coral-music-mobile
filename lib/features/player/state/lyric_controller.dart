@@ -1,72 +1,48 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/app_failure.dart';
+import '../../../core/http_client.dart';
 import '../../../domain/music.dart';
-import '../data/kuwo_lyric_service.dart';
+import '../data/independent_lyric_service.dart';
 import '../data/local_lyric_loader.dart';
-import 'player_controller.dart';
-import 'user_api_debug_controller.dart';
 
 final _sessionLyricCacheProvider = Provider((_) => <String, LyricPayload>{});
-
+final lyricFallbackProvider = Provider<Future<LyricPayload?> Function(Track)>(
+    (_) => IndependentLyricService(createHttpClient()).resolve);
 final lyricProvider =
     FutureProvider.family<LyricPayload?, Track>((ref, track) async {
-  ref.watch(userApiDebugProvider.select((state) => state.activeSourceId));
-  ref.watch(userApiDebugProvider.select((state) => state.runtimeRevision));
   final local = await LocalLyricLoader().load(track);
-  if (_hasContent(local) || track.sourceKind != TrackSourceKind.online) {
+  if (_hasContent(local)) return local;
+  if (track.sourceKind != TrackSourceKind.online &&
+      track.sourceKind != TrackSourceKind.local) {
     return local;
   }
 
   final cache = ref.read(_sessionLyricCacheProvider);
-  try {
-    final lyric = await _loadOnlineLyric(
-      track,
-      ref.watch(userApiRunnerProvider).resolveLyric,
-    );
-    if (_hasContent(lyric)) {
-      // ponytail: 20-track session FIFO; persist lyrics when offline access is required.
-      if (cache.length >= 20 && !cache.containsKey(track.id)) {
-        cache.remove(cache.keys.first);
-      }
-      cache[track.id] = lyric!;
-      return lyric;
+  final lyric = await _loadOnlineLyric(
+    track,
+    ref.read(lyricFallbackProvider),
+  );
+  if (_hasContent(lyric)) {
+    // ponytail: 20-track session FIFO; persist lyrics when offline access is required.
+    if (cache.length >= 20 && !cache.containsKey(track.id)) {
+      cache.remove(cache.keys.first);
     }
-    return cache[track.id];
-  } on AppFailure {
-    final cached = cache[track.id];
-    if (cached != null) return cached;
-    rethrow;
+    cache[track.id] = lyric!;
+    return lyric;
   }
+  return cache[track.id];
 });
 
 Future<LyricPayload?> _loadOnlineLyric(
   Track track,
-  Future<LyricPayload?> Function(Track) resolveUserApi,
+  Future<LyricPayload?> Function(Track) resolveFallback,
 ) async {
-  AppFailure? builtInFailure;
   try {
-    final lyric = await KuwoLyricService().resolve(track);
+    final lyric = await resolveFallback(track);
     if (_hasContent(lyric)) return lyric;
-  } on AppFailure catch (error) {
-    builtInFailure = error;
+  } on Object {
+    // Keep the independent lookup retryable; service errors are not user-facing.
   }
-
-  try {
-    final lyric = await resolveUserApi(track);
-    if (_hasContent(lyric)) return lyric;
-  } on AppFailure catch (error) {
-    if (builtInFailure == null) rethrow;
-    throw AppFailure(
-      code: error.code,
-      message: '${builtInFailure.message}；${error.message}',
-      diagnostic: [builtInFailure.diagnostic, error.diagnostic]
-          .whereType<String>()
-          .join(' | '),
-    );
-  }
-
-  if (builtInFailure != null) throw builtInFailure;
   return null;
 }
 
