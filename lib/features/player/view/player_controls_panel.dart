@@ -64,7 +64,11 @@ class PlayerControlsPanel extends ConsumerWidget {
           ),
           const SizedBox(height: 5),
           Text(
-            _fileInfoText(player.fileInfo, player.quality),
+            _fileInfoText(
+              player.fileInfo,
+              player.quality,
+              showQuality: track.sourceKind != TrackSourceKind.local,
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
@@ -337,12 +341,16 @@ double _nextPlaybackSpeed(double current) {
   return values[(currentIndex + 1) % values.length];
 }
 
-String _fileInfoText(AudioFileInfo? info, AudioQuality quality) {
+String _fileInfoText(
+  AudioFileInfo? info,
+  AudioQuality quality, {
+  required bool showQuality,
+}) {
   return [
     if (info?.bitrate case final bitrate?) '${(bitrate / 1000).round()} kbps',
     if (info?.sampleRate case final sampleRate?)
       '${(sampleRate / 1000).round()} kHz',
     if (info?.format case final format?) format.toUpperCase(),
-    audioQualityLabel(quality),
+    if (showQuality) audioQualityLabel(quality),
   ].where((part) => part.isNotEmpty).join(' · ');
 }

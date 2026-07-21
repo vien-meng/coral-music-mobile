@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../../../domain/music.dart';
+import 'dsd_audio_stream.dart';
 
 enum AudioEngineStatus {
   idle,
@@ -181,6 +182,7 @@ final class _CoralAudioHandler extends BaseAudioHandler with SeekHandler {
   final _snapshots = StreamController<AudioEngineSnapshot>.broadcast();
   final _commands = StreamController<AudioEngineCommand>.broadcast();
   final _subscriptions = <StreamSubscription<Object?>>[];
+  FfmpegAudioStream? _ffmpegStream;
   AudioEngineSnapshot _snapshot = const AudioEngineSnapshot();
 
   Stream<AudioEngineSnapshot> get snapshots => _snapshots.stream;
@@ -188,9 +190,11 @@ final class _CoralAudioHandler extends BaseAudioHandler with SeekHandler {
 
   Future<void> load(Track track, Uri uri,
       {Map<String, String> headers = const {}}) async {
+    await _closeFfmpegStream();
     _snapshot =
         AudioEngineSnapshot(track: track, status: AudioEngineStatus.loading);
     _snapshots.add(_snapshot);
+    FfmpegAudioStream? stream;
     mediaItem.add(MediaItem(
       id: uri.toString(),
       title: track.title,
@@ -199,7 +203,16 @@ final class _CoralAudioHandler extends BaseAudioHandler with SeekHandler {
       duration: track.duration,
       artUri: track.coverUri,
     ));
-    await _player.setAudioSource(AudioSource.uri(uri, headers: headers));
+    try {
+      stream = await FfmpegAudioStream.open(uri);
+      await _player.setAudioSource(
+        AudioSource.uri(stream?.uri ?? uri, headers: headers),
+      );
+      _ffmpegStream = stream;
+    } on Object {
+      await stream?.dispose();
+      rethrow;
+    }
     _emit(track: track, status: AudioEngineStatus.ready, error: null);
   }
 
@@ -236,6 +249,7 @@ final class _CoralAudioHandler extends BaseAudioHandler with SeekHandler {
   @override
   Future<void> stop() async {
     await _player.stop();
+    await _closeFfmpegStream();
     _emit(status: AudioEngineStatus.idle);
     await super.stop();
   }
@@ -249,6 +263,12 @@ final class _CoralAudioHandler extends BaseAudioHandler with SeekHandler {
       await _snapshots.close();
       await _commands.close();
     }
+  }
+
+  Future<void> _closeFfmpegStream() async {
+    final stream = _ffmpegStream;
+    _ffmpegStream = null;
+    await stream?.dispose();
   }
 
   void _emit(

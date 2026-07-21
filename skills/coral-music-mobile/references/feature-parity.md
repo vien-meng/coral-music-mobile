@@ -71,7 +71,7 @@
 | 导入导出 | P1 | 兼容桌面列表数据格式，非法项返回可读报告 | TODO |
 | 本地文件与目录导入 | P0 | 已实现文件选择与用户授权目录递归扫描；没有播放列表时可直接选择音频文件，自动创建并进入“本地音乐”列表；Android 选择目录后按需请求音乐和音频权限，不再静默返回空列表；导入后可进入现有列表、队列和播放；分享入口与重启授权恢复待补 | DOING |
 | 元数据 | P0 | MP3/AAC(ID3)、FLAC、WAV、M4A、Ogg/Opus 已读取标题、歌手、专辑、年份与类型；支持格式的嵌入封面落入私有缓存，缺失时使用同目录封面；时长与三端实机格式矩阵待补 | DOING |
-| 格式 | P0/P1 | P0: mp3/flac/wav/m4a/aac/ogg/opus；FLAC 已覆盖导入、标签/封面和本地 URI 直通。导入额外识别 dsf/dff/ac3/aif/aiff/alac/m4r/wma，但不具备独立解码器，实际播放由平台解码器决定；全格式 Android/iOS/鸿蒙实机矩阵待验收 | DOING |
+| 格式 | P0/P1 | P0: mp3/flac/wav/m4a/aac/ogg/opus；FLAC 已覆盖导入、标签/封面和本地 URI 直通。导入额外识别 dsf/dff/ac3/aif/aiff/alac/m4r/wma；Android 的 DSF/DFF 由非 GPL FFmpegKit 单线程异步转为临时 PCM WAV 后交给既有播放器，普通 WAV 直通，仅 DTS 伪 WAV 才转码，非 Android 明确不支持该适配。转码期间主播放按钮显示不可点击的加载状态；DSF/DFF 显示容器头中的 DSD 原始码率，DTS WAV 显示 WAV 字节率中的编码码率。当前未达到桌面端秒播，真实 DSF/DFF 播放、seek、切歌、后台及全格式 Android/iOS/鸿蒙实机矩阵待验收 | DOING |
 | CUE | P1 | 已支持 FILE/TRACK/INDEX 01 单文件分轨，按分轨起点 seek、边界自动切歌并避免整轨重复导入；可解析 FLAC/MP3 总时长会补齐末曲边界，真机格式矩阵待验收 | DOING |
 | 失败报告 | P1 | 统计候选、导入、重复、跳过和失败原因 | TODO |
 | 播放历史 | P1 | 已在首次进入真实播放态时写入；重复歌曲更新最近时间、次数与最后位置，最多保留 1000 条；已实现读取、清空和历史内播放，真机重启验收待补 | DOING |

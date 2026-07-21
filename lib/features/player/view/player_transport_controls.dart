@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/music.dart';
+import '../data/audio_engine.dart';
 import '../state/playback_queue_controller.dart';
 import '../state/player_controller.dart';
 
@@ -23,6 +24,7 @@ class PlayerTransportControls extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
     final queue = ref.watch(playbackQueueProvider);
+    final isLoading = player.status == AudioEngineStatus.loading;
     final duration = player.track?.id == track.id
         ? player.duration ?? track.duration
         : track.duration;
@@ -80,20 +82,29 @@ class PlayerTransportControls extends ConsumerWidget {
               dimension: 58,
               child: FilledButton(
                 key: toggleKey,
-                onPressed: () =>
-                    ref.read(playerProvider.notifier).toggle(track),
+                onPressed: isLoading
+                    ? null
+                    : () => ref.read(playerProvider.notifier).toggle(track),
                 style: FilledButton.styleFrom(
                   padding: EdgeInsets.zero,
                   shape: const CircleBorder(),
                   backgroundColor: scheme.primary,
                   foregroundColor: scheme.onPrimary,
                 ),
-                child: Icon(
-                  player.isPlaying
-                      ? Icons.pause_rounded
-                      : Icons.play_arrow_rounded,
-                  size: 31,
-                ),
+                child: isLoading
+                    ? SizedBox.square(
+                        dimension: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: scheme.onPrimary,
+                        ),
+                      )
+                    : Icon(
+                        player.isPlaying
+                            ? Icons.pause_rounded
+                            : Icons.play_arrow_rounded,
+                        size: 31,
+                      ),
               ),
             ),
             const SizedBox(width: 18),

@@ -26,6 +26,7 @@ dependencies:
       url: https://gitee.com/openharmony-sig/flutter_sqflite.git
       ref: 0bd638a416215b9ab74f21eef98e14797827df04
       path: sqflite
+  ffmpeg_kit_flutter_new_full: ^2.4.1
 
 dependency_overrides:
   sqflite:

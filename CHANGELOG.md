@@ -2,6 +2,17 @@
 
 All notable changes to 珊瑚音乐移动端 (Coral Music Mobile) will be documented in this file.
 
+## [1.0.0] - 2026-07-21(02)
+
+### Android DSD 流式解码播放
+
+- 接入非 GPL `ffmpeg_kit_flutter_new_full: 2.4.1`（LGPL 3.0），Android DSF/DFF 启动 FFmpeg 异步会话输出临时 PCM WAV 再交给 `just_audio` 播放
+- DTS 伪 WAV（前 64KB 检测帧同步字）转码为双声道 PCM；普通 PCM WAV 直通不转码
+- 输出固定 44.1 kHz、16-bit、双声道 PCM；切歌/停止/解码失败删除临时文件
+- 文件信息探测增加 DSF/DFF/DTS WAV 头解析，显示原始编码码率而非转码后 PCM
+- 转码准备阶段复用 `AudioEngineStatus.loading`，播放按钮显示加载指示器
+- 真机验证：SM-N986U 构建安装成功，loopback/FIFO 方案失败改用临时文件；秒播需原生 Media3 `DataSource`（后续）
+
 ## [1.0.0] - 2026-07-21
 
 ### 启动音源恢复与平台切换隔离
