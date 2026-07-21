@@ -13,6 +13,11 @@ All notable changes to 珊瑚音乐移动端 (Coral Music Mobile) will be docume
 - 转码准备阶段复用 `AudioEngineStatus.loading`，播放按钮显示加载指示器
 - 真机验证：SM-N986U 构建安装成功，loopback/FIFO 方案失败改用临时文件；秒播需原生 Media3 `DataSource`（后续）
 
+### 统一歌词服务
+
+- 全平台歌词走独立歌词服务，不在依赖user api能力
+- 歌单服务兼容
+
 ## [1.0.0] - 2026-07-21
 
 ### 启动音源恢复与平台切换隔离

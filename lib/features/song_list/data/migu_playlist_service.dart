@@ -5,7 +5,9 @@ import 'package:dio/dio.dart';
 
 import '../../../core/app_failure.dart';
 import '../../../core/http_client.dart';
+import '../../../core/response_json.dart';
 import '../../../domain/music.dart';
+import '../../leaderboard/data/migu_track_support.dart';
 import 'kuwo_playlist_service.dart';
 
 final class MiguPlaylistService implements PlaylistCatalogService {
@@ -180,9 +182,9 @@ final class MiguPlaylistService implements PlaylistCatalogService {
   }
 
   static List<PlaylistTag> parseTags(Object? raw) {
-    final response = raw is Map ? raw : null;
-    final data = response?['data'];
-    if (response?['code'] != '000000' || data is! List) {
+    final response = decodeJsonMap(raw);
+    final data = response['data'];
+    if ('${response['code']}' != '000000' || data is! List) {
       throw const AppFailure(
         code: AppFailureCode.invalidData,
         message: '咪咕音乐歌单标签数据格式异常',
@@ -209,9 +211,9 @@ final class MiguPlaylistService implements PlaylistCatalogService {
     Object? raw, {
     required int page,
   }) {
-    final response = raw is Map ? raw : null;
-    final data = response?['data'];
-    if (response?['code'] != '000000' || data is! Map) {
+    final response = decodeJsonMap(raw);
+    final data = response['data'];
+    if ('${response['code']}' != '000000' || data is! Map) {
       throw const AppFailure(
         code: AppFailureCode.invalidData,
         message: '咪咕音乐歌单广场数据格式异常',
@@ -284,8 +286,8 @@ final class MiguPlaylistService implements PlaylistCatalogService {
     Object? raw, {
     required int page,
   }) {
-    final response = raw is Map ? raw : null;
-    final data = response?['songListResultData'];
+    final response = decodeJsonMap(raw);
+    final data = response['songListResultData'];
     final items = data is Map ? data['result'] : null;
     if (data is! Map || items is! List) {
       throw const AppFailure(
@@ -322,14 +324,14 @@ final class MiguPlaylistService implements PlaylistCatalogService {
     required Object? info,
     required OnlinePlaylist fallback,
   }) {
-    final songResponse = songs is Map ? songs : null;
-    final songData = songResponse?['data'];
+    final songResponse = decodeJsonMap(songs);
+    final songData = songResponse['data'];
     final rawSongs = songData is Map ? songData['songList'] : null;
-    final infoResponse = info is Map ? info : null;
-    final infoData = infoResponse?['data'];
-    if (songResponse?['code'] != '000000' ||
+    final infoResponse = decodeJsonMap(info);
+    final infoData = infoResponse['data'];
+    if ('${songResponse['code']}' != '000000' ||
         rawSongs is! List ||
-        infoResponse?['code'] != '000000' ||
+        '${infoResponse['code']}' != '000000' ||
         infoData is! Map) {
       throw const AppFailure(
         code: AppFailureCode.invalidData,
@@ -351,10 +353,12 @@ final class MiguPlaylistService implements PlaylistCatalogService {
         album: '${item['album'] ?? ''}'.trim(),
         duration: _duration(item['duration']),
         coverUri: _httpsUri(item['img3'] ?? item['img2'] ?? item['img1']),
-        availableQualities: _qualities(item['audioFormats']),
+        availableQualities: miguAudioQualities(item['audioFormats']),
         extra: {
+          'songId': item['songId'],
           'albumId': item['albumId'],
           'copyrightId': item['copyrightId'],
+          'qualityMeta': miguQualityMeta(item['audioFormats']),
           'lrcUrl': item['lrcUrl'] ?? item['lyricUrl'],
           'mrcUrl': item['mrcUrl'] ?? item['mrcurl'],
           'trcUrl': item['trcUrl'],
@@ -371,7 +375,8 @@ final class MiguPlaylistService implements PlaylistCatalogService {
         author: '${infoData['ownerName'] ?? fallback.author}'.trim(),
         description: '${infoData['summary'] ?? fallback.description}'.trim(),
         trackCount:
-            int.tryParse('${songData['totalCount'] ?? ''}') ?? tracks.length,
+            int.tryParse('${(songData as Map)['totalCount'] ?? ''}') ??
+                tracks.length,
         playCount: _formatCount(opNum is Map ? opNum['playNum'] : null),
         coverUri:
             _httpsUri(image is Map ? image['img'] : null) ?? fallback.coverUri,
@@ -394,25 +399,6 @@ final class MiguPlaylistService implements PlaylistCatalogService {
   static Duration? _duration(Object? value) {
     final seconds = int.tryParse('$value');
     return seconds == null || seconds <= 0 ? null : Duration(seconds: seconds);
-  }
-
-  static List<AudioQuality> _qualities(Object? raw) {
-    final values = <AudioQuality>{};
-    if (raw is List) {
-      for (final item in raw.whereType<Map>()) {
-        switch (item['formatType']) {
-          case 'PQ':
-            values.add(AudioQuality.standard128k);
-          case 'HQ':
-            values.add(AudioQuality.high320k);
-          case 'SQ':
-            values.add(AudioQuality.flac);
-          case 'ZQ':
-            values.add(AudioQuality.flac24bit);
-        }
-      }
-    }
-    return AudioQuality.values.where(values.contains).toList(growable: false);
   }
 
   static Uri? _httpsUri(Object? value) {

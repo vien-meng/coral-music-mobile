@@ -72,5 +72,9 @@ void main() {
     expect(result.items.single.coverUri.toString(),
         'https://y.gtimg.cn/music/photo_new/T002R500x500M000album-mid.jpg');
     expect(result.items.single.extra['mediaMid'], 'media-mid');
+    expect(result.items.single.extra['qualityMeta'], {
+      'flac': {'size': 30000000},
+      '320k': {'size': 8000000},
+    });
   });
 }

@@ -384,14 +384,9 @@ class _InlineError extends StatelessWidget {
 }
 
 List<String> _capabilities(UserApiSource source) {
-  final keys = {...source.musicUrlSources, ...source.lyricSources}.toList()
-    ..sort();
+  final keys = source.musicUrlSources.toList()..sort();
   return [
-    for (final key in keys)
-      '${_sourceName(key)} · ${[
-        if (source.musicUrlSources.contains(key)) '播放',
-        if (source.lyricSources.contains(key)) '歌词',
-      ].join(' / ')}',
+    for (final key in keys) '${_sourceName(key)} · 播放',
   ];
 }
 

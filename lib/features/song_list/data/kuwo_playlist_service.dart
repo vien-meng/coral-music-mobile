@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../../../core/app_failure.dart';
 import '../../../core/http_client.dart';
+import '../../../core/response_json.dart';
 import '../../../domain/music.dart';
 import '../../leaderboard/data/kuwo_leaderboard_parser.dart';
 
@@ -366,9 +367,7 @@ final class KuwoPlaylistService implements PlaylistCatalogService {
         total: int.tryParse('${response['TOTAL'] ?? ''}') ?? playlists.length);
   }
 
-  static Map<Object?, Object?> _map(Object? value) => value is Map
-      ? Map<Object?, Object?>.from(value)
-      : const <Object?, Object?>{};
+  static Map<Object?, Object?> _map(Object? value) => decodeJsonMap(value);
 
   static Uri? _httpsUri(String value) {
     final uri = Uri.tryParse(value.trim());

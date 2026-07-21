@@ -1,5 +1,6 @@
 import '../../../core/app_failure.dart';
 import '../../../domain/music.dart';
+import 'qq_track_support.dart';
 
 final class QqLeaderboardParser {
   static PageResult<Track> parse(Map<String, Object?> response) {
@@ -97,6 +98,7 @@ final class QqLeaderboardParser {
             'songId': value['id'],
             'albumMid': albumMid,
             'mediaMid': (value['file'] as Map?)?['media_mid'],
+            'qualityMeta': qqQualityMeta(value['file']),
           },
         ),
       );
@@ -132,19 +134,6 @@ final class QqLeaderboardParser {
             'https://y.gtimg.cn/music/photo_new/${type}R500x500M000$id.jpg');
   }
 
-  static List<AudioQuality> _qualities(Object? value) {
-    if (value is! Map) return const [];
-    final qualities = <AudioQuality>{};
-    if (_positive(value['size_hires'])) qualities.add(AudioQuality.flac24bit);
-    if (_positive(value['size_flac'])) qualities.add(AudioQuality.flac);
-    if (_positive(value['size_320mp3'])) qualities.add(AudioQuality.high320k);
-    if (_positive(value['size_128mp3'])) {
-      qualities.add(AudioQuality.standard128k);
-    }
-    return AudioQuality.values
-        .where(qualities.contains)
-        .toList(growable: false);
-  }
-
-  static bool _positive(Object? value) => (int.tryParse('$value') ?? 0) > 0;
+  static List<AudioQuality> _qualities(Object? value) =>
+      qqAudioQualities(value);
 }

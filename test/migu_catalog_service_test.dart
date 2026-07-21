@@ -1,3 +1,4 @@
+import 'package:coral_music_mobile/domain/music.dart';
 import 'package:coral_music_mobile/features/leaderboard/data/migu_catalog_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -18,7 +19,10 @@ void main() {
               'lrcUrl': 'https://example.com/song.lrc',
               'mrcurl': 'https://example.com/song.mrc',
               'trcUrl': 'https://example.com/song.trc',
-              'audioFormats': const [],
+              'copyrightId': 'copyright-1',
+              'audioFormats': const [
+                {'formatType': 'ZQ24', 'asize': 123456},
+              ],
             },
           ],
         ],
@@ -30,5 +34,9 @@ void main() {
     expect(result.items.single.extra['lrcUrl'], 'https://example.com/song.lrc');
     expect(result.items.single.extra['mrcUrl'], 'https://example.com/song.mrc');
     expect(result.items.single.extra['trcUrl'], 'https://example.com/song.trc');
+    expect(result.items.single.availableQualities, [AudioQuality.flac24bit]);
+    expect(result.items.single.extra['qualityMeta'], {
+      'flac24bit': {'size': 123456},
+    });
   });
 }

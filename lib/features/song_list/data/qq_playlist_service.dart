@@ -4,7 +4,9 @@ import 'package:dio/dio.dart';
 
 import '../../../core/app_failure.dart';
 import '../../../core/http_client.dart';
+import '../../../core/response_json.dart';
 import '../../../domain/music.dart';
+import '../../leaderboard/data/qq_track_support.dart';
 import 'kuwo_playlist_service.dart';
 
 final class QqPlaylistService implements PlaylistCatalogService {
@@ -211,10 +213,10 @@ final class QqPlaylistService implements PlaylistCatalogService {
     Object? raw, {
     required int page,
   }) {
-    final response = raw is Map ? raw : null;
-    final data = response?['data'];
+    final response = decodeJsonMap(raw);
+    final data = response['data'];
     final items = data is Map ? data['list'] : null;
-    if (response?['code'] != 0 || data is! Map || items is! List) {
+    if ('${response['code']}' != '0' || data is! Map || items is! List) {
       throw const AppFailure(
         code: AppFailureCode.invalidData,
         message: 'QQ 音乐歌单搜索数据格式异常',
@@ -250,13 +252,13 @@ final class QqPlaylistService implements PlaylistCatalogService {
     Object? raw, {
     required OnlinePlaylist fallback,
   }) {
-    final response = raw is Map ? raw : null;
-    final list = response?['cdlist'];
+    final response = decodeJsonMap(raw);
+    final list = response['cdlist'];
     final detail = list is List && list.isNotEmpty && list.first is Map
         ? list.first as Map
         : null;
     final songs = detail?['songlist'];
-    if (response?['code'] != 0 || detail == null || songs is! List) {
+    if ('${response['code']}' != '0' || detail == null || songs is! List) {
       throw const AppFailure(
         code: AppFailureCode.invalidData,
         message: 'QQ 音乐歌单详情格式异常',
@@ -296,6 +298,7 @@ final class QqPlaylistService implements PlaylistCatalogService {
           'songId': song['id'],
           'albumMid': albumMid,
           'mediaMid': fileMap['media_mid'],
+          'qualityMeta': qqQualityMeta(fileMap),
         },
       ));
     }
@@ -316,20 +319,8 @@ final class QqPlaylistService implements PlaylistCatalogService {
     );
   }
 
-  static List<AudioQuality> _qualities(Map<Object?, Object?> file) {
-    final available = <AudioQuality>{};
-    if (_positive(file['size_hires'])) available.add(AudioQuality.flac24bit);
-    if (_positive(file['size_flac'])) available.add(AudioQuality.flac);
-    if (_positive(file['size_320mp3'])) available.add(AudioQuality.high320k);
-    if (_positive(file['size_128mp3'])) {
-      available.add(AudioQuality.standard128k);
-    }
-    return AudioQuality.values
-        .where(available.contains)
-        .toList(growable: false);
-  }
-
-  static bool _positive(Object? value) => (int.tryParse('$value') ?? 0) > 0;
+  static List<AudioQuality> _qualities(Map<Object?, Object?> file) =>
+      qqAudioQualities(file);
 
   static Duration? _duration(Object? value) {
     final seconds = int.tryParse('$value');

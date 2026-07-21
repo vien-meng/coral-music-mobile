@@ -13,28 +13,22 @@ import android.webkit.WebViewClient
 import io.flutter.plugin.common.MethodChannel
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
-import java.io.ByteArrayInputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
-import java.nio.charset.Charset
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.UUID
 import java.util.concurrent.Executors
-import java.util.zip.InflaterInputStream
-import kotlin.math.roundToInt
 
 class UserApiRunner(private val activity: Activity) {
     private val handler = Handler(Looper.getMainLooper())
     private val executor = Executors.newSingleThreadExecutor()
     private val pendingResults = mutableMapOf<String, MethodChannel.Result>()
-    private val pendingLyricResults = mutableMapOf<String, MethodChannel.Result>()
     private var pendingLoad: MethodChannel.Result? = null
     private var script = ""
     private var loaded = false
     private var sources = emptySet<String>()
-    private var lyricSources = emptySet<String>()
     private var webView: WebView? = null
 
     fun load(rawScript: String, result: MethodChannel.Result) {
@@ -49,7 +43,6 @@ class UserApiRunner(private val activity: Activity) {
         script = rawScript
         loaded = false
         sources = emptySet()
-        lyricSources = emptySet()
         val view = ensureWebView()
         resetWebView(view)
         handler.postDelayed({
@@ -88,137 +81,6 @@ class UserApiRunner(private val activity: Activity) {
         }, 20_000)
     }
 
-    fun resolveLyric(arguments: Map<*, *>?, result: MethodChannel.Result) {
-        val requestArguments = arguments ?: emptyMap<String, Any?>()
-        val source = requestArguments["source"] as? String ?: ""
-        if (!loaded || source !in sources) {
-            result.error("not_ready", "当前音源未支持该歌曲来源的歌词", null)
-            return
-        }
-        val musicInfo = requestArguments["musicInfo"] as? Map<*, *> ?: emptyMap<String, Any?>()
-        val payload = JSONObject().apply {
-            put("source", source)
-            put("action", "lyric")
-            put("info", JSONObject().apply {
-                put("isGetLyricx", true)
-                put("musicInfo", JSONObject(musicInfo))
-            })
-        }
-        val requestId = UUID.randomUUID().toString()
-        pendingLyricResults[requestId] = result
-        evaluate("""
-            Promise.resolve(window.__coralRequestHandler(${payload}))
-              .then((value) => NativeBridge.lyricResult(${JSONObject.quote(requestId)}, JSON.stringify({ok: true, value})))
-              .catch((error) => NativeBridge.lyricResult(${JSONObject.quote(requestId)}, JSON.stringify({ok: false, error: String(error && error.message || error)})));
-        """.trimIndent())
-        handler.postDelayed({
-            pendingLyricResults.remove(requestId)?.error("timeout", "音源歌词获取超时", null)
-        }, 20_000)
-    }
-
-    fun resolveKuwoLyric(songId: String, result: MethodChannel.Result) {
-        if (!songId.matches(Regex("\\d+"))) {
-            result.error("invalid_song", "酷我歌曲标识无效", null)
-            return
-        }
-        executor.execute {
-            try {
-                val lyric = runCatching { fetchKuwoCompressedLyric(songId) }
-                    .getOrElse { fetchKuwoJsonLyric(songId) }
-                if (lyric.isBlank() || !lyric.contains(Regex("\\[\\d{1,2}:"))) {
-                    throw IllegalStateException("酷我未返回可用歌词")
-                }
-                handler.post { result.success(lyric) }
-            } catch (error: Exception) {
-                handler.post { result.error("kuwo_lyric", error.message ?: "酷我歌词加载失败", null) }
-            }
-        }
-    }
-
-    private fun fetchKuwoCompressedLyric(songId: String): String {
-        val query = kuwoLyricQuery(songId)
-        val connection = (URL("http://newlyric.kuwo.cn/newlyric.lrc?$query").openConnection() as HttpURLConnection).apply {
-            connectTimeout = 15_000
-            readTimeout = 15_000
-            setRequestProperty("User-Agent", "Mozilla/5.0")
-            setRequestProperty("Accept-Encoding", "identity")
-        }
-        return try {
-            if (connection.responseCode != 200) throw IllegalStateException("酷我歌词服务暂不可用")
-            decodeKuwoLyric(connection.inputStream.use { it.readBytes() })
-        } finally {
-            connection.disconnect()
-        }
-    }
-
-    private fun fetchKuwoJsonLyric(songId: String): String {
-        val connection = (URL("https://m.kuwo.cn/newh5/singles/songinfoandlrc?musicId=$songId")
-            .openConnection() as HttpURLConnection).apply {
-            connectTimeout = 15_000
-            readTimeout = 15_000
-            setRequestProperty("User-Agent", "Mozilla/5.0")
-        }
-        return try {
-            if (connection.responseCode != 200) throw IllegalStateException("酷我歌词服务暂不可用")
-            val data = JSONObject(connection.inputStream.use { it.readBytes() }.toString(Charsets.UTF_8))
-                .optJSONObject("data") ?: throw IllegalStateException("酷我歌词响应格式异常")
-            val list = data.optJSONArray("lrclist")
-                ?: throw IllegalStateException("酷我歌词响应格式异常")
-            buildString {
-                for (index in 0 until list.length()) {
-                    val line = list.optJSONObject(index) ?: continue
-                    val text = line.optString("lineLyric", line.optString("text"))
-                    if (text.isBlank()) continue
-                    append('[')
-                    append(formatKuwoTime(line.opt("time")))
-                    append(']')
-                    append(text.trim())
-                    append('\n')
-                }
-            }
-        } finally {
-            connection.disconnect()
-        }
-    }
-
-    private fun formatKuwoTime(raw: Any?): String {
-        val value = raw?.toString()?.trim().orEmpty()
-        if (value.contains(':')) return value
-        val milliseconds = ((value.toDoubleOrNull() ?: throw IllegalStateException("酷我歌词时间无效")) * 1000)
-            .roundToInt()
-        val minutes = milliseconds / 60_000
-        val seconds = (milliseconds / 1000) % 60
-        val fraction = milliseconds % 1000
-        return "%02d:%02d.%03d".format(minutes, seconds, fraction)
-    }
-
-    private fun kuwoLyricQuery(songId: String): String {
-        val raw = "user=12345,web,web,web&requester=localhost&req=1&rid=MUSIC_$songId&lrcx=1".toByteArray()
-        val key = "yeelion".toByteArray()
-        // Node's Buffer.from(Uint16Array) copies each element's low byte.
-        val output = ByteArray(raw.size) { index ->
-            (raw[index].toInt() xor key[index % key.size].toInt()).toByte()
-        }
-        return URLEncoder.encode(
-            Base64.encodeToString(output, Base64.NO_WRAP),
-            "UTF-8",
-        )
-    }
-
-    private fun decodeKuwoLyric(payload: ByteArray): String {
-        val marker = "\r\n\r\n".toByteArray()
-        val start = payload.indices.firstOrNull { index ->
-            index + marker.size <= payload.size && marker.indices.all { payload[index + it] == marker[it] }
-        } ?: throw IllegalStateException("酷我歌词响应格式异常")
-        val inflated = InflaterInputStream(
-            ByteArrayInputStream(payload.copyOfRange(start + marker.size, payload.size)),
-        ).use { it.readBytes() }
-        val encoded = Base64.decode(String(inflated), Base64.DEFAULT)
-        val key = "yeelion".toByteArray()
-        val decoded = ByteArray(encoded.size) { index -> (encoded[index].toInt() xor key[index % key.size].toInt()).toByte() }
-        return decoded.toString(Charset.forName("GB18030"))
-    }
-
     fun clear(result: MethodChannel.Result) {
         pendingLoad?.error("cancelled", "音源脚本已移除", null)
         pendingLoad = null
@@ -226,7 +88,6 @@ class UserApiRunner(private val activity: Activity) {
         script = ""
         loaded = false
         sources = emptySet()
-        lyricSources = emptySet()
         webView?.let(::resetWebView)
         result.success(null)
     }
@@ -295,8 +156,6 @@ class UserApiRunner(private val activity: Activity) {
     private fun cancelPendingRequests(message: String) {
         pendingResults.values.forEach { it.error("cancelled", message, null) }
         pendingResults.clear()
-        pendingLyricResults.values.forEach { it.error("cancelled", message, null) }
-        pendingLyricResults.clear()
     }
 
     private inner class Bridge {
@@ -312,18 +171,10 @@ class UserApiRunner(private val activity: Activity) {
                             if (info?.optString("type") == "music" && actions?.toString()?.contains("musicUrl") == true) add(source)
                         }
                     }
-                    val lyricEnabled = buildSet {
-                        sourceObject.keys().forEach { source ->
-                            val info = sourceObject.optJSONObject(source)
-                            val actions = info?.optJSONArray("actions")
-                            if (info?.optString("type") == "music" && actions?.toString()?.contains("lyric") == true) add(source)
-                        }
-                    }
                     if (enabled.isEmpty()) throw IllegalArgumentException("音源脚本未声明可用的 musicUrl 来源")
                     sources = enabled
-                    lyricSources = lyricEnabled
                     loaded = true
-                    pendingLoad?.success(mapOf("musicUrlSources" to enabled.toList(), "lyricSources" to lyricEnabled.toList()))
+                    pendingLoad?.success(mapOf("musicUrlSources" to enabled.toList()))
                     pendingLoad = null
                 } catch (error: Exception) {
                     pendingLoad?.error("invalid_manifest", error.message, null)
@@ -462,33 +313,6 @@ class UserApiRunner(private val activity: Activity) {
             }
         }
 
-        @JavascriptInterface
-        fun lyricResult(id: String, rawResult: String) {
-            handler.post {
-                val result = pendingLyricResults.remove(id) ?: return@post
-                try {
-                    val data = JSONObject(rawResult)
-                    if (!data.optBoolean("ok")) {
-                        result.error(
-                            "source_error",
-                            data.optString("error", "音源歌词获取失败").take(1024),
-                            null,
-                        )
-                        return@post
-                    }
-                    val value = data.opt("value")
-                    val payload = when (value) {
-                        is JSONObject -> value.toString()
-                        is String -> JSONObject().put("lyric", value).toString()
-                        else -> throw IllegalArgumentException()
-                    }
-                    if (payload.length > 256 * 1024) throw IllegalArgumentException()
-                    result.success(payload)
-                } catch (error: Exception) {
-                    result.error("invalid_result", "音源未返回有效歌词", null)
-                }
-            }
-        }
     }
 
     private fun sendRequestResult(id: String, response: String, error: String?) {

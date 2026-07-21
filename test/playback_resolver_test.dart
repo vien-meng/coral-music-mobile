@@ -115,9 +115,6 @@ final class _Runner implements UserApiRunner {
   Future<void> clear() async {}
 
   @override
-  Future<LyricPayload?> resolveLyric(Track track) async => null;
-
-  @override
   Future<UserApiManifest> load(String script) async =>
       const UserApiManifest({'kw'});
 

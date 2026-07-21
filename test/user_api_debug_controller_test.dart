@@ -216,14 +216,8 @@ final class _Runner implements UserApiRunner {
   @override
   Future<UserApiManifest> load(String script) async {
     loadedScript = script;
-    return UserApiManifest(
-      {script.startsWith('kw') ? 'kw' : 'qq'},
-      lyricSources: {script.startsWith('kw') ? 'kw' : 'qq'},
-    );
+    return UserApiManifest({script.startsWith('kw') ? 'kw' : 'qq'});
   }
-
-  @override
-  Future<LyricPayload?> resolveLyric(Track track) async => null;
 
   @override
   Future<ResolvedPlaybackUrl> resolveMusicUrl(

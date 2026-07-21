@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:coral_music_mobile/domain/music.dart';
 import 'package:coral_music_mobile/features/player/state/lyric_controller.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -101,19 +100,10 @@ void main() {
     expect(fallbackRequests, 1);
   });
 
-  test('falls back to an independent lyric service when Kuwo fails', () async {
-    const channel = MethodChannel('coral_music/user_api');
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(channel, (_) {
-      throw PlatformException(code: 'kuwo_lyric', message: '内置服务不可用');
-    });
-    addTearDown(() => TestDefaultBinaryMessengerBinding
-        .instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(channel, null));
-
+  test('uses the same independent lyric service for every online source',
+      () async {
     final container = ProviderContainer(
       overrides: [
-        sourceLyricProvider.overrideWithValue((_) async => null),
         lyricFallbackProvider.overrideWithValue(
           (_) async => const LyricPayload(lyric: '[00:01.00]独立歌词'),
         ),
@@ -137,7 +127,6 @@ void main() {
     var requests = 0;
     final container = ProviderContainer(
       overrides: [
-        sourceLyricProvider.overrideWithValue((_) async => null),
         lyricFallbackProvider.overrideWithValue((_) async {
           requests++;
           return requests == 1
@@ -160,32 +149,5 @@ void main() {
 
     expect(second?.lyric, first?.lyric);
     expect(requests, 2);
-  });
-
-  test('uses a source lyric before querying the public fallback', () async {
-    var fallbackRequests = 0;
-    final container = ProviderContainer(
-      overrides: [
-        sourceLyricProvider.overrideWithValue(
-          (_) async => const LyricPayload(lyric: '[00:01.00]来源歌词'),
-        ),
-        lyricFallbackProvider.overrideWithValue((_) async {
-          fallbackRequests++;
-          return null;
-        }),
-      ],
-    );
-    addTearDown(container.dispose);
-
-    final lyric = await container.read(lyricProvider(const Track(
-      sourceKind: TrackSourceKind.online,
-      sourceId: 'tx',
-      sourceTrackId: 'source-lyric',
-      title: '在线歌曲',
-      artist: '测试歌手',
-    )).future);
-
-    expect(lyric?.lyric, '[00:01.00]来源歌词');
-    expect(fallbackRequests, 0);
   });
 }

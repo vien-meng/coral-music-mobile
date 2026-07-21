@@ -68,7 +68,6 @@ final class UserApiSource {
     required this.script,
     required this.info,
     required this.musicUrlSources,
-    required this.lyricSources,
     this.originUrl,
   });
 
@@ -77,7 +76,6 @@ final class UserApiSource {
   final String script;
   final UserApiSourceInfo info;
   final Set<String> musicUrlSources;
-  final Set<String> lyricSources;
   final Uri? originUrl;
 }
 
@@ -232,7 +230,6 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
         script: script,
         info: info,
         musicUrlSources: manifest.musicUrlSources,
-        lyricSources: manifest.lyricSources,
         originUrl: originUrl,
       );
       _playbackResolver?.clear();
@@ -277,7 +274,6 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
         script: target.script,
         info: target.info,
         musicUrlSources: manifest.musicUrlSources,
-        lyricSources: manifest.lyricSources,
         originUrl: target.originUrl,
       );
       _playbackResolver?.clear();
@@ -331,7 +327,6 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
         script: script,
         info: info,
         musicUrlSources: manifest.musicUrlSources,
-        lyricSources: manifest.lyricSources,
         originUrl: target.originUrl,
       );
       _playbackResolver?.clear();

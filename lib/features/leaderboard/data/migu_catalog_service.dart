@@ -7,6 +7,7 @@ import '../../../core/app_failure.dart';
 import '../../../core/http_client.dart';
 import '../../../domain/music.dart';
 import 'online_catalog_service.dart';
+import 'migu_track_support.dart';
 
 final class MiguCatalogService implements OnlineCatalogService {
   MiguCatalogService(this._dio);
@@ -168,10 +169,12 @@ final class MiguCatalogService implements OnlineCatalogService {
         album: '${object['album'] ?? ''}'.trim(),
         duration: _duration('${object['length'] ?? ''}'),
         coverUri: _cover(object['albumImgs']),
-        availableQualities: _qualities(object['newRateFormats']),
+        availableQualities: miguAudioQualities(object['newRateFormats']),
         extra: {
+          'songId': object['songId'],
           'albumId': object['albumId'],
           'copyrightId': object['copyrightId'],
+          'qualityMeta': miguQualityMeta(object['newRateFormats']),
           'lrcUrl': object['lyricUrl'] ?? object['lrcUrl'],
           'mrcUrl': object['mrcUrl'] ?? object['mrcurl'],
           'trcUrl': object['trcUrl'],
@@ -213,10 +216,12 @@ final class MiguCatalogService implements OnlineCatalogService {
             album: '${song['album'] ?? ''}',
             duration: duration == null ? null : Duration(seconds: duration),
             coverUri: _searchCover(song),
-            availableQualities: _qualities(song['audioFormats']),
+            availableQualities: miguAudioQualities(song['audioFormats']),
             extra: {
+              'songId': song['songId'],
               'albumId': song['albumId'],
               'copyrightId': song['copyrightId'],
+              'qualityMeta': miguQualityMeta(song['audioFormats']),
               'lrcUrl': song['lyricUrl'] ?? song['lrcUrl'],
               'mrcUrl': song['mrcUrl'] ?? song['mrcurl'],
               'trcUrl': song['trcUrl'],
@@ -269,25 +274,6 @@ final class MiguCatalogService implements OnlineCatalogService {
       );
     }
     return uri.scheme == 'http' ? uri.replace(scheme: 'https') : uri;
-  }
-
-  static List<AudioQuality> _qualities(Object? raw) {
-    final values = <AudioQuality>{};
-    if (raw is List) {
-      for (final item in raw.whereType<Map>()) {
-        switch (item['formatType']) {
-          case 'PQ':
-            values.add(AudioQuality.standard128k);
-          case 'HQ':
-            values.add(AudioQuality.high320k);
-          case 'SQ':
-            values.add(AudioQuality.flac);
-          case 'ZQ':
-            values.add(AudioQuality.flac24bit);
-        }
-      }
-    }
-    return AudioQuality.values.where(values.contains).toList(growable: false);
   }
 
   AppFailure _unsupported(String feature) =>

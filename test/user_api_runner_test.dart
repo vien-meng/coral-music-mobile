@@ -118,11 +118,15 @@ void main() {
         sourceTrackId: 'qq-mid',
         title: 'QQ 歌曲',
         artist: 'QQ 歌手',
-        availableQualities: [AudioQuality.flac],
+        availableQualities: [AudioQuality.flac, AudioQuality.high320k],
         extra: {
           'songId': 12,
           'albumMid': 'album-mid',
           'mediaMid': 'media-mid',
+          'qualityMeta': {
+            'flac': {'size': 30000000},
+            '320k': {'size': 8000000},
+          },
         },
       ),
       AudioQuality.flac,
@@ -134,8 +138,12 @@ void main() {
         sourceTrackId: 'migu-song',
         title: '咪咕歌曲',
         artist: '咪咕歌手',
+        availableQualities: [AudioQuality.flac],
         extra: {
           'copyrightId': 'copyright-id',
+          'qualityMeta': {
+            'flac': {'size': 30000000},
+          },
           'lrcUrl': 'https://example.com/song.lrc',
           'mrcUrl': 'https://example.com/song.mrc',
           'trcUrl': 'https://example.com/song.trc',
@@ -148,87 +156,16 @@ void main() {
     expect(qq['strMediaMid'], 'media-mid');
     expect(qq['songId'], 12);
     expect(qq['types'], [
-      {'type': 'flac', 'size': null},
+      {'type': 'flac', 'size': 30000000},
+      {'type': '320k', 'size': 8000000},
     ]);
     final migu = requests[1]['musicInfo']! as Map<Object?, Object?>;
+    expect(migu['songmid'], 'migu-song');
     expect(migu['copyrightId'], 'copyright-id');
+    expect(migu['types'], [
+      {'type': 'flac', 'size': 30000000},
+    ]);
     expect(migu['mrcUrl'], 'https://example.com/song.mrc');
     expect(migu['trcUrl'], 'https://example.com/song.trc');
-  });
-
-  test('normalizes a desktop-shaped User API lyric payload', () async {
-    const channel = MethodChannel('coral_music/user_api');
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(channel, (call) async {
-      if (call.method == 'load') {
-        return <String, Object?>{
-          'musicUrlSources': ['kw'],
-          'lyricSources': ['kw'],
-        };
-      }
-      if (call.method == 'resolveLyric') {
-        return '''
-          {"data":{"lyric":"[00:01.00]原文","lxlyric":"[00:01.00]<1000,200>原文","tlyric":"[00:01.00]Translation","rlyric":"[00:01.00]yuan wen"}}
-        ''';
-      }
-      return null;
-    });
-    addTearDown(
-      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(channel, null),
-    );
-
-    final runner = MethodChannelUserApiRunner();
-    await runner.load('source');
-    final lyric = await runner.resolveLyric(
-      const Track(
-        sourceKind: TrackSourceKind.online,
-        sourceId: 'kw',
-        sourceTrackId: '1',
-        title: '测试歌曲',
-        artist: '测试歌手',
-      ),
-    );
-
-    expect(lyric?.lyric, '[00:01.00]原文');
-    expect(lyric?.lxlyric, '[00:01.00]<1000,200>原文');
-    expect(lyric?.tlyric, '[00:01.00]Translation');
-    expect(lyric?.rlyric, '[00:01.00]yuan wen');
-  });
-
-  test('does not request lyrics when a source only advertises musicUrl',
-      () async {
-    const channel = MethodChannel('coral_music/user_api');
-    var lyricRequested = false;
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(channel, (call) async {
-      if (call.method == 'load') {
-        return <String, Object?>{
-          'musicUrlSources': ['kw']
-        };
-      }
-      if (call.method == 'resolveLyric') {
-        lyricRequested = true;
-        return '{"lyric":"[00:01.00]原文"}';
-      }
-      return null;
-    });
-    addTearDown(
-      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(channel, null),
-    );
-
-    final runner = MethodChannelUserApiRunner();
-    await runner.load('source');
-    final lyric = await runner.resolveLyric(const Track(
-      sourceKind: TrackSourceKind.online,
-      sourceId: 'kw',
-      sourceTrackId: '1',
-      title: '测试歌曲',
-      artist: '测试歌手',
-    ));
-
-    expect(lyricRequested, isFalse);
-    expect(lyric, isNull);
   });
 }
