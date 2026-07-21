@@ -357,6 +357,9 @@ final class LibraryController extends StateNotifier<LibraryState> {
     }
   }
 
+  Future<bool> isFavoriteAlbum(String name, List<Track> tracks) =>
+      _store.isFavoriteAlbum(name, tracks);
+
   Future<void> removeTrack(String trackId) => _run(() async {
         final playlist = state.selectedPlaylist;
         if (playlist == null) return;

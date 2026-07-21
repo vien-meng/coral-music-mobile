@@ -35,7 +35,10 @@ void main() {
         .setMockMethodCallHandler(channel, (call) async {
       if (call.method == 'load') {
         return <String, Object?>{
-          'musicUrlSources': ['kg']
+          'musicUrlSources': ['kg'],
+          'musicUrlQualities': {
+            'kg': ['128k', 'flac', 'hires', 'master'],
+          },
         };
       }
       if (call.method == 'resolveMusicUrl') {
@@ -53,7 +56,13 @@ void main() {
     );
 
     final runner = MethodChannelUserApiRunner();
-    await runner.load('source');
+    final manifest = await runner.load('source');
+    expect(manifest.musicUrlQualities['kg'], {
+      AudioQuality.standard128k,
+      AudioQuality.flac,
+      AudioQuality.hires,
+      AudioQuality.master,
+    });
     final playbackUrl = await runner.resolveMusicUrl(
       const Track(
         sourceKind: TrackSourceKind.online,

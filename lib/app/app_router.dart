@@ -7,6 +7,7 @@ import '../features/webdav/view/webdav_page.dart';
 import '../features/download/view/download_page.dart';
 import '../features/leaderboard/view/leaderboard_page.dart';
 import '../features/search/view/search_page.dart';
+import '../features/search/view/search_album_detail_page.dart';
 import '../features/song_list/view/song_list_page.dart';
 import '../features/player/view/player_detail_page.dart';
 import '../features/player/view/user_api_debug_page.dart';
@@ -51,6 +52,16 @@ GoRouter createAppRouter() => GoRouter(
                   pageBuilder: (context, state) =>
                       _page(state, const SearchPage()),
                 ),
+                GoRoute(
+                  name: 'search-album-detail',
+                  path: '/album-detail',
+                  pageBuilder: (context, state) => _page(
+                    state,
+                    SearchAlbumDetailPage(
+                      detail: state.extra! as SearchAlbumDetail,
+                    ),
+                  ),
+                ),
               ],
             ),
             StatefulShellBranch(
@@ -64,6 +75,12 @@ GoRouter createAppRouter() => GoRouter(
                 GoRoute(
                   name: 'song-list',
                   path: '/song-list',
+                  pageBuilder: (context, state) =>
+                      _page(state, const SongListPage()),
+                ),
+                GoRoute(
+                  name: 'song-list-detail',
+                  path: '/song-list/detail',
                   pageBuilder: (context, state) =>
                       _page(state, const SongListPage()),
                 ),

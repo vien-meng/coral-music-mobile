@@ -59,7 +59,7 @@ List<String> parsePlainLyricLines(LyricPayload payload) {
       .where((value) => value.trim().isNotEmpty)
       .firstOrNull;
   if (raw == null) return const [];
-  final timeTag = RegExp(r'\[\d{1,2}:\d{2}(?:[.:]\d{1,3})?\]');
+  final timeTag = _timeTag;
   final metadata = RegExp(
     r'\[(?:ar|ti|al|by|offset|kuwo):[^\]]*\]',
     caseSensitive: false,
@@ -161,14 +161,14 @@ Duration _parseOffset(String raw) {
 
 Map<int, _TimedText> _parse(String raw) {
   final lines = <int, _TimedText>{};
-  final tag = RegExp(r'\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\]');
+  final tag = _timeTag;
   for (final rawLine in raw.split(RegExp(r'\r?\n'))) {
     final matches = tag.allMatches(rawLine).toList();
     if (matches.isEmpty) continue;
     final text = rawLine.replaceAll(tag, '').trim();
     if (text.isEmpty) continue;
     for (final match in matches) {
-      final minutes = int.parse(match.group(1)!);
+      final minutes = int.tryParse(match.group(1) ?? '') ?? 0;
       final seconds = int.parse(match.group(2)!);
       final fraction = (match.group(3) ?? '').padRight(3, '0');
       final milliseconds = fraction.isEmpty ? 0 : int.parse(fraction);
@@ -182,6 +182,9 @@ Map<int, _TimedText> _parse(String raw) {
   }
   return lines;
 }
+
+/// Standard LRC uses `[mm:ss.xx]`; Kuwo's detail endpoint uses `[seconds.xx]`.
+final _timeTag = RegExp(r'\[(?:(\d{1,2}):)?(\d{1,3})(?:[.:](\d{1,3}))?\]');
 
 final class _TimedText {
   const _TimedText(this.at, this.text);

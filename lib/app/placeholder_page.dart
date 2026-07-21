@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/song_list/state/song_list_controller.dart';
 import 'app_router.dart';
 import 'app_theme.dart';
 
@@ -31,13 +33,13 @@ class PlaceholderPage extends StatelessWidget {
       );
 }
 
-class MorePage extends StatelessWidget {
+class MorePage extends ConsumerWidget {
   const MorePage({super.key});
 
   static const _quickPaths = {'/list', '/favorites', '/download', '/setting'};
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final quick = appDestinations
         .where((item) => _quickPaths.contains(item.path))
         .toList();
@@ -115,7 +117,12 @@ class MorePage extends StatelessWidget {
                 for (var index = 0; index < entries.length; index++) ...[
                   _ProfileEntry(
                     destination: entries[index],
-                    onTap: () => context.go(entries[index].path),
+                    onTap: () {
+                      if (entries[index].path == '/song-list') {
+                        ref.read(songListProvider.notifier).closeDetail();
+                      }
+                      context.go(entries[index].path);
+                    },
                   ),
                   if (index != entries.length - 1)
                     const Divider(height: 1, indent: 56),
@@ -129,6 +136,16 @@ class MorePage extends StatelessWidget {
                     icon: Icons.tune_rounded,
                   ),
                   onTap: () => context.push('/setting'),
+                ),
+                const Divider(height: 1, indent: 56),
+                _ProfileEntry(
+                  destination: const AppDestination(
+                    name: 'source-management',
+                    path: '/setting/source',
+                    label: '音乐资源',
+                    icon: Icons.graphic_eq_outlined,
+                  ),
+                  onTap: () => context.push('/setting/source'),
                 ),
               ],
             ),

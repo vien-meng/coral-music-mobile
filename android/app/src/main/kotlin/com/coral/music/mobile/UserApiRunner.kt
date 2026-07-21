@@ -14,6 +14,7 @@ import io.flutter.plugin.common.MethodChannel
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
+import java.net.InetAddress
 import java.net.URL
 import java.net.URLEncoder
 import java.security.MessageDigest
@@ -23,7 +24,7 @@ import java.util.concurrent.Executors
 
 class UserApiRunner(private val activity: Activity) {
     private val handler = Handler(Looper.getMainLooper())
-    private val executor = Executors.newSingleThreadExecutor()
+    private val executor = Executors.newFixedThreadPool(3)
     private val pendingResults = mutableMapOf<String, MethodChannel.Result>()
     private var pendingLoad: MethodChannel.Result? = null
     private var script = ""
@@ -174,7 +175,19 @@ class UserApiRunner(private val activity: Activity) {
                     if (enabled.isEmpty()) throw IllegalArgumentException("音源脚本未声明可用的 musicUrl 来源")
                     sources = enabled
                     loaded = true
-                    pendingLoad?.success(mapOf("musicUrlSources" to enabled.toList()))
+                    val qualities = enabled.associateWith { source ->
+                        val info = sourceObject.optJSONObject(source)
+                        val values = info?.optJSONArray("qualitys") ?: info?.optJSONArray("qualities")
+                        buildList {
+                            for (index in 0 until (values?.length() ?: 0)) {
+                                values?.optString(index)?.takeIf(String::isNotBlank)?.let(::add)
+                            }
+                        }
+                    }.filterValues { it.isNotEmpty() }
+                    pendingLoad?.success(mapOf(
+                        "musicUrlSources" to enabled.toList(),
+                        "musicUrlQualities" to qualities,
+                    ))
                     pendingLoad = null
                 } catch (error: Exception) {
                     pendingLoad?.error("invalid_manifest", error.message, null)
@@ -209,9 +222,9 @@ class UserApiRunner(private val activity: Activity) {
         @JavascriptInterface
         fun request(id: String, rawUrl: String, rawOptions: String) {
             val url = Uri.parse(rawUrl)
-            if (url.scheme != "https" || url.host.isNullOrEmpty()) {
+            if (url.scheme !in setOf("http", "https") || url.host.isNullOrEmpty() || isPrivateHost(url.host!!)) {
                 Log.w("CoralUserApi", "blocked request scheme=${url.scheme ?: "missing"}")
-                sendRequestResult(id, "", "仅允许 HTTPS 请求")
+                sendRequestResult(id, "", "仅允许公开 HTTP/HTTPS 请求")
                 return
             }
             executor.execute {
@@ -325,6 +338,21 @@ class UserApiRunner(private val activity: Activity) {
             }
         }
         evaluate("window.__coralRequestDone(${JSONObject.quote(id)}, ${JSONObject.quote(payload.toString())});")
+    }
+
+    private fun isPrivateHost(host: String): Boolean {
+        val value = host.lowercase().removePrefix("[").removeSuffix("]")
+        return runCatching { InetAddress.getAllByName(value) }
+            .map { addresses ->
+                addresses.any {
+                    it.isAnyLocalAddress ||
+                        it.isLoopbackAddress ||
+                        it.isLinkLocalAddress ||
+                        it.isSiteLocalAddress ||
+                        it.isMulticastAddress
+                }
+            }
+            .getOrDefault(true)
     }
 
     companion object {

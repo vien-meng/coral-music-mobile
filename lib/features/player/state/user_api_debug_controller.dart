@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/app_failure.dart';
 import '../../../core/http_client.dart';
+import '../../../domain/music.dart';
 import '../data/playback_resolver.dart';
 import '../data/user_api_runner.dart';
 import '../data/user_api_script_fetcher.dart';
@@ -23,6 +24,7 @@ final userApiDebugProvider =
 const defaultUserApiSourceName = '落雪音源';
 const defaultUserApiSourceUrl =
     'https://raw.githubusercontent.com/pdone/lx-music-source/main/lx/latest.js';
+final defaultUserApiSourceUri = Uri.parse(defaultUserApiSourceUrl);
 
 final class UserApiDebugState {
   const UserApiDebugState({
@@ -68,6 +70,7 @@ final class UserApiSource {
     required this.script,
     required this.info,
     required this.musicUrlSources,
+    required this.musicUrlQualities,
     this.originUrl,
   });
 
@@ -76,8 +79,12 @@ final class UserApiSource {
   final String script;
   final UserApiSourceInfo info;
   final Set<String> musicUrlSources;
+  final Map<String, Set<AudioQuality>> musicUrlQualities;
   final Uri? originUrl;
 }
+
+bool isDefaultUserApiSource(UserApiSource source) =>
+    source.originUrl == defaultUserApiSourceUri;
 
 /// Public, comment-header metadata only. It is never executed or persisted.
 final class UserApiSourceInfo {
@@ -145,18 +152,17 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
     try {
       saved = await _preferences.read();
     } on Object {
-      // ponytail: persisted URL sources are optional; unavailable secure storage must not break in-memory imports.
-      return;
+      // ponytail: unavailable secure storage falls back to the built-in source.
+      saved = null;
     }
     if (state.sources.isNotEmpty) return;
-    if (saved != null) {
-      await importUrl(saved.name, saved.url.toString(), persist: false);
-      return;
-    }
     await importUrl(
       defaultUserApiSourceName,
       defaultUserApiSourceUrl,
+      persist: saved == null,
     );
+    if (saved == null || saved.url == defaultUserApiSourceUri) return;
+    await importUrl(saved.name, saved.url.toString(), persist: false);
   }
 
   Future<void> importUrl(String name, String rawUrl,
@@ -230,6 +236,7 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
         script: script,
         info: info,
         musicUrlSources: manifest.musicUrlSources,
+        musicUrlQualities: manifest.musicUrlQualities,
         originUrl: originUrl,
       );
       _playbackResolver?.clear();
@@ -274,6 +281,7 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
         script: target.script,
         info: target.info,
         musicUrlSources: manifest.musicUrlSources,
+        musicUrlQualities: manifest.musicUrlQualities,
         originUrl: target.originUrl,
       );
       _playbackResolver?.clear();
@@ -327,6 +335,7 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
         script: script,
         info: info,
         musicUrlSources: manifest.musicUrlSources,
+        musicUrlQualities: manifest.musicUrlQualities,
         originUrl: target.originUrl,
       );
       _playbackResolver?.clear();
@@ -358,6 +367,15 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
   Future<void> remove(String id) async {
     final source = state.sources.where((item) => item.id == id).firstOrNull;
     if (source == null) return;
+    if (isDefaultUserApiSource(source)) {
+      state = state.copyWith(
+        error: const AppFailure(
+          code: AppFailureCode.invalidData,
+          message: '内置落雪音源不能移除',
+        ),
+      );
+      return;
+    }
     if (id != state.activeSourceId) {
       state = state.copyWith(
         sources: state.sources.where((item) => item.id != id).toList(),

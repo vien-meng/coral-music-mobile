@@ -4,9 +4,11 @@ import '../../../core/app_failure.dart';
 import '../../../domain/music.dart';
 
 final class UserApiManifest {
-  const UserApiManifest(this.musicUrlSources);
+  const UserApiManifest(this.musicUrlSources,
+      [this.musicUrlQualities = const {}]);
 
   final Set<String> musicUrlSources;
+  final Map<String, Set<AudioQuality>> musicUrlQualities;
 }
 
 final class ResolvedPlaybackUrl {
@@ -51,7 +53,20 @@ final class MethodChannelUserApiRunner implements UserApiRunner {
           message: '音源脚本未声明可用的 musicUrl 来源',
         );
       }
-      return _manifest = UserApiManifest(sources);
+      final qualities = <String, Set<AudioQuality>>{};
+      final rawQualities = result?['musicUrlQualities'];
+      if (rawQualities is Map) {
+        for (final entry in rawQualities.entries) {
+          final source = '${entry.key}'.trim();
+          if (source.isEmpty || entry.value is! List) continue;
+          final values = (entry.value as List)
+              .map((value) => _qualityFromName('$value'))
+              .whereType<AudioQuality>()
+              .toSet();
+          if (values.isNotEmpty) qualities[source] = values;
+        }
+      }
+      return _manifest = UserApiManifest(sources, qualities);
     } on PlatformException catch (error) {
       throw AppFailure(
         code: AppFailureCode.invalidData,

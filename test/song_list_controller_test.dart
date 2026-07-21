@@ -21,6 +21,18 @@ void main() {
       ['1', '2', '3'],
     );
   });
+
+  test('does not replace an opened detail with the playlist square', () async {
+    final service = _FakePlaylistService();
+    final controller = SongListController({OnlineSource.kuwo: service});
+    addTearDown(controller.dispose);
+
+    await controller.open(_playlist1);
+    await controller.loadInitial();
+
+    expect(controller.state.detail?.playlist.id, '1');
+    expect(service.requestedPages, isEmpty);
+  });
 }
 
 final class _FakePlaylistService implements PlaylistCatalogService {

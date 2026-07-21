@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/app_failure.dart';
@@ -97,9 +99,13 @@ final class SongListController extends StateNotifier<SongListState> {
 
   final Map<OnlineSource, PlaylistCatalogService> _services;
   int _requestId = 0;
+  Future<void>? _artworkResolution;
+  final _artworkListeners = <void Function(Track)>[];
 
   Future<void> loadInitial() async {
-    if (state.isLoading || state.playlists.isNotEmpty) return;
+    if (state.isLoading || state.playlists.isNotEmpty || state.detail != null) {
+      return;
+    }
     await loadPage(1);
   }
 
@@ -152,6 +158,7 @@ final class SongListController extends StateNotifier<SongListState> {
       if (requestId != _requestId) return;
       state =
           state.copyWith(detail: detail, isLoading: false, clearError: true);
+      unawaited(resolveAllTrackArtwork());
     } on AppFailure catch (error) {
       if (requestId == _requestId) {
         state = state.copyWith(isLoading: false, error: error);
@@ -167,6 +174,54 @@ final class SongListController extends StateNotifier<SongListState> {
           ),
         );
       }
+    }
+  }
+
+  Future<Track> resolveTrackArtwork(Track track) async {
+    if (track.coverUri != null || track.sourceId != OnlineSource.kuwo.id) {
+      return track;
+    }
+    final service = _services[OnlineSource.kuwo];
+    if (service is! KuwoPlaylistService) return track;
+    final resolved = await service.resolveTrackArtwork(
+      track,
+      fallbackCover: state.detail?.playlist.coverUri,
+    );
+    if (resolved.coverUri == track.coverUri) return resolved;
+    final detail = state.detail;
+    if (detail == null) return resolved;
+    final index = detail.tracks.indexWhere((item) => item.id == track.id);
+    if (index < 0) return resolved;
+    final tracks = [...detail.tracks]..[index] = resolved;
+    state = state.copyWith(
+      detail: PlaylistDetail(playlist: detail.playlist, tracks: tracks),
+    );
+    return resolved;
+  }
+
+  Future<void> resolveAllTrackArtwork([void Function(Track)? onResolved]) {
+    if (onResolved != null) _artworkListeners.add(onResolved);
+    return _artworkResolution ??= _resolveAllTrackArtwork().whenComplete(() {
+      _artworkResolution = null;
+      _artworkListeners.clear();
+    });
+  }
+
+  Future<void> _resolveAllTrackArtwork() async {
+    final detail = state.detail;
+    if (detail == null || detail.playlist.source != OnlineSource.kuwo) return;
+    final tracks = detail.tracks;
+    // ponytail: three concurrent lookups keep the public search endpoint responsive; raise only with measured need.
+    for (var index = 0; index < tracks.length; index += 3) {
+      final batch = tracks.skip(index).take(3);
+      await Future.wait(
+        batch.map((track) async {
+          final resolved = await resolveTrackArtwork(track);
+          for (final listener in _artworkListeners) {
+            listener(resolved);
+          }
+        }),
+      );
     }
   }
 

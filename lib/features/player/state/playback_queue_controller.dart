@@ -146,6 +146,18 @@ final class PlaybackQueueController extends StateNotifier<PlaybackQueueState> {
     );
   }
 
+  void replaceTrack(Track track) {
+    final index = state.tracks.indexWhere((item) => item.id == track.id);
+    if (index < 0 || state.tracks[index].coverUri == track.coverUri) return;
+    final tracks = [...state.tracks]..[index] = track;
+    state = PlaybackQueueState(
+      tracks: List.unmodifiable(tracks),
+      currentIndex: state.currentIndex,
+      contextId: state.contextId,
+      mode: state.mode,
+    );
+  }
+
   void removeAt(int index) {
     if (index < 0 || index >= state.tracks.length) {
       throw RangeError.index(index, state.tracks, 'index');

@@ -62,6 +62,23 @@ void main() {
     expect(controller.state.mode, PlaybackMode.shuffle);
   });
 
+  test('replaces a queued track without changing the current selection', () {
+    final controller = PlaybackQueueController()
+      ..replaceQueue(tracks, startIndex: 1)
+      ..replaceTrack(Track(
+        sourceKind: TrackSourceKind.online,
+        sourceId: 'kw',
+        sourceTrackId: '1',
+        title: '一',
+        artist: '歌手',
+        coverUri: Uri.parse('https://cover.example.com/1.jpg'),
+      ));
+
+    expect(controller.state.currentTrack?.sourceTrackId, '2');
+    expect(controller.state.tracks.first.coverUri.toString(),
+        'https://cover.example.com/1.jpg');
+  });
+
   test('next and previous wrap at queue boundaries', () {
     final controller = PlaybackQueueController();
     controller.replaceQueue(tracks, startIndex: 0);

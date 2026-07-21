@@ -16,16 +16,18 @@ void main() {
   test('imports, activates and removes session-only User API sources',
       () async {
     final runner = _Runner();
-    final controller = _sessionController(runner);
+    final controller = await _sessionController(runner);
 
     await controller.importScript('酷我音源', 'kw-script');
     await controller.importScript('QQ 音源', 'qq-script');
 
-    expect(controller.state.sources, hasLength(2));
+    expect(controller.state.sources, hasLength(3));
     expect(controller.state.activeSource?.name, 'QQ 音源');
     expect(controller.state.activeSource?.musicUrlSources, {'qq'});
 
-    final kuwoId = controller.state.sources.first.id;
+    final kuwoId = controller.state.sources
+        .firstWhere((source) => source.name == '酷我音源')
+        .id;
     await controller.activate(kuwoId);
     expect(controller.state.activeSource?.name, '酷我音源');
     expect(runner.loadedScript, 'kw-script');
@@ -37,7 +39,7 @@ void main() {
 
   test('uses public script header details instead of a generated source name',
       () async {
-    final controller = _sessionController(_Runner());
+    final controller = await _sessionController(_Runner());
 
     await controller.importScript('', '''
 /*!
@@ -64,10 +66,11 @@ kw-script
     final resolver = PlaybackResolver(runner);
     final controller = UserApiDebugController(
       runner,
-      null,
+      _Fetcher('kw-default-script'),
       resolver,
       _UnavailablePreferences(),
     );
+    await controller.restorePersisted();
     const track = Track(
       sourceKind: TrackSourceKind.online,
       sourceId: 'kw',
@@ -85,7 +88,7 @@ kw-script
   });
 
   test('imports UTF-8 script bytes and rejects an oversized file', () async {
-    final controller = _sessionController(_Runner());
+    final controller = await _sessionController(_Runner());
 
     await controller.importBytes('文件音源', utf8.encode('kw-script'));
     expect(controller.state.activeSource?.name, '文件音源');
@@ -114,8 +117,23 @@ kw-script
     ]);
   });
 
-  test('restores the saved source instead of replacing it with the default',
+  test('loads the default LX source when persisted storage is unavailable',
       () async {
+    final fetcher = _Fetcher('kw-default-script');
+    final controller = UserApiDebugController(
+      _Runner(),
+      fetcher,
+      null,
+      _UnavailablePreferences(),
+    );
+
+    await controller.restorePersisted();
+
+    expect(controller.state.activeSource?.name, defaultUserApiSourceName);
+    expect(fetcher.urls, [Uri.parse(defaultUserApiSourceUrl)]);
+  });
+
+  test('keeps the default source while restoring the saved source', () async {
     final saved = (name: '我的音源', url: Uri.parse('https://example.com/me.js'));
     final preferences = _Preferences(saved);
     final fetcher = _Fetcher('kw-saved-script');
@@ -129,8 +147,20 @@ kw-script
     await controller.restorePersisted();
 
     expect(controller.state.activeSource?.name, saved.name);
-    expect(fetcher.urls, [saved.url]);
+    expect(controller.state.sources.map((source) => source.name),
+        [defaultUserApiSourceName, saved.name]);
+    expect(fetcher.urls, [Uri.parse(defaultUserApiSourceUrl), saved.url]);
     expect(preferences.saved, isEmpty);
+  });
+
+  test('does not remove the built-in LX source', () async {
+    final controller = await _sessionController(_Runner());
+    final source = controller.state.sources.single;
+
+    await controller.remove(source.id);
+
+    expect(controller.state.sources, [source]);
+    expect(controller.state.error?.message, '内置落雪音源不能移除');
   });
 
   test('a default source failure completes startup restore without a source',
@@ -149,8 +179,16 @@ kw-script
   });
 }
 
-UserApiDebugController _sessionController(_Runner runner) =>
-    UserApiDebugController(runner, null, null, _UnavailablePreferences());
+Future<UserApiDebugController> _sessionController(_Runner runner) async {
+  final controller = UserApiDebugController(
+    runner,
+    _Fetcher('kw-default-script'),
+    null,
+    _UnavailablePreferences(),
+  );
+  await controller.restorePersisted();
+  return controller;
+}
 
 final class _UnavailablePreferences extends UserApiSourcePreferences {
   @override

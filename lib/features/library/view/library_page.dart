@@ -40,11 +40,14 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(libraryProvider);
-    if (state.selectedPlaylist case final playlist?) {
-      return _PlaylistTracks(
-        playlist: playlist,
-        tracks: state.tracks,
-        showBack: !widget.favoritesOnly,
+    final playlist = state.selectedPlaylist;
+    if (playlist != null) {
+      return Scaffold(
+        body: _PlaylistTracks(
+          playlist: playlist,
+          tracks: state.tracks,
+          showBack: !widget.favoritesOnly,
+        ),
       );
     }
     return Scaffold(
@@ -183,16 +186,17 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     BuildContext context, {
     UserPlaylist? playlist,
   }) async {
-    final controller = TextEditingController(text: playlist?.name);
+    var value = playlist?.name ?? '';
     final name = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(playlist == null ? '新建列表' : '重命名列表'),
-        content: TextField(
-          controller: controller,
+        content: TextFormField(
+          initialValue: value,
           autofocus: true,
           textInputAction: TextInputAction.done,
-          onSubmitted: (value) => Navigator.pop(context, value),
+          onChanged: (input) => value = input,
+          onFieldSubmitted: (input) => Navigator.pop(context, input),
           decoration: const InputDecoration(hintText: '列表名称'),
         ),
         actions: [
@@ -201,13 +205,13 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
             child: const Text('取消'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text),
+            onPressed: () => Navigator.pop(context, value),
             child: const Text('保存'),
           ),
         ],
       ),
     );
-    controller.dispose();
+    if (!mounted) return;
     final normalized = name?.trim();
     if (normalized == null || normalized.isEmpty) return;
     final library = ref.read(libraryProvider.notifier);

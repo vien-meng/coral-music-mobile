@@ -26,6 +26,19 @@ void main() {
     expect(lines.map((line) => line.text), ['第一句', '第二句', '第三句']);
   });
 
+  test('parses Kuwo seconds-only timestamps for lyric scrolling', () {
+    final lines = parseLyricTimeline(const LyricPayload(
+      lyric: '[0.0]标题\n[3.3]第一句\n[13.23]第二句',
+    ));
+
+    expect(lines.map((line) => line.at), [
+      Duration.zero,
+      const Duration(seconds: 3, milliseconds: 300),
+      const Duration(seconds: 13, milliseconds: 230),
+    ]);
+    expect(lines.map((line) => line.text), ['标题', '第一句', '第二句']);
+  });
+
   test('prefers LX LRC and retains word timing', () {
     final lines = parseLyricTimeline(const LyricPayload(
       lyric: '[00:01.00]普通歌词',

@@ -2,6 +2,33 @@
 
 All notable changes to 珊瑚音乐移动端 (Coral Music Mobile) will be documented in this file.
 
+## [1.0.0] - 2026-07-21(03)
+
+### QQ 搜索音质与脚本网络兼容
+
+- QQ 搜索曲目补齐 `qualityMeta`，使用 User API 协议键名（`flac/320k/128k`）而非应用枚举名
+- Android 脚本网络从 HTTPS-only 调整为公开 HTTP/HTTPS，保留 DNS 解析后的私网地址阻断，兼容桌面端 QQ 取链中转
+
+### User API 音质能力与搜索分区
+
+- User API manifest 读取每个平台 `qualitys`（兼容 `qualities`）并传给播放页
+- 在线音质菜单合并曲目接口返回与脚本声明，Hi-Res、全景声和母带可被选择并直接请求音源
+- 搜索页按热门歌曲、歌单、专辑拆分；歌单复用现有歌单搜索服务，专辑按歌曲搜索响应聚合
+- 新增 `search_album_detail_page.dart` 搜索专辑详情页
+
+### 歌单详情与搜索路由修复
+
+- 修复歌单详情已加载后仍被 `loadInitial` 覆盖为广场的状态竞态
+- 搜索歌单以独立压栈路由展示详情，搜索专辑进入歌曲列表并支持播放全部
+- 酷我歌单详情曲目补齐专辑封面解析
+- 歌单详情响应增加 JSON/JSONP 文本归一化，覆盖 QQ、酷我和咪咕服务端格式差异
+- 咪咕补齐 `ZQ24` 与各档文件大小，避免 User API 选择默认无损时缺少可用格式
+
+### 歌词链路收敛
+
+- 歌词主链改为"本地 LRC → IndependentLyricService 公开平台端点 → LrcLib → 会话缓存"
+- 删除 User API manifest 的歌词能力、Dart/Android 歌词调用；聚合器不读取当前音源脚本
+
 ## [1.0.0] - 2026-07-21(02)
 
 ### Android DSD 流式解码播放

@@ -28,13 +28,7 @@ class SettingsPage extends ConsumerWidget {
         const SizedBox(height: 8),
         Text('只显示当前可实际生效的管理项。', style: Theme.of(context).textTheme.bodySmall),
         const SizedBox(height: 18),
-        _SettingsGroup(title: '音乐资源', children: [
-          _SettingsItem(
-            icon: Icons.graphic_eq_outlined,
-            title: '音源管理',
-            subtitle: '导入、启用或移除 User API 音源',
-            onTap: () => context.push('/setting/source'),
-          ),
+        _SettingsGroup(title: '网盘资源', children: [
           _SettingsItem(
             icon: Icons.cloud_outlined,
             title: '网盘资源',

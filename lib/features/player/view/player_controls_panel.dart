@@ -13,6 +13,7 @@ import '../data/audio_engine.dart';
 import '../data/audio_file_probe.dart';
 import '../state/playback_queue_controller.dart';
 import '../state/player_controller.dart';
+import '../state/user_api_debug_controller.dart';
 import 'player_action_sheets.dart';
 import 'player_transport_controls.dart';
 
@@ -29,6 +30,13 @@ class PlayerControlsPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final mode = ref.watch(playbackQueueProvider.select((queue) => queue.mode));
+    final sourceQualities = track.sourceKind == TrackSourceKind.online
+        ? ref.watch(userApiDebugProvider.select((value) =>
+            value.activeSource?.musicUrlQualities[track.sourceId] ??
+            const <AudioQuality>{}))
+        : const <AudioQuality>{};
+    final qualities = {...track.availableQualities, ...sourceQualities}.toList()
+      ..sort((left, right) => left.index.compareTo(right.index));
 
     return SingleChildScrollView(
       key: const ValueKey('player-panel'),
@@ -152,7 +160,7 @@ class PlayerControlsPanel extends ConsumerWidget {
                     .read(playerProvider.notifier)
                     .setSpeed(_nextPlaybackSpeed(player.speed)),
               ),
-              if (track.availableQualities.isNotEmpty)
+              if (qualities.isNotEmpty)
                 _SmallControl(
                   label: audioQualityLabel(player.quality),
                   tooltip: '播放音质',
@@ -161,6 +169,7 @@ class PlayerControlsPanel extends ConsumerWidget {
                     ref,
                     track,
                     player.quality,
+                    qualities: qualities,
                   ),
                 ),
             ],

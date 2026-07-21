@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../app/cover_image.dart';
 import '../../../app/online_source_menu.dart';
@@ -11,8 +12,24 @@ import '../../library/view/playlist_picker.dart';
 import '../../player/state/playback_queue_controller.dart';
 import '../../player/state/player_controller.dart';
 import '../../player/state/user_api_debug_controller.dart';
+import '../../song_list/state/song_list_controller.dart';
 import '../state/search_controller.dart';
+import 'search_album_detail_page.dart';
 import 'search_discovery.dart';
+
+typedef _PlaylistSearch = ({OnlineSource source, String query, int page});
+
+final _playlistSearchProvider = FutureProvider.autoDispose
+    .family<PageResult<OnlinePlaylist>, _PlaylistSearch>(
+  (ref, request) {
+    final service = ref.watch(playlistCatalogServicesProvider)[request.source];
+    return service?.searchPlaylists(request.query, request.page) ??
+        Future.value(PageResult(
+            items: const [], page: request.page, pageSize: 30, total: 0));
+  },
+);
+
+enum _SearchResultTab { tracks, playlists, albums }
 
 class SearchPage extends ConsumerStatefulWidget {
   const SearchPage({super.key});
@@ -21,11 +38,27 @@ class SearchPage extends ConsumerStatefulWidget {
   ConsumerState<SearchPage> createState() => _SearchPageState();
 }
 
-class _SearchPageState extends ConsumerState<SearchPage> {
+class _SearchPageState extends ConsumerState<SearchPage>
+    with SingleTickerProviderStateMixin {
   final _queryController = TextEditingController();
+  late final TabController _tabController;
+  var _tab = _SearchResultTab.tracks;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(
+        length: _SearchResultTab.values.length, vsync: this)
+      ..addListener(() {
+        if (!_tabController.indexIsChanging) {
+          setState(() => _tab = _SearchResultTab.values[_tabController.index]);
+        }
+      });
+  }
 
   @override
   void dispose() {
+    _tabController.dispose();
     _queryController.dispose();
     super.dispose();
   }
@@ -34,63 +67,77 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(searchProvider);
     final hotTerms = ref.watch(hotSearchProvider);
-    return RefreshIndicator(
-      color: CoralPalette.mint,
-      onRefresh: ref.read(searchProvider.notifier).refresh,
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-        children: [
-          _SearchHeader(state: state),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _queryController,
-            textInputAction: TextInputAction.search,
-            onSubmitted: _submit,
-            onChanged: (_) => setState(() {}),
-            decoration: InputDecoration(
-              hintText: '搜索歌曲 / 歌手 / 专辑 / 歌单',
-              prefixIcon: const Icon(Icons.search_outlined),
-              suffixIcon: _queryController.text.isEmpty
-                  ? null
-                  : IconButton(
-                      tooltip: '清除',
-                      icon: const Icon(Icons.close_rounded),
-                      onPressed: () {
-                        _queryController.clear();
-                        setState(() {});
-                      },
-                    ),
-            ),
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 10),
+          child: Column(
+            children: [
+              _SearchHeader(state: state),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _queryController,
+                textInputAction: TextInputAction.search,
+                onSubmitted: _submit,
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  hintText: '搜索歌曲 / 歌手 / 专辑 / 歌单',
+                  prefixIcon: const Icon(Icons.search_outlined),
+                  suffixIcon: _queryController.text.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: '清除',
+                          icon: const Icon(Icons.close_rounded),
+                          onPressed: () {
+                            _queryController.clear();
+                            setState(() {});
+                          },
+                        ),
+                ),
+              ),
+              if (state.error != null) ...[
+                const SizedBox(height: 14),
+                _SearchError(
+                  message: state.error!.message,
+                  onRetry: ref.read(searchProvider.notifier).refresh,
+                ),
+              ],
+            ],
           ),
-          if (state.error != null) ...[
-            const SizedBox(height: 14),
-            _SearchError(
-              message: state.error!.message,
-              onRetry: ref.read(searchProvider.notifier).refresh,
-            ),
-          ],
-          const SizedBox(height: 22),
-          if (state.tracks.isEmpty && state.query.isEmpty)
-            SearchDiscovery(
-              terms: hotTerms,
-              history: state.history,
-              onSelected: (term) {
-                _queryController.text = term;
-                _submit(term);
-                setState(() {});
-              },
-              onClearHistory: ref.read(searchProvider.notifier).clearHistory,
-              onRetry: () => ref.invalidate(hotSearchProvider),
-            )
-          else
-            _SearchResults(
-              state: state,
-              onPlay: _playTrack,
-            ),
-          if (state.tracks.isNotEmpty) _Pagination(state: state),
-        ],
-      ),
+        ),
+        Expanded(
+          child: RefreshIndicator(
+            color: CoralPalette.mint,
+            onRefresh: ref.read(searchProvider.notifier).refresh,
+            child: state.tracks.isEmpty && state.query.isEmpty
+                ? ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                    children: [
+                      SearchDiscovery(
+                        terms: hotTerms,
+                        history: state.history,
+                        onSelected: (term) {
+                          _queryController.text = term;
+                          _submit(term);
+                          setState(() {});
+                        },
+                        onClearHistory:
+                            ref.read(searchProvider.notifier).clearHistory,
+                        onRetry: () => ref.invalidate(hotSearchProvider),
+                      ),
+                    ],
+                  )
+                : _SearchResults(
+                    state: state,
+                    tab: _tab,
+                    tabController: _tabController,
+                    onPlay: _playTrack,
+                    onPlayAlbum: _playAlbum,
+                  ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -107,6 +154,16 @@ class _SearchPageState extends ConsumerState<SearchPage> {
           contextId: 'search:${state.source.id}:${state.query}:${state.page}',
         );
     await ref.read(playerProvider.notifier).playTrack(track);
+  }
+
+  Future<void> _playAlbum(List<Track> tracks) async {
+    if (tracks.isEmpty) return;
+    ref.read(playbackQueueProvider.notifier).replaceQueue(
+          tracks,
+          contextId:
+              'search-album:${tracks.first.sourceId}:${tracks.first.album}',
+        );
+    await ref.read(playerProvider.notifier).playTrack(tracks.first);
   }
 }
 
@@ -151,10 +208,19 @@ class _SearchHeader extends ConsumerWidget {
 }
 
 class _SearchResults extends ConsumerWidget {
-  const _SearchResults({required this.state, required this.onPlay});
+  const _SearchResults({
+    required this.state,
+    required this.tab,
+    required this.tabController,
+    required this.onPlay,
+    required this.onPlayAlbum,
+  });
 
   final SearchState state;
+  final _SearchResultTab tab;
+  final TabController tabController;
   final Future<void> Function(SearchState state, int index) onPlay;
+  final Future<void> Function(List<Track> tracks) onPlayAlbum;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -164,7 +230,7 @@ class _SearchResults extends ConsumerWidget {
         child: Center(child: CircularProgressIndicator()),
       );
     }
-    if (state.tracks.isEmpty) {
+    if (state.tracks.isEmpty && tab != _SearchResultTab.playlists) {
       return _EmptySearchSection(
         message: state.query.isEmpty ? '输入歌曲或歌手开始搜索' : '暂无搜索结果',
       );
@@ -180,11 +246,155 @@ class _SearchResults extends ConsumerWidget {
               ?.copyWith(fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 12),
-        for (var index = 0; index < state.tracks.length; index++)
-          _SearchTrackTile(
-            track: state.tracks[index],
-            showSource: state.isCombined,
-            onTap: () => onPlay(state, index),
+        TabBar(
+          controller: tabController,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          tabs: const [
+            Tab(text: '热门歌曲'),
+            Tab(text: '歌单'),
+            Tab(text: '专辑'),
+          ],
+        ),
+        Expanded(
+          child: switch (tab) {
+            _SearchResultTab.tracks => _TrackResults(
+                state: state,
+                onPlay: onPlay,
+              ),
+            _SearchResultTab.playlists => _PlaylistResults(state: state),
+            _SearchResultTab.albums => _AlbumResults(
+                tracks: state.tracks,
+                onPlay: onPlayAlbum,
+              ),
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _TrackResults extends StatelessWidget {
+  const _TrackResults({required this.state, required this.onPlay});
+
+  final SearchState state;
+  final Future<void> Function(SearchState state, int index) onPlay;
+
+  @override
+  Widget build(BuildContext context) => ListView(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+        children: [
+          for (var index = 0; index < state.tracks.length; index++)
+            _SearchTrackTile(
+              track: state.tracks[index],
+              showSource: state.isCombined,
+              onTap: () => onPlay(state, index),
+            ),
+          _Pagination(state: state),
+        ],
+      );
+}
+
+class _PlaylistResults extends ConsumerWidget {
+  const _PlaylistResults({required this.state});
+
+  final SearchState state;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (state.isCombined) {
+      return const _EmptySearchSection(message: '综合搜索暂不聚合歌单');
+    }
+    final result = ref.watch(_playlistSearchProvider((
+      source: state.source,
+      query: state.query,
+      page: state.page,
+    )));
+    return result.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.symmetric(vertical: 36),
+        child: Center(child: CircularProgressIndicator()),
+      ),
+      error: (_, __) => const _EmptySearchSection(message: '当前平台暂未返回歌单'),
+      data: (page) => page.items.isEmpty
+          ? const _EmptySearchSection(message: '暂无匹配歌单')
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+              children: [
+                for (final playlist in page.items)
+                  _SearchPlaylistTile(playlist: playlist),
+              ],
+            ),
+    );
+  }
+}
+
+class _SearchPlaylistTile extends ConsumerWidget {
+  const _SearchPlaylistTile({required this.playlist});
+
+  final OnlinePlaylist playlist;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        leading: _SearchArtwork(uri: playlist.coverUri),
+        title:
+            Text(playlist.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+        subtitle: Text(
+          [
+            playlist.author,
+            playlist.playCount.isEmpty ? '' : '${playlist.playCount} 播放'
+          ].where((value) => value.isNotEmpty).join(' · '),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: const Icon(Icons.chevron_right_rounded),
+        onTap: () async {
+          await ref.read(songListProvider.notifier).open(playlist);
+          if (context.mounted) context.push('/song-list/detail');
+        },
+      );
+}
+
+class _AlbumResults extends StatelessWidget {
+  const _AlbumResults({required this.tracks, required this.onPlay});
+
+  final List<Track> tracks;
+  final Future<void> Function(List<Track> tracks) onPlay;
+
+  @override
+  Widget build(BuildContext context) {
+    final albums = <String, List<Track>>{};
+    for (final track in tracks) {
+      final name = track.album?.trim() ?? '';
+      if (name.isEmpty) continue;
+      albums.putIfAbsent('${track.sourceId}:$name', () => []).add(track);
+    }
+    if (albums.isEmpty) return const _EmptySearchSection(message: '暂无匹配专辑');
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+      children: [
+        for (final items in albums.values)
+          ListTile(
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            leading: _SearchArtwork(uri: items.first.coverUri),
+            title: Text(items.first.album!,
+                maxLines: 1, overflow: TextOverflow.ellipsis),
+            subtitle: Text('${items.first.artist} · ${items.length} 首匹配歌曲'),
+            trailing: IconButton(
+              tooltip: '播放专辑匹配歌曲',
+              icon: const Icon(Icons.play_arrow_rounded),
+              onPressed: () => onPlay(items),
+            ),
+            onTap: () => context.push(
+              '/album-detail',
+              extra: SearchAlbumDetail(
+                title: items.first.album!,
+                artist: items.first.artist,
+                tracks: items,
+              ),
+            ),
           ),
       ],
     );

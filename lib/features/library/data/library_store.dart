@@ -727,6 +727,19 @@ final class LibraryStore {
     });
   }
 
+  Future<bool> isFavoriteAlbum(String name, List<Track> tracks) async {
+    if (name.trim().isEmpty || tracks.isEmpty) return false;
+    final database = await _database;
+    final rows = await database.query(
+      'album_favorite',
+      columns: const ['album_key'],
+      where: 'album_key = ?',
+      whereArgs: [_favoriteAlbum(name, tracks).key],
+      limit: 1,
+    );
+    return rows.isNotEmpty;
+  }
+
   Future<List<DownloadTask>> listDownloadTasks() async {
     final database = await _database;
     final rows =

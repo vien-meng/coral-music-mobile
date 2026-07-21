@@ -5,6 +5,7 @@ import '../../../core/http_client.dart';
 import '../../../core/response_json.dart';
 import '../../../domain/music.dart';
 import '../../leaderboard/data/kuwo_leaderboard_parser.dart';
+import '../../search/data/kuwo_search_parser.dart';
 
 final class PlaylistTag {
   const PlaylistTag({required this.id, required this.name});
@@ -124,6 +125,7 @@ final class KuwoPlaylistService implements PlaylistCatalogService {
       'devid': '28156413',
       'ft': 'playlist',
       'pay': '0',
+      'needliveshow': '0',
     });
     try {
       final response = await _dio.getUri<Object?>(uri);
@@ -234,6 +236,56 @@ final class KuwoPlaylistService implements PlaylistCatalogService {
     return sourceId;
   }
 
+  Future<Uri?> _lookupTrackCover(Track track) async {
+    if (track.coverUri != null) return null;
+    try {
+      final response = await _dio.getUri<String>(
+        Uri.https('search.kuwo.cn', '/r.s', {
+          'client': 'kt',
+          'all': '${track.title} ${track.artist}',
+          'pn': '0',
+          'rn': '10',
+          'uid': '794762570',
+          'ver': 'kwplayer_ar_9.2.2.1',
+          'vipver': '1',
+          'show_copyright_off': '1',
+          'newver': '1',
+          'ft': 'music',
+          'cluster': '0',
+          'strategy': '2012',
+          'encoding': 'utf8',
+          'rformat': 'json',
+          'vermerge': '1',
+          'mobi': '1',
+          'issubtitle': '1',
+        }),
+        options: Options(responseType: ResponseType.plain),
+      );
+      final body = response.data;
+      if (body == null || body.isEmpty) return null;
+      final candidates = KuwoSearchParser.parse(
+        Map<String, Object?>.from(decodeJsonMap(body)),
+        page: 1,
+        pageSize: 10,
+      ).items;
+      final match = candidates
+              .where((item) => item.sourceTrackId == track.sourceTrackId)
+              .firstOrNull ??
+          candidates.firstOrNull;
+      return match?.coverUri;
+    } on Object {
+      return null;
+    }
+  }
+
+  Future<Track> resolveTrackArtwork(
+    Track track, {
+    Uri? fallbackCover,
+  }) async {
+    final cover = await _lookupTrackCover(track) ?? fallbackCover;
+    return cover == null ? track : _copyTrackWithCover(track, cover);
+  }
+
   static PageResult<OnlinePlaylist> _parsePopular(Object? raw, int page) {
     final response = _map(raw);
     final data = _map(response['data']);
@@ -305,6 +357,7 @@ final class KuwoPlaylistService implements PlaylistCatalogService {
           album:
               KuwoLeaderboardParser.decodeText('${item['album'] ?? ''}').trim(),
           duration: duration == null ? null : Duration(seconds: duration),
+          coverUri: _trackCover(item),
           availableQualities: KuwoLeaderboardParser.parseQualities(
             '${item['N_MINFO'] ?? item['n_minfo'] ?? ''}',
           ),
@@ -327,7 +380,9 @@ final class KuwoPlaylistService implements PlaylistCatalogService {
             .trim(),
         trackCount: int.tryParse('${response['total'] ?? ''}') ?? tracks.length,
         playCount: _formatCount(response['playnum']),
-        coverUri: _httpsUri('${response['pic'] ?? ''}') ?? fallback.coverUri,
+        coverUri: fallback.coverUri ??
+            _httpsUri('${response['pic'] ?? ''}') ??
+            tracks.firstOrNull?.coverUri,
       ),
       tracks: tracks,
     );
@@ -371,9 +426,37 @@ final class KuwoPlaylistService implements PlaylistCatalogService {
 
   static Uri? _httpsUri(String value) {
     final uri = Uri.tryParse(value.trim());
-    if (uri == null) return null;
+    if (uri == null || uri.host.isEmpty) return null;
     return uri.scheme == 'http' ? uri.replace(scheme: 'https') : uri;
   }
+
+  static Uri? _trackCover(Map<Object?, Object?> item) {
+    final direct = _httpsUri('${item['pic'] ?? ''}') ??
+        _httpsUri('${item['albumPic'] ?? ''}');
+    if (direct != null) return direct;
+    final parts = '${item['web_albumpic_short'] ?? ''}'.trim().split('/');
+    if (parts.length < 2 || parts.skip(1).any((part) => part.isEmpty)) {
+      return null;
+    }
+    return Uri.https(
+      'img3.kuwo.cn',
+      '/star/albumcover/500/${parts.skip(1).join('/')}',
+    );
+  }
+
+  static Track _copyTrackWithCover(Track track, Uri cover) => Track(
+        sourceKind: track.sourceKind,
+        sourceId: track.sourceId,
+        sourceTrackId: track.sourceTrackId,
+        title: track.title,
+        artist: track.artist,
+        album: track.album,
+        duration: track.duration,
+        coverUri: cover,
+        localUri: track.localUri,
+        availableQualities: track.availableQualities,
+        extra: track.extra,
+      );
 
   static String _formatCount(Object? value) {
     final count = int.tryParse('$value') ?? 0;

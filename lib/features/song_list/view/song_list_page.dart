@@ -311,24 +311,48 @@ class _PlaylistDetail extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          _PlaylistDetailBanner(detail: detail),
           Padding(
-            padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
             child: Row(
               children: [
-                IconButton(
-                  tooltip: '返回歌单广场',
-                  onPressed: ref.read(songListProvider.notifier).closeDetail,
-                  icon: const Icon(Icons.arrow_back),
-                ),
-                Expanded(
-                  child: Text(
-                    detail.playlist.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
+                FilledButton.tonalIcon(
+                  onPressed: detail.tracks.isEmpty
+                      ? null
+                      : () async {
+                          await ref
+                              .read(songListProvider.notifier)
+                              .resolveTrackArtwork(detail.tracks.first);
+                          final queueTracks =
+                              ref.read(songListProvider).detail?.tracks ??
+                                  detail.tracks;
+                          final tracks = await ref
+                              .read(libraryStoreProvider)
+                              .filterIgnored(queueTracks);
+                          if (tracks.isEmpty) return;
+                          ref.read(playbackQueueProvider.notifier).replaceQueue(
+                                tracks,
+                                contextId:
+                                    'songlist:${detail.playlist.source.id}:${detail.playlist.id}',
+                              );
+                          unawaited(
+                            ref
+                                .read(songListProvider.notifier)
+                                .resolveAllTrackArtwork(
+                                  ref
+                                      .read(playbackQueueProvider.notifier)
+                                      .replaceTrack,
+                                ),
+                          );
+                          await ref
+                              .read(playerProvider.notifier)
+                              .playTrack(tracks.first);
+                        },
+                  icon: const Icon(Icons.play_arrow),
+                  label: Text('播放全部 (${detail.tracks.length})'),
                 ),
                 FavoriteOnlinePlaylistButton(detail: detail),
+                const Spacer(),
                 IconButton(
                   tooltip: '下载全部',
                   onPressed: detail.tracks.isEmpty
@@ -340,52 +364,18 @@ class _PlaylistDetail extends ConsumerWidget {
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text(
-                                  result.skipped == 0
-                                      ? '已加入 ${result.added} 首下载任务'
-                                      : '已加入 ${result.added} 首，跳过 ${result.skipped} 首重复或不支持歌曲',
-                                ),
+                                content: Text(result.skipped == 0
+                                    ? '已加入 ${result.added} 首下载任务'
+                                    : '已加入 ${result.added} 首，跳过 ${result.skipped} 首重复或不支持歌曲'),
                               ),
                             );
                           }
                         },
                   icon: const Icon(Icons.download_for_offline_outlined),
                 ),
-                FilledButton.tonalIcon(
-                  onPressed: detail.tracks.isEmpty
-                      ? null
-                      : () async {
-                          final tracks = await ref
-                              .read(libraryStoreProvider)
-                              .filterIgnored(detail.tracks);
-                          if (tracks.isEmpty) return;
-                          ref.read(playbackQueueProvider.notifier).replaceQueue(
-                                tracks,
-                                contextId:
-                                    'songlist:${detail.playlist.source.id}:${detail.playlist.id}',
-                              );
-                          await ref
-                              .read(playerProvider.notifier)
-                              .playTrack(tracks.first);
-                        },
-                  icon: const Icon(Icons.play_arrow),
-                  label: const Text('播放全部'),
-                ),
               ],
             ),
           ),
-          if (detail.playlist.author.isNotEmpty ||
-              detail.playlist.description.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Text(
-                [detail.playlist.author, detail.playlist.description]
-                    .where((value) => value.isNotEmpty)
-                    .join(' · '),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
           Expanded(
             child: ListView.separated(
               itemCount: detail.tracks.length,
@@ -402,7 +392,9 @@ class _PlaylistDetail extends ConsumerWidget {
                           child: Text('${index + 1}'.padLeft(2, '0')),
                         ),
                         const SizedBox(width: 5),
-                        _PlaylistTrackArtwork(uri: track.coverUri),
+                        _PlaylistTrackArtwork(
+                          uri: track.coverUri ?? detail.playlist.coverUri,
+                        ),
                       ],
                     ),
                   ),
@@ -427,13 +419,24 @@ class _PlaylistDetail extends ConsumerWidget {
                     ],
                   ),
                   onTap: () async {
+                    await ref
+                        .read(songListProvider.notifier)
+                        .resolveTrackArtwork(track);
+                    final queueTracks =
+                        ref.read(songListProvider).detail?.tracks ??
+                            detail.tracks;
+                    final queueIndex =
+                        queueTracks.indexWhere((item) => item.id == track.id);
+                    if (queueIndex < 0) return;
                     ref.read(playbackQueueProvider.notifier).replaceQueue(
-                          detail.tracks,
-                          startIndex: index,
+                          queueTracks,
+                          startIndex: queueIndex,
                           contextId:
                               'songlist:${detail.playlist.source.id}:${detail.playlist.id}',
                         );
-                    await ref.read(playerProvider.notifier).playTrack(track);
+                    await ref
+                        .read(playerProvider.notifier)
+                        .playTrack(queueTracks[queueIndex]);
                   },
                 );
               },
@@ -441,6 +444,93 @@ class _PlaylistDetail extends ConsumerWidget {
           ),
         ],
       );
+}
+
+class _PlaylistDetailBanner extends ConsumerWidget {
+  const _PlaylistDetailBanner({required this.detail});
+
+  final PlaylistDetail detail;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final emptyCover = ColoredBox(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      child: const Icon(Icons.queue_music_rounded, size: 56),
+    );
+    return SizedBox(
+      height: 224,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          CoverImage(
+            uri: detail.playlist.coverUri,
+            fit: BoxFit.cover,
+            fallback: CoverImage(
+              uri: detail.tracks.firstOrNull?.coverUri,
+              fit: BoxFit.cover,
+              fallback: emptyCover,
+            ),
+          ),
+          const ColoredBox(color: Color(0x66000000)),
+          Positioned(
+            top: 6,
+            left: 6,
+            right: 6,
+            child: Row(
+              children: [
+                IconButton(
+                  tooltip: '返回',
+                  color: Colors.white,
+                  onPressed: () {
+                    if (Navigator.of(context).canPop()) {
+                      Navigator.of(context).pop();
+                    } else {
+                      ref.read(songListProvider.notifier).closeDetail();
+                    }
+                  },
+                  icon: const Icon(Icons.arrow_back_rounded),
+                ),
+              ],
+            ),
+          ),
+          Positioned(
+            left: 20,
+            right: 20,
+            bottom: 18,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  detail.playlist.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+                if (detail.playlist.author.isNotEmpty ||
+                    detail.playlist.description.isNotEmpty) ...[
+                  const SizedBox(height: 5),
+                  Text(
+                    [detail.playlist.author, detail.playlist.description]
+                        .where((value) => value.isNotEmpty)
+                        .join(' · '),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Colors.white.withValues(alpha: .92),
+                        ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _PlaylistCover extends StatelessWidget {

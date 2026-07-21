@@ -13,6 +13,7 @@ import '../../library/view/playlist_picker.dart';
 import '../../player/state/playback_queue_controller.dart';
 import '../../player/state/player_controller.dart';
 import '../../player/state/user_api_debug_controller.dart';
+import '../../song_list/state/song_list_controller.dart';
 import '../state/leaderboard_controller.dart';
 
 class LeaderboardPage extends ConsumerStatefulWidget {
@@ -33,78 +34,93 @@ class _LeaderboardPageState extends ConsumerState<LeaderboardPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(leaderboardProvider);
-    return RefreshIndicator(
-      color: CoralPalette.mint,
-      onRefresh: ref.read(leaderboardProvider.notifier).refresh,
-      child: ListView(
-        key: const Key('leaderboard-tracks'),
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
-        children: [
-          _TopBar(state: state),
-          const SizedBox(height: 18),
-          _DiscoveryHero(state: state),
-          const SizedBox(height: 16),
-          _QuickActions(
-            onDailyRecommendation: _loadDailyRecommendation,
-            onRadio: _startRadio,
-          ),
-          const SizedBox(height: 28),
-          _SectionHeader(
-            title: '推荐歌单',
-            trailing: state.isLoading
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : TextButton.icon(
-                    onPressed: () =>
-                        ref.read(leaderboardProvider.notifier).refresh(),
-                    icon: const Icon(Icons.refresh_rounded, size: 17),
-                    label: const Text('换一换'),
-                  ),
-          ),
-          const SizedBox(height: 8),
-          if (state.boards.isEmpty && state.isLoading)
-            const _BoardLoading()
-          else if (state.boards.isNotEmpty)
-            _BoardStrip(state: state)
-          else
-            _InlineMessage(message: state.error?.message ?? '暂无可用榜单'),
-          const SizedBox(height: 28),
-          _SectionHeader(
-            title: state.activeBoard?.name ?? '热门歌曲',
-            subtitle: state.activeBoard == null ? null : '${state.total} 首歌曲',
-            trailing: OutlinedButton.icon(
-              onPressed: state.tracks.isEmpty ? null : () => _playAll(state),
-              icon: const Icon(Icons.play_arrow_rounded, size: 18),
-              label: const Text('播放全部'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Theme.of(context).colorScheme.onSurface,
-                padding: const EdgeInsets.symmetric(horizontal: 14),
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+          child: Column(
+            children: [
+              _TopBar(state: state),
+              const SizedBox(height: 18),
+              _DiscoveryHero(state: state),
+              const SizedBox(height: 16),
+              _QuickActions(
+                onDailyRecommendation: _loadDailyRecommendation,
+                onRadio: _startRadio,
+                onSongList: _openSongList,
               ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: RefreshIndicator(
+            color: CoralPalette.mint,
+            onRefresh: ref.read(leaderboardProvider.notifier).refresh,
+            child: ListView(
+              key: const Key('leaderboard-tracks'),
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
+              children: [
+                _SectionHeader(
+                  title: '推荐歌单',
+                  trailing: state.isLoading
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : TextButton.icon(
+                          onPressed: () =>
+                              ref.read(leaderboardProvider.notifier).refresh(),
+                          icon: const Icon(Icons.refresh_rounded, size: 17),
+                          label: const Text('换一换'),
+                        ),
+                ),
+                const SizedBox(height: 8),
+                if (state.boards.isEmpty && state.isLoading)
+                  const _BoardLoading()
+                else if (state.boards.isNotEmpty)
+                  _BoardStrip(state: state)
+                else
+                  _InlineMessage(message: state.error?.message ?? '暂无可用榜单'),
+                const SizedBox(height: 28),
+                _SectionHeader(
+                  title: state.activeBoard?.name ?? '热门歌曲',
+                  subtitle:
+                      state.activeBoard == null ? null : '${state.total} 首歌曲',
+                  trailing: OutlinedButton.icon(
+                    onPressed:
+                        state.tracks.isEmpty ? null : () => _playAll(state),
+                    icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                    label: const Text('播放全部'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Theme.of(context).colorScheme.onSurface,
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                if (state.error != null)
+                  _ErrorCard(
+                    message: state.error!.message,
+                    onRetry: ref.read(leaderboardProvider.notifier).refresh,
+                  )
+                else if (state.isLoading && state.tracks.isEmpty)
+                  const _TrackLoading()
+                else if (state.tracks.isEmpty)
+                  const _InlineMessage(message: '这里暂时没有歌曲')
+                else
+                  for (var index = 0; index < state.tracks.length; index++)
+                    _TrackTile(
+                      track: state.tracks[index],
+                      rank: index + 1,
+                      onTap: () => _playTrack(state, index),
+                    ),
+                if (state.tracks.isNotEmpty) _Pagination(state: state),
+              ],
             ),
           ),
-          const SizedBox(height: 10),
-          if (state.error != null)
-            _ErrorCard(
-              message: state.error!.message,
-              onRetry: ref.read(leaderboardProvider.notifier).refresh,
-            )
-          else if (state.isLoading && state.tracks.isEmpty)
-            const _TrackLoading()
-          else if (state.tracks.isEmpty)
-            const _InlineMessage(message: '这里暂时没有歌曲')
-          else
-            for (var index = 0; index < state.tracks.length; index++)
-              _TrackTile(
-                track: state.tracks[index],
-                rank: index + 1,
-                onTap: () => _playTrack(state, index),
-              ),
-          if (state.tracks.isNotEmpty) _Pagination(state: state),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -171,6 +187,11 @@ class _LeaderboardPageState extends ConsumerState<LeaderboardPage> {
     if (track == null) return;
     await ref.read(playerProvider.notifier).playTrack(track);
     if (mounted) _showMessage('音乐电台已开始随机播放');
+  }
+
+  void _openSongList() {
+    ref.read(songListProvider.notifier).closeDetail();
+    context.go('/song-list');
   }
 
   void _showMessage(String message) => ScaffoldMessenger.of(context)
@@ -263,10 +284,12 @@ class _QuickActions extends StatelessWidget {
   const _QuickActions({
     required this.onDailyRecommendation,
     required this.onRadio,
+    required this.onSongList,
   });
 
   final VoidCallback onDailyRecommendation;
   final VoidCallback onRadio;
+  final VoidCallback onSongList;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -279,7 +302,7 @@ class _QuickActions extends StatelessWidget {
           _QuickAction(
             icon: Icons.grid_view_outlined,
             label: '歌单广场',
-            onTap: () => context.go('/song-list'),
+            onTap: onSongList,
           ),
           _QuickAction(
             icon: Icons.radio_rounded,
