@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/cover_image.dart';
 import '../../../app/online_source_menu.dart';
-import '../../../app/app_theme.dart';
 import '../../../domain/music.dart';
 import '../../download/view/download_track_button.dart';
 import '../../library/view/favorite_track_button.dart';
@@ -107,7 +106,7 @@ class _SearchPageState extends ConsumerState<SearchPage>
         ),
         Expanded(
           child: RefreshIndicator(
-            color: CoralPalette.mint,
+            color: Theme.of(context).colorScheme.primary,
             onRefresh: ref.read(searchProvider.notifier).refresh,
             child: state.tracks.isEmpty && state.query.isEmpty
                 ? ListView(
@@ -447,9 +446,14 @@ class _SearchTrackTile extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  FavoriteTrackButton(track: track),
-                  DownloadTrackButton(track: track),
+                  FavoriteTrackButton(track: track, compact: true),
+                  DownloadTrackButton(track: track, compact: true),
                   IconButton(
+                    style: IconButton.styleFrom(
+                      minimumSize: const Size.square(40),
+                      padding: EdgeInsets.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
                     tooltip: '添加到我的列表',
                     onPressed: () => addTrackToPlaylist(context, ref, track),
                     icon: const Icon(Icons.more_horiz_rounded),
@@ -479,11 +483,12 @@ class _SearchArtwork extends StatelessWidget {
     final fallback = Container(
       width: 48,
       height: 48,
-      decoration: const BoxDecoration(
-        borderRadius: BorderRadius.all(Radius.circular(8)),
-        color: CoralPalette.sky,
+      decoration: BoxDecoration(
+        borderRadius: const BorderRadius.all(Radius.circular(8)),
+        color: Theme.of(context).colorScheme.primaryContainer,
       ),
-      child: const Icon(Icons.music_note_rounded, color: Colors.white),
+      child: Icon(Icons.music_note_rounded,
+          color: Theme.of(context).colorScheme.onPrimaryContainer),
     );
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),

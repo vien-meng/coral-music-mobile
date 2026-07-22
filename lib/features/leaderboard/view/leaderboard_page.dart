@@ -54,7 +54,7 @@ class _LeaderboardPageState extends ConsumerState<LeaderboardPage> {
         ),
         Expanded(
           child: RefreshIndicator(
-            color: CoralPalette.mint,
+            color: Theme.of(context).colorScheme.primary,
             onRefresh: ref.read(leaderboardProvider.notifier).refresh,
             child: ListView(
               key: const Key('leaderboard-tracks'),
@@ -362,10 +362,13 @@ class _DiscoveryHero extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 13, 14, 13),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
-          colors: [Color(0xffffeee9), Color(0xfffff8f5)],
+          colors: [
+            Theme.of(context).colorScheme.primaryContainer,
+            Theme.of(context).colorScheme.secondaryContainer,
+          ],
         ),
         border: Border.all(
           color: Theme.of(context).colorScheme.outlineVariant,
@@ -383,7 +386,7 @@ class _DiscoveryHero extends StatelessWidget {
             children: [
               Text('春日初遇',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: CoralPalette.brand,
+                        color: Theme.of(context).colorScheme.primary,
                         fontWeight: FontWeight.w700,
                       )),
               const SizedBox(height: 4),
@@ -546,11 +549,11 @@ class _BoardCover extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const colors = [
-      CoralPalette.sky,
-      CoralPalette.pink,
-      CoralPalette.peach,
-      CoralPalette.cyan
+    final colors = [
+      Theme.of(context).colorScheme.primaryContainer,
+      Theme.of(context).colorScheme.secondaryContainer,
+      Theme.of(context).colorScheme.tertiaryContainer,
+      Theme.of(context).colorScheme.surfaceContainerHighest,
     ];
     final fallback = Container(
       width: double.infinity,
@@ -567,7 +570,7 @@ class _BoardCover extends StatelessWidget {
           Icons.favorite_rounded
         ][index % 4],
         size: 24,
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.onPrimaryContainer,
       ),
     );
     return ClipRRect(
@@ -628,7 +631,11 @@ class _TrackTile extends ConsumerWidget {
                             maxLines: 1, overflow: TextOverflow.ellipsis),
                         const SizedBox(height: 3),
                         Text(
-                          track.artist.isEmpty ? '未知歌手' : track.artist,
+                          [
+                            track.artist.isEmpty ? '未知歌手' : track.artist,
+                            if (track.duration != null)
+                              _duration(track.duration),
+                          ].join(' · '),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.bodySmall,
@@ -636,11 +643,14 @@ class _TrackTile extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  Text(_duration(track.duration),
-                      style: Theme.of(context).textTheme.labelSmall),
-                  FavoriteTrackButton(track: track),
-                  DownloadTrackButton(track: track),
+                  FavoriteTrackButton(track: track, compact: true),
+                  DownloadTrackButton(track: track, compact: true),
                   IconButton(
+                    style: IconButton.styleFrom(
+                      minimumSize: const Size.square(40),
+                      padding: EdgeInsets.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
                     tooltip: '添加到我的列表',
                     onPressed: () => addTrackToPlaylist(context, ref, track),
                     icon: const Icon(Icons.more_horiz_rounded),
@@ -670,11 +680,12 @@ class _TrackArtwork extends StatelessWidget {
     final placeholder = Container(
       width: 48,
       height: 48,
-      decoration: const BoxDecoration(
-        borderRadius: BorderRadius.all(Radius.circular(8)),
-        color: CoralPalette.sky,
+      decoration: BoxDecoration(
+        borderRadius: const BorderRadius.all(Radius.circular(8)),
+        color: Theme.of(context).colorScheme.primaryContainer,
       ),
-      child: const Icon(Icons.music_note_rounded, color: Colors.white),
+      child: Icon(Icons.music_note_rounded,
+          color: Theme.of(context).colorScheme.onPrimaryContainer),
     );
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),

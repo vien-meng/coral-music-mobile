@@ -76,6 +76,29 @@ void main() {
     }
   });
 
+  test('moves a downloaded file into the configured directory', () async {
+    final sourceDirectory =
+        await Directory.systemTemp.createTemp('coral-source-');
+    final destinationDirectory =
+        await Directory.systemTemp.createTemp('coral-destination-');
+    try {
+      final source = File('${sourceDirectory.path}/原始文件.flac');
+      await source.writeAsBytes([1, 2, 3]);
+
+      final target = await DownloadController.moveFile(
+        source,
+        destinationDirectory,
+        track,
+      );
+
+      expect(await source.exists(), isFalse);
+      expect(await File(target).readAsBytes(), [1, 2, 3]);
+    } finally {
+      await sourceDirectory.delete(recursive: true);
+      await destinationDirectory.delete(recursive: true);
+    }
+  });
+
   test('only allows a strictly higher quality after download completes', () {
     final completed = task(DownloadStatus.completed, '/tmp/test.mp3');
 

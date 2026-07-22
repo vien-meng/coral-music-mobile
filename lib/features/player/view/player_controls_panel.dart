@@ -41,11 +41,11 @@ class PlayerControlsPanel extends ConsumerWidget {
     return SingleChildScrollView(
       key: const ValueKey('player-panel'),
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(24, 76, 24, 30),
+      padding: const EdgeInsets.fromLTRB(24, 92, 24, 16),
       child: Column(
         children: [
           _AlbumArtwork(track: track),
-          const SizedBox(height: 20),
+          const SizedBox(height: 14),
           Text(
             track.title,
             maxLines: 2,
@@ -87,7 +87,7 @@ class PlayerControlsPanel extends ConsumerWidget {
                       .withValues(alpha: .78),
                 ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 14),
           PlayerTransportControls(
             track: track,
             player: player,
@@ -99,23 +99,28 @@ class PlayerControlsPanel extends ConsumerWidget {
             icon: Icon(_playbackModeIcon(mode), size: 18),
             label: Text(_playbackModeLabel(mode)),
           ),
-          const SizedBox(height: 8),
-          Wrap(
-            alignment: WrapAlignment.center,
-            spacing: 18,
+          const SizedBox(height: 4),
+          Row(
             children: [
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox(
-                    height: 48,
-                    child: FavoriteTrackButton(track: track),
-                  ),
-                  const SizedBox(height: 3),
-                  Text('收藏', style: Theme.of(context).textTheme.labelSmall),
-                ],
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      height: 48,
+                      child: FavoriteTrackButton(track: track),
+                    ),
+                    const SizedBox(height: 3),
+                    FittedBox(
+                      child: Text('收藏',
+                          maxLines: 1,
+                          style: Theme.of(context).textTheme.labelSmall),
+                    ),
+                  ],
+                ),
               ),
-              _PlayerAction(
+              Expanded(
+                  child: _PlayerAction(
                 icon: Icons.block_outlined,
                 label: '不喜欢',
                 onTap: () async {
@@ -131,23 +136,31 @@ class PlayerControlsPanel extends ConsumerWidget {
                     );
                   }
                 },
-              ),
+              )),
               if (track.sourceKind == TrackSourceKind.online ||
                   track.sourceKind == TrackSourceKind.webdav)
-                DownloadTrackButton(track: track, showLabel: true),
-              _PlayerAction(
+                Expanded(
+                  child: Center(
+                    child: DownloadTrackButton(track: track, showLabel: true),
+                  ),
+                )
+              else
+                const Expanded(child: SizedBox()),
+              Expanded(
+                  child: _PlayerAction(
                 icon: Icons.timer_outlined,
                 label: player.stopAfterCurrent ? '播完停止' : '定时停止',
                 onTap: () => showPlayerSleepTimerSheet(context, ref),
-              ),
-              _PlayerAction(
+              )),
+              Expanded(
+                  child: _PlayerAction(
                 icon: Icons.queue_music_outlined,
                 label: '列表',
                 onTap: Scaffold.of(context).openEndDrawer,
-              ),
+              )),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 6),
           Wrap(
             alignment: WrapAlignment.center,
             spacing: 8,
@@ -270,7 +283,10 @@ class _PlayerAction extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 3),
-          Text(label, style: Theme.of(context).textTheme.labelSmall),
+          FittedBox(
+            child: Text(label,
+                maxLines: 1, style: Theme.of(context).textTheme.labelSmall),
+          ),
         ],
       );
 }

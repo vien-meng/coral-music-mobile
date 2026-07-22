@@ -2,6 +2,37 @@
 
 All notable changes to 珊瑚音乐移动端 (Coral Music Mobile) will be documented in this file.
 
+## [1.0.1] - 2026-07-22
+
+### 自定义下载目录
+
+- 新增 `DownloadDirectoryController`，用户可在设置页选择下载目录并校验可写性
+- 下载页"导出文件"操作改为"移动到下载目录"和"打开目录"
+- Android `MainActivity` 新增 `coral_music/downloads` 通道，调用系统文件管理器打开下载目录
+- `DownloadController` 新增 `moveFile` 将已下载文件移动到自定义目录
+
+### 返回键移至后台
+
+- 主界面 `PopScope` 拦截系统返回键，调用 `moveTaskToBack` 移至后台而非直接退出
+- Android `MainActivity` 新增 `coral_music/app_task` 通道实现 `moveTaskToBack`
+
+### User API 脚本本地缓存
+
+- `UserApiSourcePreferences` 新增 `readCachedScript`/`cacheScript`，以 SHA-256 为键缓存脚本到 `applicationSupportDirectory`
+- 原子写入（`.tmp` → rename），256KB 大小限制，启动优先读取缓存避免重复下载
+
+### 文件夹导入为列表
+
+- "我的列表"页导入入口从 JSON 文件改为文件夹选择
+- `LibraryController.importDirectory()` 递归扫描目录并创建列表，复用 `LocalAudioDirectoryAccess` 权限
+
+### 下载页与播放控制 UI 调整
+
+- 下载页硬编码 `CoralPalette` 颜色统一替换为 `ColorScheme`，状态行与音质/格式行拆分为两行
+- 播放控制面板间距收紧，操作区从 `Wrap` 改为 `Row` + `Expanded` 等宽对齐
+- `FavoriteTrackButton` 新增 `compact` 模式适配紧凑布局
+- 页面渐变从常量 `coralPageGradient` 改为 `coralPageGradientOf(context)` 动态适配主题
+
 ## [1.0.0] - 2026-07-21(03)
 
 ### QQ 搜索音质与脚本网络兼容

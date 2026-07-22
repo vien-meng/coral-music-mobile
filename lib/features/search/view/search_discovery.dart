@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/app_theme.dart';
 import '../../../app/cover_image.dart';
 
 class SearchDiscovery extends StatelessWidget {
@@ -104,11 +103,19 @@ class SearchDiscovery extends StatelessWidget {
               separatorBuilder: (_, __) => const SizedBox(width: 12),
               itemBuilder: (context, index) {
                 final artist = _artists[index];
+                final scheme = Theme.of(context).colorScheme;
+                final color = [
+                  scheme.primaryContainer,
+                  scheme.secondaryContainer,
+                  scheme.tertiaryContainer,
+                  scheme.surfaceContainerHighest,
+                ][index];
                 final fallback = DecoratedBox(
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(colors: artist.colors),
+                    gradient: LinearGradient(colors: [color, scheme.primary]),
                   ),
-                  child: const Icon(Icons.person_rounded, color: Colors.white),
+                  child: Icon(Icons.person_rounded,
+                      color: scheme.onPrimaryContainer),
                 );
                 return SizedBox(
                   width: 76,
@@ -175,7 +182,7 @@ class _HotTermRow extends StatelessWidget {
                     '$rank',
                     style: TextStyle(
                       color: rank <= 3
-                          ? const Color(0xffff776c)
+                          ? Theme.of(context).colorScheme.primary
                           : Theme.of(context).colorScheme.onSurfaceVariant,
                       fontWeight: FontWeight.w800,
                     ),
@@ -213,32 +220,27 @@ class _EmptySection extends StatelessWidget {
 }
 
 class _ArtistSuggestion {
-  const _ArtistSuggestion(this.name, this.avatar, this.colors);
+  const _ArtistSuggestion(this.name, this.avatar);
 
   final String name;
   final String avatar;
-  final List<Color> colors;
 }
 
 const _artists = [
   _ArtistSuggestion(
     '周杰伦',
     'https://y.gtimg.cn/music/photo_new/T001R300x300M0000025NhlN2yWrP4.jpg',
-    [CoralPalette.periwinkle, CoralPalette.player],
   ),
   _ArtistSuggestion(
     'Taylor Swift',
     'https://y.gtimg.cn/music/photo_new/T001R300x300M000000qrPik2w6lDr.jpg',
-    [CoralPalette.pink, CoralPalette.lilac],
   ),
   _ArtistSuggestion(
     '陈奕迅',
     'https://y.gtimg.cn/music/photo_new/T001R300x300M000003Nz2So3XXYek.jpg',
-    [CoralPalette.peach, CoralPalette.mint],
   ),
   _ArtistSuggestion(
     'G.E.M.',
     'https://y.gtimg.cn/music/photo_new/T001R300x300M000001fNHEf1SFEFN.jpg',
-    [CoralPalette.sky, CoralPalette.mint],
   ),
 ];

@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,6 +8,7 @@ import '../../../app/app_theme.dart';
 import '../../../app/theme_mode_controller.dart';
 import '../../../domain/music.dart';
 import '../../player/state/default_quality_controller.dart';
+import '../../download/state/download_controller.dart';
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
@@ -15,6 +17,7 @@ class SettingsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(appThemeModeProvider);
     final quality = ref.watch(defaultPlaybackQualityProvider);
+    final downloadDirectory = ref.watch(downloadDirectoryProvider);
     return ListView(
       padding: const EdgeInsets.fromLTRB(12, 12, 20, 24),
       children: [
@@ -99,6 +102,13 @@ class SettingsPage extends ConsumerWidget {
             onTap: () => context.push('/download'),
           ),
           _SettingsItem(
+            icon: Icons.folder_outlined,
+            title: '下载目录',
+            subtitle: downloadDirectory ?? '默认应用下载目录',
+            onTap: () =>
+                _pickDownloadDirectory(context, ref, downloadDirectory),
+          ),
+          _SettingsItem(
             icon: Icons.library_music_outlined,
             title: '我的列表',
             subtitle: '管理本地导入、收藏和播放列表',
@@ -138,6 +148,25 @@ class SettingsPage extends ConsumerWidget {
         AudioQuality.high192k => '192k',
         AudioQuality.standard128k => '128k',
       };
+
+  Future<void> _pickDownloadDirectory(
+    BuildContext context,
+    WidgetRef ref,
+    String? current,
+  ) async {
+    final directory = await FilePicker.platform.getDirectoryPath(
+      dialogTitle: '选择下载目录',
+      initialDirectory: current,
+    );
+    if (directory == null || !context.mounted) return;
+    final saved = await ref
+        .read(downloadDirectoryProvider.notifier)
+        .setDirectory(directory);
+    if (context.mounted && !saved) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('该目录不可写，请选择其他目录。')));
+    }
+  }
 }
 
 class _SettingsGroup extends StatelessWidget {

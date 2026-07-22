@@ -1,6 +1,11 @@
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:path_provider/path_provider.dart';
+
+import 'user_api_script_fetcher.dart';
 
 class UserApiSourcePreferences {
   UserApiSourcePreferences([FlutterSecureStorage? storage])
@@ -46,5 +51,46 @@ class UserApiSourcePreferences {
     } on Object {
       // ponytail: there is no persisted URL to remove when secure storage is unavailable.
     }
+  }
+
+  Future<String?> readCachedScript(Uri url) async {
+    try {
+      final script = await (await _scriptFile(url)).readAsString();
+      return script.trim().isEmpty ||
+              script.length > UserApiScriptFetcher.maxBytes
+          ? null
+          : script;
+    } on FileSystemException {
+      return null;
+    } on Object {
+      return null;
+    }
+  }
+
+  Future<void> cacheScript(Uri url, String script) async {
+    if (script.trim().isEmpty ||
+        script.length > UserApiScriptFetcher.maxBytes) {
+      return;
+    }
+    try {
+      final file = await _scriptFile(url);
+      final temporary = File('${file.path}.tmp');
+      await temporary.writeAsString(script, flush: true);
+      await temporary.rename(file.path);
+    } on FileSystemException {
+      // ponytail: a network-loaded source remains usable when its local cache cannot be written.
+    } on Object {
+      // ponytail: unsupported platforms fall back to the existing secure URL preference.
+    }
+  }
+
+  Future<File> _scriptFile(Uri url) async {
+    final supportDirectory = await getApplicationSupportDirectory();
+    final key = base64Url
+        .encode(sha256.convert(utf8.encode(url.toString())).bytes)
+        .replaceAll('=', '');
+    final directory = Directory('${supportDirectory.path}/user-api-scripts');
+    await directory.create(recursive: true);
+    return File('${directory.path}/$key.js');
   }
 }

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/app_failure.dart';
@@ -265,6 +267,52 @@ final class LibraryController extends StateNotifier<LibraryState> {
         error: AppFailure(
           code: AppFailureCode.unknown,
           message: '本地音频导入失败',
+          diagnostic: error.runtimeType.toString(),
+        ),
+      );
+      return null;
+    }
+  }
+
+  Future<({UserPlaylist playlist, int added, int skipped})?> importDirectory(
+    String path,
+  ) async {
+    if (state.isLoading) return null;
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final scan = await LocalAudioScanner().scanDirectory(path);
+      if (scan.errorMessage case final message?) {
+        state = state.copyWith(
+          isLoading: false,
+          error: AppFailure(code: AppFailureCode.invalidData, message: message),
+        );
+        return null;
+      }
+      final segments = Directory(path)
+          .absolute
+          .uri
+          .pathSegments
+          .where((segment) => segment.isNotEmpty)
+          .toList();
+      final playlist = await _store.createPlaylist(
+        segments.isEmpty ? '本地音乐' : segments.last,
+      );
+      var added = 0;
+      for (final track in scan.tracks) {
+        if (await _store.addTrack(playlist.id, track)) added++;
+      }
+      state = state.copyWith(
+        playlists: await _store.listPlaylists(),
+        isLoading: false,
+        clearError: true,
+      );
+      return (playlist: playlist, added: added, skipped: scan.skipped.length);
+    } on Object catch (error) {
+      state = state.copyWith(
+        isLoading: false,
+        error: AppFailure(
+          code: AppFailureCode.unknown,
+          message: '导入文件夹失败',
           diagnostic: error.runtimeType.toString(),
         ),
       );

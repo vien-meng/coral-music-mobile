@@ -32,7 +32,7 @@ bool matchesIgnoredKeyword(Track track, String keyword) => [
 
 final class LibraryStore {
   static const _databaseName = 'coral_music.db';
-  static const _schemaVersion = 11;
+  static const _schemaVersion = 12;
   static const favoritesId = 'favorites';
 
   late final Future<Database> _database = _open();
@@ -783,6 +783,34 @@ final class LibraryStore {
     await database.delete('download_task', where: 'id = ?', whereArgs: [id]);
   }
 
+  Future<String?> downloadDirectory() async {
+    final rows = await (await _database).query(
+      'app_setting',
+      columns: const ['value'],
+      where: 'key = ?',
+      whereArgs: const ['download_directory'],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : rows.single['value'] as String;
+  }
+
+  Future<void> saveDownloadDirectory(String? path) async {
+    final database = await _database;
+    if (path == null) {
+      await database.delete(
+        'app_setting',
+        where: 'key = ?',
+        whereArgs: const ['download_directory'],
+      );
+      return;
+    }
+    await database.insert(
+      'app_setting',
+      {'key': 'download_directory', 'value': path},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
   Future<List<PlayHistoryEntry>> listHistory() async {
     final database = await _database;
     final rows = await database.query(
@@ -881,6 +909,7 @@ final class LibraryStore {
           await _createV9(database);
           await _createV10(database);
           await _createV11(database);
+          await _createV12(database);
         },
         onUpgrade: (database, oldVersion, _) async {
           if (oldVersion < 1) await _createV1(database);
@@ -894,6 +923,7 @@ final class LibraryStore {
           if (oldVersion < 9) await _createV9(database);
           if (oldVersion < 10) await _createV10(database);
           if (oldVersion < 11) await _createV11(database);
+          if (oldVersion < 12) await _createV12(database);
         },
       );
 
@@ -1003,6 +1033,13 @@ final class LibraryStore {
       cover_uri TEXT,
       tracks_json TEXT NOT NULL,
       saved_at INTEGER NOT NULL
+    )
+  ''');
+
+  Future<void> _createV12(DatabaseExecutor database) => database.execute('''
+    CREATE TABLE app_setting (
+      key TEXT PRIMARY KEY NOT NULL,
+      value TEXT NOT NULL
     )
   ''');
 

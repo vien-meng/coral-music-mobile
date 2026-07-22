@@ -9,11 +9,13 @@ class DownloadTrackButton extends ConsumerStatefulWidget {
   const DownloadTrackButton({
     required this.track,
     this.showLabel = false,
+    this.compact = false,
     super.key,
   });
 
   final Track track;
   final bool showLabel;
+  final bool compact;
 
   @override
   ConsumerState<DownloadTrackButton> createState() =>
@@ -41,8 +43,15 @@ class _DownloadTrackButtonState extends ConsumerState<DownloadTrackButton> {
                 ? '已暂停'
                 : '下载';
     final button = SizedBox.square(
-      dimension: 48,
+      dimension: widget.compact ? 40 : 48,
       child: IconButton(
+        style: widget.compact
+            ? IconButton.styleFrom(
+                minimumSize: const Size.square(40),
+                padding: EdgeInsets.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              )
+            : null,
         key: ValueKey('download-${widget.track.id}'),
         tooltip: label,
         onPressed: active ? null : _enqueue,
@@ -73,7 +82,10 @@ class _DownloadTrackButtonState extends ConsumerState<DownloadTrackButton> {
       children: [
         button,
         const SizedBox(height: 3),
-        Text(label, style: Theme.of(context).textTheme.labelSmall),
+        FittedBox(
+          child: Text(label,
+              maxLines: 1, style: Theme.of(context).textTheme.labelSmall),
+        ),
       ],
     );
   }

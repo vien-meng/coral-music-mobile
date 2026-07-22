@@ -86,9 +86,14 @@ class SearchAlbumDetailPage extends ConsumerWidget {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        FavoriteTrackButton(track: track),
-                        DownloadTrackButton(track: track),
+                        FavoriteTrackButton(track: track, compact: true),
+                        DownloadTrackButton(track: track, compact: true),
                         IconButton(
+                          style: IconButton.styleFrom(
+                            minimumSize: const Size.square(40),
+                            padding: EdgeInsets.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
                           tooltip: '添加到我的列表',
                           onPressed: () =>
                               addTrackToPlaylist(context, ref, track),

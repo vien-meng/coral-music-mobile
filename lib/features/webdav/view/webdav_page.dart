@@ -82,7 +82,7 @@ class _WebDavPageState extends ConsumerState<WebDavPage> {
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: CoralPalette.sky,
+              color: Theme.of(context).colorScheme.primaryContainer,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: Theme.of(context).colorScheme.outlineVariant,
@@ -170,7 +170,7 @@ class _WebDavPageState extends ConsumerState<WebDavPage> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
           decoration: BoxDecoration(
-            color: CoralPalette.sky,
+            color: Theme.of(context).colorScheme.primaryContainer,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: Theme.of(context).colorScheme.outlineVariant,
@@ -279,7 +279,9 @@ class _WebDavPageState extends ConsumerState<WebDavPage> {
             width: 38,
             height: 38,
             decoration: BoxDecoration(
-              color: entry.isDirectory ? CoralPalette.sky : CoralPalette.lilac,
+              color: entry.isDirectory
+                  ? Theme.of(context).colorScheme.primaryContainer
+                  : Theme.of(context).colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(9),
             ),
             child: Icon(

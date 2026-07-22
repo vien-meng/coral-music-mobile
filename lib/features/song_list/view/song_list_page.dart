@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/app_theme.dart';
 import '../../../app/cover_image.dart';
 import '../../../app/online_source_menu.dart';
 import '../../../domain/music.dart';
@@ -408,9 +407,14 @@ class _PlaylistDetail extends ConsumerWidget {
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      FavoriteTrackButton(track: track),
-                      DownloadTrackButton(track: track),
+                      FavoriteTrackButton(track: track, compact: true),
+                      DownloadTrackButton(track: track, compact: true),
                       IconButton(
+                        style: IconButton.styleFrom(
+                          minimumSize: const Size.square(40),
+                          padding: EdgeInsets.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
                         tooltip: '添加到我的列表',
                         onPressed: () =>
                             addTrackToPlaylist(context, ref, track),
@@ -568,11 +572,12 @@ class _PlaylistTrackArtwork extends StatelessWidget {
     final fallback = Container(
       width: 38,
       height: 38,
-      decoration: const BoxDecoration(
-        borderRadius: BorderRadius.all(Radius.circular(8)),
-        color: CoralPalette.sky,
+      decoration: BoxDecoration(
+        borderRadius: const BorderRadius.all(Radius.circular(8)),
+        color: Theme.of(context).colorScheme.primaryContainer,
       ),
-      child: const Icon(Icons.music_note_rounded, color: Colors.white),
+      child: Icon(Icons.music_note_rounded,
+          color: Theme.of(context).colorScheme.onPrimaryContainer),
     );
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),
