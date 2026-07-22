@@ -33,9 +33,36 @@ final class DownloadDirectoryController extends StateNotifier<String?> {
   final LibraryStore _store;
   late final Future<void> _ready;
 
-  Future<void> _load() async => state = await _store.downloadDirectory();
+  Future<void> _load() async {
+    final saved = await _store.downloadDirectory();
+    if (Platform.isIOS) {
+      // iOS document-provider paths are not persistently writable from Dart.
+      if (saved != null) await _store.saveDownloadDirectory(null);
+      state = null;
+      return;
+    }
+    state = saved;
+  }
+
+  Future<Directory> _applicationDownloads() async {
+    final documents = await getApplicationDocumentsDirectory();
+    return Directory('${documents.path}/downloads');
+  }
+
+  Future<bool> useApplicationDirectory() async {
+    await _ready;
+    try {
+      await (await _applicationDownloads()).create(recursive: true);
+    } on FileSystemException {
+      return false;
+    }
+    await _store.saveDownloadDirectory(null);
+    state = null;
+    return true;
+  }
 
   Future<bool> setDirectory(String path) async {
+    if (Platform.isIOS) return useApplicationDirectory();
     final directory = Directory(path);
     try {
       await directory.create(recursive: true);
@@ -49,13 +76,13 @@ final class DownloadDirectoryController extends StateNotifier<String?> {
 
   Future<Directory> resolve() async {
     await _ready;
-    if (state != null) return Directory(state!);
-    final documents = await getApplicationDocumentsDirectory();
-    return Directory('${documents.path}/downloads');
+    if (!Platform.isIOS && state != null) return Directory(state!);
+    return _applicationDownloads();
   }
 
   Future<Directory?> configured() async {
     await _ready;
+    if (Platform.isIOS) return resolve();
     return state == null ? null : Directory(state!);
   }
 }
