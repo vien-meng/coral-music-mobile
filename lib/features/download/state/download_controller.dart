@@ -16,16 +16,59 @@ final downloadProvider =
   (ref) => DownloadController(
     ref.watch(playbackResolverProvider),
     ref.watch(libraryStoreProvider),
+    ref.read(downloadDirectoryProvider.notifier),
   ),
 );
 
+final downloadDirectoryProvider =
+    StateNotifierProvider<DownloadDirectoryController, String?>(
+  (ref) => DownloadDirectoryController(ref.watch(libraryStoreProvider)),
+);
+
+final class DownloadDirectoryController extends StateNotifier<String?> {
+  DownloadDirectoryController(this._store) : super(null) {
+    _ready = _load();
+  }
+
+  final LibraryStore _store;
+  late final Future<void> _ready;
+
+  Future<void> _load() async => state = await _store.downloadDirectory();
+
+  Future<bool> setDirectory(String path) async {
+    final directory = Directory(path);
+    try {
+      await directory.create(recursive: true);
+    } on FileSystemException {
+      return false;
+    }
+    await _store.saveDownloadDirectory(directory.path);
+    state = directory.path;
+    return true;
+  }
+
+  Future<Directory> resolve() async {
+    await _ready;
+    if (state != null) return Directory(state!);
+    final documents = await getApplicationDocumentsDirectory();
+    return Directory('${documents.path}/downloads');
+  }
+
+  Future<Directory?> configured() async {
+    await _ready;
+    return state == null ? null : Directory(state!);
+  }
+}
+
 final class DownloadController extends StateNotifier<List<DownloadTask>> {
-  DownloadController(this._resolver, this._store) : super(const []) {
+  DownloadController(this._resolver, this._store, this._directory)
+      : super(const []) {
     _ready = load();
   }
 
   final PlaybackResolver _resolver;
   final LibraryStore _store;
+  final DownloadDirectoryController _directory;
   late final Future<void> _ready;
   final _cancelTokens = <String, CancelToken>{};
   final _paused = <String>{};
@@ -142,6 +185,23 @@ final class DownloadController extends StateNotifier<List<DownloadTask>> {
     }
   }
 
+  static Future<String> moveFile(
+    File source,
+    Directory directory,
+    Track track,
+  ) async {
+    final dot = source.path.lastIndexOf('.');
+    final extension = dot < 1 ? 'mp3' : source.path.substring(dot + 1);
+    final target = await nextTargetPath(directory, track, extension);
+    try {
+      await source.rename(target);
+    } on FileSystemException {
+      await source.copy(target);
+      await source.delete();
+    }
+    return target;
+  }
+
   Future<void> resume(DownloadTask task) async {
     if (_cancelTokens.containsKey(task.id) ||
         _waiting.any((waiting) => waiting.id == task.id)) {
@@ -184,6 +244,32 @@ final class DownloadController extends StateNotifier<List<DownloadTask>> {
     state = state.where((item) => item.id != task.id).toList(growable: false);
   }
 
+  Future<MoveDownloadResult> moveToConfiguredDirectory(
+      DownloadTask task) async {
+    final destination = await _directory.configured();
+    if (destination == null) return MoveDownloadResult.noConfiguredDirectory;
+    final source = File(task.targetPath);
+    if (task.targetPath.isEmpty || !await source.exists()) {
+      return MoveDownloadResult.sourceMissing;
+    }
+    try {
+      final directory = await destination.create(recursive: true);
+      if (source.parent.absolute.path == directory.absolute.path) {
+        return MoveDownloadResult.alreadyInDirectory;
+      }
+      final target = await moveFile(source, directory, task.track);
+      final moved = _task(task, status: task.status, targetPath: target);
+      state = [
+        for (final item in state)
+          if (item.id == task.id) moved else item,
+      ];
+      await _store.saveDownloadTask(moved);
+      return MoveDownloadResult.moved;
+    } on FileSystemException {
+      return MoveDownloadResult.failed;
+    }
+  }
+
   void _schedule(DownloadTask task) {
     _waiting.add(task);
     unawaited(_drain());
@@ -206,9 +292,8 @@ final class DownloadController extends StateNotifier<List<DownloadTask>> {
     try {
       final playback =
           await _resolver.resolve(task.track, quality: task.quality);
-      final directory = await getApplicationDocumentsDirectory();
-      final downloads = await Directory('${directory.path}/downloads')
-          .create(recursive: true);
+      final downloads =
+          await (await _directory.resolve()).create(recursive: true);
       final extension = _extension(playback.uri);
       final target = task.targetPath.isNotEmpty
           ? task.targetPath
@@ -333,4 +418,12 @@ final class DownloadController extends StateNotifier<List<DownloadTask>> {
     final dot = last.lastIndexOf('.');
     return dot > 0 && dot < last.length - 1 ? last.substring(dot + 1) : 'mp3';
   }
+}
+
+enum MoveDownloadResult {
+  moved,
+  alreadyInDirectory,
+  noConfiguredDirectory,
+  sourceMissing,
+  failed,
 }

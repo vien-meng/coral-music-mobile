@@ -16,6 +16,12 @@ import 'app_theme.dart';
 import 'shared_audio_receiver.dart';
 import 'theme_mode_controller.dart';
 
+double coralTextScaleForWidth(double width) =>
+    (width / 390).clamp(.88, 1).toDouble();
+
+TextScaler coralTextScalerForWidth(TextScaler textScaler, double width) =>
+    TextScaler.linear(textScaler.scale(1) * coralTextScaleForWidth(width));
+
 class CoralMusicApp extends StatelessWidget {
   const CoralMusicApp({super.key, this.catalogService});
 
@@ -124,5 +130,17 @@ class _CoralMaterialAppState extends ConsumerState<_CoralMaterialApp> {
         darkTheme: coralTheme(Brightness.dark),
         themeMode: ref.watch(appThemeModeProvider),
         routerConfig: _router,
+        builder: (context, child) {
+          final mediaQuery = MediaQuery.of(context);
+          return MediaQuery(
+            data: mediaQuery.copyWith(
+              textScaler: coralTextScalerForWidth(
+                mediaQuery.textScaler,
+                mediaQuery.size.width,
+              ),
+            ),
+            child: child!,
+          );
+        },
       );
 }

@@ -19,11 +19,14 @@ abstract final class CoralPalette {
   static const player = Color(0xffff6b6b);
 }
 
-const coralPageGradient = LinearGradient(
-  begin: Alignment.topLeft,
-  end: Alignment.bottomRight,
-  colors: [Color(0xffffffff), CoralPalette.page],
-);
+LinearGradient coralPageGradientOf(BuildContext context) {
+  final scheme = Theme.of(context).colorScheme;
+  return LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [scheme.surface, Theme.of(context).scaffoldBackgroundColor],
+  );
+}
 
 ThemeData coralTheme(Brightness brightness) {
   final dark = brightness == Brightness.dark;
@@ -178,6 +181,10 @@ ThemeData coralTheme(Brightness brightness) {
     ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
+      backgroundColor: dark ? const Color(0xff323347) : const Color(0xff2d2f3b),
+      contentTextStyle:
+          TextStyle(color: dark ? scheme.onSurface : Colors.white),
+      actionTextColor: scheme.primary,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
     ),
     dividerTheme: DividerThemeData(color: scheme.outlineVariant),

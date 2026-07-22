@@ -133,6 +133,41 @@ kw-script
     expect(fetcher.urls, [Uri.parse(defaultUserApiSourceUrl)]);
   });
 
+  test('restores a cached source script before requesting the network',
+      () async {
+    final preferences = _CachingPreferences('kw-cached-script');
+    final fetcher = _Fetcher('kw-network-script');
+    final controller = UserApiDebugController(
+      _Runner(),
+      fetcher,
+      null,
+      preferences,
+    );
+
+    await controller.restorePersisted();
+
+    expect(controller.state.activeSource?.name, defaultUserApiSourceName);
+    expect(controller.state.activeSource?.script, 'kw-cached-script');
+    expect(fetcher.urls, isEmpty);
+  });
+
+  test('caches a fetched source script after it has initialized', () async {
+    final preferences = _CachingPreferences();
+    final controller = UserApiDebugController(
+      _Runner(),
+      _Fetcher('kw-network-script'),
+      null,
+      preferences,
+    );
+    final url = Uri.parse('https://example.com/source.js');
+
+    await controller.restorePersisted();
+    preferences.cached = null;
+    await controller.importUrl('测试音源', url.toString());
+
+    expect(preferences.cached, (url: url, script: 'kw-network-script'));
+  });
+
   test('keeps the default source while restoring the saved source', () async {
     final saved = (name: '我的音源', url: Uri.parse('https://example.com/me.js'));
     final preferences = _Preferences(saved);
@@ -215,6 +250,27 @@ final class _Preferences extends UserApiSourcePreferences {
 
   @override
   Future<void> clear() async {}
+}
+
+final class _CachingPreferences extends UserApiSourcePreferences {
+  _CachingPreferences([this.script]);
+
+  final String? script;
+  ({Uri url, String script})? cached;
+
+  @override
+  Future<({String name, Uri url})?> read() async => null;
+
+  @override
+  Future<void> save(String name, Uri url) async {}
+
+  @override
+  Future<String?> readCachedScript(Uri url) async => script;
+
+  @override
+  Future<void> cacheScript(Uri url, String script) async {
+    cached = (url: url, script: script);
+  }
 }
 
 final class _Fetcher extends UserApiScriptFetcher {

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/app_theme.dart';
 import '../../../app/cover_image.dart';
 import '../../../domain/music.dart';
 import '../../player/state/playback_queue_controller.dart';
@@ -377,9 +376,10 @@ class _Artwork extends StatelessWidget {
           height: 42,
           child: CoverImage(
             uri: track.coverUri,
-            fallback: const ColoredBox(
-              color: CoralPalette.sky,
-              child: Icon(Icons.music_note_outlined, color: CoralPalette.brand),
+            fallback: ColoredBox(
+              color: Theme.of(context).colorScheme.primaryContainer,
+              child: Icon(Icons.music_note_outlined,
+                  color: Theme.of(context).colorScheme.primary),
             ),
           ),
         ),

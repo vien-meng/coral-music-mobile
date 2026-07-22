@@ -155,11 +155,12 @@ class _MiniArtwork extends StatelessWidget {
     final placeholder = Container(
       width: 38,
       height: 38,
-      decoration: const BoxDecoration(
-        borderRadius: BorderRadius.all(Radius.circular(7)),
-        color: CoralPalette.sky,
+      decoration: BoxDecoration(
+        borderRadius: const BorderRadius.all(Radius.circular(7)),
+        color: Theme.of(context).colorScheme.primaryContainer,
       ),
-      child: const Icon(Icons.music_note_outlined, color: Colors.white),
+      child: Icon(Icons.music_note_outlined,
+          color: Theme.of(context).colorScheme.onPrimaryContainer),
     );
     return ClipRRect(
       borderRadius: BorderRadius.circular(7),

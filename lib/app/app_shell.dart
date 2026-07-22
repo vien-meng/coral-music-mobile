@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/player/view/mini_player.dart';
@@ -11,6 +12,7 @@ class AppShell extends StatelessWidget {
   });
 
   final StatefulNavigationShell navigationShell;
+  static const _taskChannel = MethodChannel('coral_music/app_task');
 
   static const _mobileDestinations = [
     _ShellDestination('/leaderboard', '发现', Icons.home_outlined),
@@ -41,31 +43,45 @@ class AppShell extends StatelessWidget {
           )
         : navigationShell;
 
-    return Scaffold(
-      // Keep the live mini player above the bottom navigation on phones.
-      extendBody: false,
-      body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: coralPageGradient),
-        child: SafeArea(
-          bottom: false,
-          child: Column(
-            children: [
-              Expanded(child: content),
-              const Padding(
-                padding: EdgeInsets.fromLTRB(12, 0, 12, 8),
-                child: MiniPlayer(),
-              ),
-            ],
+    return PopScope<void>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _moveTaskToBack();
+      },
+      child: Scaffold(
+        // Keep the live mini player above the bottom navigation on phones.
+        extendBody: false,
+        body: DecoratedBox(
+          decoration: BoxDecoration(gradient: coralPageGradientOf(context)),
+          child: SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                Expanded(child: content),
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(12, 0, 12, 8),
+                  child: MiniPlayer(),
+                ),
+              ],
+            ),
           ),
         ),
+        bottomNavigationBar: useNavigationRail
+            ? null
+            : _CoralBottomBar(
+                selectedIndex: selectedIndex,
+                onSelected: (index) => _go(context, index),
+              ),
       ),
-      bottomNavigationBar: useNavigationRail
-          ? null
-          : _CoralBottomBar(
-              selectedIndex: selectedIndex,
-              onSelected: (index) => _go(context, index),
-            ),
     );
+  }
+
+  Future<void> _moveTaskToBack() async {
+    try {
+      await _taskChannel.invokeMethod<void>('moveTaskToBack');
+    } on MissingPluginException {
+      // Only Android can move this task behind the launcher.
+    }
   }
 
   void _go(BuildContext context, int index) {
@@ -199,7 +215,8 @@ class _BrandMark extends StatelessWidget {
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: .05),
+              color:
+                  Theme.of(context).colorScheme.shadow.withValues(alpha: .12),
               blurRadius: 8,
               offset: const Offset(0, 3),
             ),

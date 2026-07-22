@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/app_theme.dart';
 import '../../../app/cover_image.dart';
 import '../../../domain/music.dart';
 import '../../download/view/download_track_button.dart';
@@ -138,9 +137,18 @@ class PlaybackQueueDrawer extends ConsumerWidget {
                                           TrackSourceKind.online ||
                                       track.sourceKind ==
                                           TrackSourceKind.webdav)
-                                    DownloadTrackButton(track: track),
+                                    DownloadTrackButton(
+                                      track: track,
+                                      compact: true,
+                                    ),
                                   if (!isCurrent)
                                     IconButton(
+                                      style: IconButton.styleFrom(
+                                        minimumSize: const Size.square(40),
+                                        padding: EdgeInsets.zero,
+                                        tapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                      ),
                                       tooltip: '移出队列',
                                       onPressed: () => ref
                                           .read(playbackQueueProvider.notifier)
@@ -183,14 +191,17 @@ class _QueueArtwork extends StatelessWidget {
     final fallback = DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(10),
-        gradient: const LinearGradient(
-          colors: [CoralPalette.sky, CoralPalette.lilac],
+        gradient: LinearGradient(
+          colors: [
+            Theme.of(context).colorScheme.primaryContainer,
+            Theme.of(context).colorScheme.secondaryContainer,
+          ],
         ),
       ),
       child: Icon(
         isCurrent ? Icons.graphic_eq : Icons.music_note_rounded,
         size: 22,
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.onPrimaryContainer,
       ),
     );
     return SizedBox.square(

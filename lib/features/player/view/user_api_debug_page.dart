@@ -49,7 +49,7 @@ class _UserApiDebugPageState extends ConsumerState<UserApiDebugPage> {
         const SizedBox(height: 16),
         Container(
           decoration: BoxDecoration(
-            color: CoralPalette.sky,
+            color: scheme.primaryContainer,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: scheme.outlineVariant),
           ),
@@ -63,7 +63,7 @@ class _UserApiDebugPageState extends ConsumerState<UserApiDebugPage> {
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: scheme.surface,
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: const Icon(Icons.link_outlined,
@@ -285,7 +285,9 @@ class _SourceDetailsCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: active ? CoralPalette.sky : CoralPalette.lilac,
+                      color: active
+                          ? scheme.primaryContainer
+                          : scheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
@@ -302,7 +304,7 @@ class _SourceDetailsCard extends StatelessWidget {
                     Chip(
                       label: const Text('已启用'),
                       visualDensity: VisualDensity.compact,
-                      backgroundColor: CoralPalette.sky,
+                      backgroundColor: scheme.primaryContainer,
                     ),
                   if (onRefresh != null)
                     IconButton(

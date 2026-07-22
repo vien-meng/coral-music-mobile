@@ -164,7 +164,7 @@ class _ProfileCard extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(14),
-          color: CoralPalette.sky,
+          color: Theme.of(context).colorScheme.primaryContainer,
           border: Border.all(
             color: Theme.of(context).colorScheme.outlineVariant,
           ),
@@ -175,11 +175,11 @@ class _ProfileCard extends StatelessWidget {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(Icons.music_note_outlined,
-                  color: CoralPalette.player, size: 26),
+              child: Icon(Icons.music_note_outlined,
+                  color: Theme.of(context).colorScheme.primary, size: 26),
             ),
             const SizedBox(width: 13),
             Expanded(
@@ -239,10 +239,11 @@ class _ProfileEntry extends StatelessWidget {
           width: 34,
           height: 34,
           decoration: BoxDecoration(
-            color: CoralPalette.sky,
+            color: Theme.of(context).colorScheme.primaryContainer,
             borderRadius: BorderRadius.circular(9),
           ),
-          child: Icon(destination.icon, size: 19, color: CoralPalette.brand),
+          child: Icon(destination.icon,
+              size: 19, color: Theme.of(context).colorScheme.primary),
         ),
         title: Text(destination.label),
         trailing: const Icon(Icons.chevron_right_outlined),

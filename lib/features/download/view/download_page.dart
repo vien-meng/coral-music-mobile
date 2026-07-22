@@ -2,10 +2,10 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/app_back_navigation.dart';
-import '../../../app/app_theme.dart';
 import '../../../app/audio_quality_labels.dart';
 import '../../../app/cover_image.dart';
 import '../../../domain/music.dart';
@@ -48,7 +48,7 @@ class DownloadPage extends ConsumerWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   decoration: BoxDecoration(
-                    color: CoralPalette.sky,
+                    color: Theme.of(context).colorScheme.primaryContainer,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: Theme.of(context).colorScheme.outlineVariant,
@@ -96,6 +96,7 @@ class _DownloadRow extends ConsumerWidget {
   const _DownloadRow({required this.task});
 
   final DownloadTask task;
+  static const _directoryChannel = MethodChannel('coral_music/downloads');
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -106,6 +107,11 @@ class _DownloadRow extends ConsumerWidget {
         : File(task.targetPath).uri.pathSegments.last;
     final extension = _extension(fileName);
     final tasks = ref.watch(downloadProvider);
+    final configuredDirectory = ref.watch(downloadDirectoryProvider);
+    final canMoveToConfiguredDirectory = configuredDirectory == null ||
+        task.targetPath.isEmpty ||
+        File(task.targetPath).parent.absolute.path !=
+            Directory(configuredDirectory).absolute.path;
     final upgrades = task.status == DownloadStatus.completed
         ? AudioQuality.values
             .where((quality) =>
@@ -155,16 +161,21 @@ class _DownloadRow extends ConsumerWidget {
                   maxLines: 1, overflow: TextOverflow.ellipsis),
               const SizedBox(height: 3),
               Text(
-                  [
-                    task.error ?? _label(task.status),
-                    if (task.status != DownloadStatus.completed)
-                      '${(task.progress * 100).round()}%',
-                    if (extension != null) extension,
-                    audioQualityLabel(task.quality),
-                  ].join(' · '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall),
+                [
+                  task.error ?? _label(task.status),
+                  if (task.status != DownloadStatus.completed)
+                    '${(task.progress * 100).round()}%',
+                ].join(' · '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              Text(
+                '音质：${audioQualityLabel(task.quality)} · 格式：${extension ?? '未知'}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
               if (isActive) ...[
                 const SizedBox(height: 7),
                 ClipRRect(
@@ -172,8 +183,9 @@ class _DownloadRow extends ConsumerWidget {
                   child: LinearProgressIndicator(
                     value: task.progress,
                     minHeight: 2,
-                    color: CoralPalette.brand,
-                    backgroundColor: CoralPalette.peach,
+                    color: Theme.of(context).colorScheme.primary,
+                    backgroundColor:
+                        Theme.of(context).colorScheme.primaryContainer,
                   ),
                 ),
               ],
@@ -208,22 +220,33 @@ class _DownloadRow extends ConsumerWidget {
                   icon: const Icon(Icons.more_horiz),
                   onSelected: (action) {
                     switch (action) {
-                      case _CompletedAction.export:
-                        _export(context);
+                      case _CompletedAction.moveToDownloadDirectory:
+                        _moveToDownloadDirectory(context, controller);
+                      case _CompletedAction.openDirectory:
+                        _openDirectory(context);
                       case _CompletedAction.remove:
                         controller.remove(task);
                     }
                   },
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(
-                      value: _CompletedAction.export,
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(
+                      value: _CompletedAction.openDirectory,
                       child: Row(children: [
-                        Icon(Icons.file_upload_outlined),
+                        Icon(Icons.folder_open_outlined),
                         SizedBox(width: 12),
-                        Text('导出文件'),
+                        Text('打开所在目录'),
                       ]),
                     ),
-                    PopupMenuItem(
+                    if (canMoveToConfiguredDirectory)
+                      const PopupMenuItem(
+                        value: _CompletedAction.moveToDownloadDirectory,
+                        child: Row(children: [
+                          Icon(Icons.drive_file_move_outlined),
+                          SizedBox(width: 12),
+                          Text('移到设置下载目录'),
+                        ]),
+                      ),
+                    const PopupMenuItem(
                       value: _CompletedAction.remove,
                       child: Row(children: [
                         Icon(Icons.delete_outline),
@@ -311,37 +334,60 @@ class _DownloadRow extends ConsumerWidget {
     );
   }
 
-  Future<void> _export(BuildContext context) async {
-    final source = File(task.targetPath);
-    if (task.targetPath.isEmpty || !await source.exists()) {
+  Future<void> _moveToDownloadDirectory(
+    BuildContext context,
+    DownloadController controller,
+  ) async {
+    final result = await controller.moveToConfiguredDirectory(task);
+    if (!context.mounted) return;
+    final message = switch (result) {
+      MoveDownloadResult.moved => '已移到设置下载目录。',
+      MoveDownloadResult.alreadyInDirectory => '文件已在设置下载目录。',
+      MoveDownloadResult.noConfiguredDirectory => '请先在设置中选择下载目录。',
+      MoveDownloadResult.sourceMissing => '下载文件不存在，无法移动。',
+      MoveDownloadResult.failed => '移动失败，请检查设置目录权限。',
+    };
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _openDirectory(BuildContext context) async {
+    final directory = File(task.targetPath).parent;
+    if (task.targetPath.isEmpty || !await directory.exists()) {
       if (context.mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('下载文件不存在，无法导出。')));
+            .showSnackBar(const SnackBar(content: Text('下载目录不存在。')));
       }
       return;
     }
-    final target = await FilePicker.platform.saveFile(
-      dialogTitle: '导出下载音乐',
-      fileName: source.uri.pathSegments.last,
-      type: FileType.audio,
-    );
-    if (target == null || target.isEmpty || target == source.path) return;
-    try {
-      await source.copy(target);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('音乐文件已导出。')));
-      }
-    } on FileSystemException {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('导出失败，请检查目标位置。')));
+    if (Platform.isAndroid) {
+      try {
+        final opened = await _directoryChannel.invokeMethod<bool>(
+              'openDirectory',
+              {'path': directory.path},
+            ) ??
+            false;
+        if (opened || !context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('默认下载目录仅应用可访问，请导出或选择公共下载目录。')),
+        );
+        return;
+      } on PlatformException {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(const SnackBar(content: Text('无法打开系统文件管理器。')));
+        }
+        return;
       }
     }
+    await FilePicker.platform.getDirectoryPath(
+      dialogTitle: '打开所在目录',
+      initialDirectory: directory.path,
+    );
   }
 }
 
-enum _CompletedAction { export, remove }
+enum _CompletedAction { openDirectory, moveToDownloadDirectory, remove }
 
 class _DownloadArtwork extends StatelessWidget {
   const _DownloadArtwork({required this.uri});
@@ -356,9 +402,12 @@ class _DownloadArtwork extends StatelessWidget {
           height: 46,
           child: CoverImage(
             uri: uri,
-            fallback: const ColoredBox(
-              color: CoralPalette.sky,
-              child: Icon(Icons.music_note_outlined, color: CoralPalette.brand),
+            fallback: ColoredBox(
+              color: Theme.of(context).colorScheme.primaryContainer,
+              child: Icon(
+                Icons.music_note_outlined,
+                color: Theme.of(context).colorScheme.primary,
+              ),
             ),
           ),
         ),

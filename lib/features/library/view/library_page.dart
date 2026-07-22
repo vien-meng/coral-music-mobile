@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -7,7 +6,6 @@ import 'package:file_picker/file_picker.dart';
 
 import '../../../app/app_back_navigation.dart';
 import '../../../app/cover_image.dart';
-import '../../../app/app_theme.dart';
 import '../../../domain/music.dart';
 import '../../player/state/playback_queue_controller.dart';
 import '../../player/state/player_controller.dart';
@@ -72,10 +70,10 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                         )),
                 const Spacer(),
                 IconButton(
-                  tooltip: '导入列表',
+                  tooltip: '导入文件夹',
                   onPressed:
-                      state.isLoading ? null : () => _importPlaylist(context),
-                  icon: const Icon(Icons.file_upload_outlined),
+                      state.isLoading ? null : () => _importDirectory(context),
+                  icon: const Icon(Icons.folder_open_outlined),
                 ),
                 IconButton(
                   tooltip: '导入本地音频',
@@ -131,8 +129,11 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                             ),
                             child: ListTile(
                               leading: CircleAvatar(
-                                backgroundColor: CoralPalette.sky,
-                                foregroundColor: CoralPalette.brand,
+                                backgroundColor: Theme.of(context)
+                                    .colorScheme
+                                    .primaryContainer,
+                                foregroundColor:
+                                    Theme.of(context).colorScheme.primary,
                                 child: Text('${index + 1}'),
                               ),
                               title: Text(playlist.name),
@@ -248,46 +249,31 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     }
   }
 
-  Future<void> _importPlaylist(BuildContext context) async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: const ['json'],
-      withData: true,
+  Future<void> _importDirectory(BuildContext context) async {
+    final path = await FilePicker.platform.getDirectoryPath(
+      dialogTitle: '选择要导入的文件夹',
     );
-    final file =
-        result == null || result.files.isEmpty ? null : result.files.first;
-    if (file == null) return;
-    if (file.size > 4 * 1024 * 1024) {
+    if (path == null) return;
+    if (!await LocalAudioDirectoryAccess.ensure()) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('列表文件不能超过 4 MB。')),
+          const SnackBar(content: Text('未获得音乐和音频访问权限，无法扫描文件夹。')),
         );
       }
       return;
     }
-    try {
-      final raw = file.bytes != null
-          ? utf8.decode(file.bytes!)
-          : await File(file.path!).readAsString();
-      final imported =
-          await ref.read(libraryProvider.notifier).importPlaylist(raw);
-      if (context.mounted && imported != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '已导入“${imported.playlist.name}”：${imported.added} 首歌曲'
-              '${imported.skipped == 0 ? '' : '，跳过 ${imported.skipped} 首重复歌曲'}',
-            ),
-          ),
-        );
-      }
-    } on Object {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('读取列表文件失败。')),
-        );
-      }
-    }
+    final imported =
+        await ref.read(libraryProvider.notifier).importDirectory(path);
+    if (!context.mounted || imported == null) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          imported.skipped == 0
+              ? '已创建“${imported.playlist.name}”，导入 ${imported.added} 首歌曲'
+              : '已创建“${imported.playlist.name}”，导入 ${imported.added} 首，跳过 ${imported.skipped} 项',
+        ),
+      ),
+    );
   }
 
   Future<void> _importLocalAudio(BuildContext context) async {
@@ -840,6 +826,9 @@ class _PlaylistTracksState extends ConsumerState<_PlaylistTracks> {
   ) {
     final selected = _selectedTrackIds.contains(track.id);
     final selectionMode = _selectedTrackIds.isNotEmpty;
+    final format = track.sourceKind == TrackSourceKind.local
+        ? _localFileFormat(track)
+        : null;
     return ListTile(
       key: ValueKey(track.id),
       selected: selected,
@@ -851,7 +840,10 @@ class _PlaylistTracksState extends ConsumerState<_PlaylistTracks> {
           : _LibraryTrackArtwork(uri: track.coverUri),
       title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(
-        track.artist.isEmpty ? '未知歌手' : track.artist,
+        [
+          track.artist.isEmpty ? '未知歌手' : track.artist,
+          if (format != null) format,
+        ].join(' · '),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
@@ -897,6 +889,13 @@ class _PlaylistTracksState extends ConsumerState<_PlaylistTracks> {
       onLongPress: isLoading ? null : () => _toggleSelected(track.id),
     );
   }
+
+  String? _localFileFormat(Track track) {
+    final path = track.localUri?.path ?? '';
+    final dot = path.lastIndexOf('.');
+    if (dot < 1 || dot == path.length - 1) return null;
+    return path.substring(dot + 1).toUpperCase();
+  }
 }
 
 class _EmptyLibrary extends StatelessWidget {
@@ -920,13 +919,17 @@ class _LibraryTrackArtwork extends StatelessWidget {
     final fallback = Container(
       width: 44,
       height: 44,
-      decoration: const BoxDecoration(
-        borderRadius: BorderRadius.all(Radius.circular(12)),
+      decoration: BoxDecoration(
+        borderRadius: const BorderRadius.all(Radius.circular(12)),
         gradient: LinearGradient(
-          colors: [CoralPalette.periwinkle, CoralPalette.lilac],
+          colors: [
+            Theme.of(context).colorScheme.primaryContainer,
+            Theme.of(context).colorScheme.secondaryContainer,
+          ],
         ),
       ),
-      child: const Icon(Icons.music_note_rounded, color: Colors.white),
+      child: Icon(Icons.music_note_rounded,
+          color: Theme.of(context).colorScheme.onPrimaryContainer),
     );
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),

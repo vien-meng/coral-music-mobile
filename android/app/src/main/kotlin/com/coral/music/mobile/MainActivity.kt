@@ -8,6 +8,8 @@ import android.database.Cursor
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import java.io.File
 import com.ryanheise.audioservice.AudioService
@@ -81,6 +83,48 @@ class MainActivity: AudioServiceActivity() {
                 }
                 ensureDirectoryReadAccess(result)
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "coral_music/app_task")
+            .setMethodCallHandler { call, result ->
+                if (call.method != "moveTaskToBack") {
+                    result.notImplemented()
+                    return@setMethodCallHandler
+                }
+                result.success(moveTaskToBack(true))
+            }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "coral_music/downloads")
+            .setMethodCallHandler { call, result ->
+                if (call.method != "openDirectory") {
+                    result.notImplemented()
+                    return@setMethodCallHandler
+                }
+                openDownloadDirectory(call.argument<String>("path"), result)
+            }
+    }
+
+    private fun openDownloadDirectory(path: String?, result: MethodChannel.Result) {
+        val directory = path?.let(::File)?.canonicalFile
+        val external = Environment.getExternalStorageDirectory().canonicalFile
+        if (directory == null || !directory.isDirectory ||
+            (directory != external && !directory.path.startsWith("${external.path}${File.separator}")) ||
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.O
+        ) {
+            result.success(false)
+            return
+        }
+        val relativePath = directory.relativeTo(external).path.replace(File.separatorChar, '/')
+        val documentId = if (relativePath.isEmpty()) "primary:" else "primary:$relativePath"
+        val initialUri = DocumentsContract.buildDocumentUri(
+            "com.android.externalstorage.documents",
+            documentId,
+        )
+        try {
+            startActivity(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+                putExtra(DocumentsContract.EXTRA_INITIAL_URI, initialUri)
+            })
+            result.success(true)
+        } catch (_: Exception) {
+            result.success(false)
+        }
     }
 
     private fun ensureDirectoryReadAccess(result: MethodChannel.Result) {

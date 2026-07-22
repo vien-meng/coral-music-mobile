@@ -156,13 +156,24 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
       saved = null;
     }
     if (state.sources.isNotEmpty) return;
-    await importUrl(
+    await _restoreUrl(
       defaultUserApiSourceName,
-      defaultUserApiSourceUrl,
+      defaultUserApiSourceUri,
       persist: saved == null,
     );
     if (saved == null || saved.url == defaultUserApiSourceUri) return;
-    await importUrl(saved.name, saved.url.toString(), persist: false);
+    await _restoreUrl(saved.name, saved.url, persist: false);
+  }
+
+  Future<void> _restoreUrl(String name, Uri url,
+      {required bool persist}) async {
+    final cached = await _preferences.readCachedScript(url);
+    if (cached != null) {
+      await importScript(name, cached,
+          originUrl: url, persist: persist, cache: false);
+      if (state.sources.any((source) => source.originUrl == url)) return;
+    }
+    await importUrl(name, url.toString(), persist: persist);
   }
 
   Future<void> importUrl(String name, String rawUrl,
@@ -222,6 +233,7 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
     String script, {
     Uri? originUrl,
     bool persist = true,
+    bool cache = true,
   }) async {
     final info = UserApiSourceInfo.fromScript(script);
     final normalizedName =
@@ -240,6 +252,9 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
         originUrl: originUrl,
       );
       _playbackResolver?.clear();
+      if (cache && originUrl != null) {
+        await _preferences.cacheScript(originUrl, script);
+      }
       if (persist && originUrl != null) {
         await _preferences.save(normalizedName, originUrl);
       } else if (persist) {
@@ -339,6 +354,7 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
         originUrl: target.originUrl,
       );
       _playbackResolver?.clear();
+      await _preferences.cacheScript(target.originUrl!, script);
       state = state.copyWith(
         isLoading: false,
         sources: [

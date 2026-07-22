@@ -5,9 +5,14 @@ import '../../../domain/music.dart';
 import '../state/library_controller.dart';
 
 class FavoriteTrackButton extends ConsumerStatefulWidget {
-  const FavoriteTrackButton({required this.track, super.key});
+  const FavoriteTrackButton({
+    required this.track,
+    this.compact = false,
+    super.key,
+  });
 
   final Track track;
+  final bool compact;
 
   @override
   ConsumerState<FavoriteTrackButton> createState() =>
@@ -51,42 +56,52 @@ class _FavoriteTrackButtonState extends ConsumerState<FavoriteTrackButton> {
   @override
   Widget build(BuildContext context) => FutureBuilder<bool>(
         future: _favorite,
-        builder: (context, snapshot) => IconButton(
-          tooltip: snapshot.data == true ? '取消收藏' : '收藏歌曲',
-          onPressed:
-              snapshot.connectionState != ConnectionState.done || _isToggling
-                  ? null
-                  : () async {
-                      final previous = snapshot.data == true;
-                      setState(() {
-                        _isToggling = true;
-                        _favorite = Future.value(!previous);
-                      });
-                      final favorite = await ref
-                          .read(libraryProvider.notifier)
-                          .toggleFavorite(widget.track);
-                      if (!mounted || !context.mounted) return;
-                      final error = ref.read(libraryProvider).error;
-                      setState(() {
-                        _isToggling = false;
-                        _favorite = error == null
-                            ? Future.value(favorite)
-                            : _loadFavorite();
-                      });
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                              error?.message ?? (favorite ? '已收藏歌曲' : '已取消收藏')),
-                        ),
-                      );
-                    },
-          icon: Icon(
-            snapshot.data == true
-                ? Icons.favorite_rounded
-                : Icons.favorite_border,
-            color: snapshot.data == true
-                ? Theme.of(context).colorScheme.primary
+        builder: (context, snapshot) => SizedBox.square(
+          dimension: widget.compact ? 40 : 48,
+          child: IconButton(
+            style: widget.compact
+                ? IconButton.styleFrom(
+                    minimumSize: const Size.square(40),
+                    padding: EdgeInsets.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  )
                 : null,
+            tooltip: snapshot.data == true ? '取消收藏' : '收藏歌曲',
+            onPressed: snapshot.connectionState != ConnectionState.done ||
+                    _isToggling
+                ? null
+                : () async {
+                    final previous = snapshot.data == true;
+                    setState(() {
+                      _isToggling = true;
+                      _favorite = Future.value(!previous);
+                    });
+                    final favorite = await ref
+                        .read(libraryProvider.notifier)
+                        .toggleFavorite(widget.track);
+                    if (!mounted || !context.mounted) return;
+                    final error = ref.read(libraryProvider).error;
+                    setState(() {
+                      _isToggling = false;
+                      _favorite = error == null
+                          ? Future.value(favorite)
+                          : _loadFavorite();
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                            error?.message ?? (favorite ? '已收藏歌曲' : '已取消收藏')),
+                      ),
+                    );
+                  },
+            icon: Icon(
+              snapshot.data == true
+                  ? Icons.favorite_rounded
+                  : Icons.favorite_border,
+              color: snapshot.data == true
+                  ? Theme.of(context).colorScheme.primary
+                  : null,
+            ),
           ),
         ),
       );

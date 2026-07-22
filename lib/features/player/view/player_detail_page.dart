@@ -91,7 +91,7 @@ class _PlayerDetailPageState extends ConsumerState<PlayerDetailPage> {
       ),
       endDrawer: const PlaybackQueueDrawer(),
       body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: coralPageGradient),
+        decoration: BoxDecoration(gradient: coralPageGradientOf(context)),
         child: SafeArea(
           top: false,
           child: track == null
@@ -188,8 +188,8 @@ class _PanelTab extends StatelessWidget {
                 duration: const Duration(milliseconds: 180),
                 width: selected ? 16 : 0,
                 height: 1,
-                decoration: const BoxDecoration(
-                  color: CoralPalette.brand,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary,
                   borderRadius: BorderRadius.all(Radius.circular(2)),
                 ),
               ),
