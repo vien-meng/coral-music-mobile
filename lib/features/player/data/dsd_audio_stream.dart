@@ -50,8 +50,8 @@ final class FfmpegAudioStream {
   static Future<FfmpegAudioStream?> open(Uri input) async {
     final isDsd = isDsdAudioUri(input);
     if (!isDsd && !await _isDtsWav(input)) return null;
-    if (!Platform.isAndroid) {
-      throw UnsupportedError('DSF/DFF/WAV 规范化播放当前仅支持 Android');
+    if (!Platform.isAndroid && !Platform.isIOS) {
+      throw UnsupportedError('DSF/DFF/DTS-WAV 规范化播放当前不受此平台支持');
     }
 
     final directory = await getTemporaryDirectory();
@@ -78,8 +78,7 @@ final class FfmpegAudioStream {
         '-vn',
         '-acodec',
         'pcm_s16le',
-        // DTS-in-WAV may have 7 channels; Android's PCM route is reliable
-        // for stereo and this matches the desktop decoder behavior.
+        // DTS-in-WAV may have 7 channels; stereo PCM is the portable output.
         '-ac',
         '2',
         if (isDsd) ...['-ar', '44100'],
@@ -90,7 +89,8 @@ final class FfmpegAudioStream {
       final session = await completion.future;
       if (!ReturnCode.isSuccess(await session.getReturnCode())) {
         if (kDebugMode) {
-          debugPrint('FFmpeg local decode failed: ${await session.getAllLogsAsString()}');
+          debugPrint(
+              'FFmpeg local decode failed: ${await session.getAllLogsAsString()}');
         }
         throw StateError('本地音频解码失败');
       }
@@ -109,15 +109,14 @@ final class FfmpegAudioStream {
   }
 
   static Future<bool> _isDtsWav(Uri input) async {
-    if (input.scheme != 'file' ||
-        !input.path.toLowerCase().endsWith('.wav')) {
+    if (input.scheme != 'file' || !input.path.toLowerCase().endsWith('.wav')) {
       return false;
     }
     try {
       final bytes = await File.fromUri(input)
           .openRead(0, 64 * 1024)
-          .fold<BytesBuilder>(BytesBuilder(copy: false),
-              (buffer, chunk) => buffer..add(chunk));
+          .fold<BytesBuilder>(
+              BytesBuilder(copy: false), (buffer, chunk) => buffer..add(chunk));
       return containsDtsFrameSync(bytes.takeBytes());
     } on FileSystemException {
       return false;

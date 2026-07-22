@@ -108,10 +108,11 @@ class _DownloadRow extends ConsumerWidget {
     final extension = _extension(fileName);
     final tasks = ref.watch(downloadProvider);
     final configuredDirectory = ref.watch(downloadDirectoryProvider);
-    final canMoveToConfiguredDirectory = configuredDirectory == null ||
-        task.targetPath.isEmpty ||
-        File(task.targetPath).parent.absolute.path !=
-            Directory(configuredDirectory).absolute.path;
+    final canMoveToConfiguredDirectory = !Platform.isIOS &&
+        (configuredDirectory == null ||
+            task.targetPath.isEmpty ||
+            File(task.targetPath).parent.absolute.path !=
+                Directory(configuredDirectory).absolute.path);
     final upgrades = task.status == DownloadStatus.completed
         ? AudioQuality.values
             .where((quality) =>
@@ -200,11 +201,19 @@ class _DownloadRow extends ConsumerWidget {
             )
           else if (task.status == DownloadStatus.paused ||
               task.status == DownloadStatus.failed)
-            IconButton(
-              tooltip: '继续下载',
-              icon: const Icon(Icons.play_arrow_outlined),
-              onPressed: () => controller.resume(task),
-            )
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              IconButton(
+                tooltip: '继续下载',
+                icon: const Icon(Icons.play_arrow_outlined),
+                onPressed: () => controller.resume(task),
+              ),
+              if (task.status == DownloadStatus.failed)
+                IconButton(
+                  tooltip: '删除失败下载',
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: () => controller.remove(task),
+                ),
+            ])
           else if (task.status == DownloadStatus.completed ||
               task.status == DownloadStatus.cancelled)
             Row(mainAxisSize: MainAxisSize.min, children: [
@@ -231,11 +240,7 @@ class _DownloadRow extends ConsumerWidget {
                   itemBuilder: (_) => [
                     const PopupMenuItem(
                       value: _CompletedAction.openDirectory,
-                      child: Row(children: [
-                        Icon(Icons.folder_open_outlined),
-                        SizedBox(width: 12),
-                        Text('打开所在目录'),
-                      ]),
+                      child: _OpenDirectoryMenuItem(),
                     ),
                     if (canMoveToConfiguredDirectory)
                       const PopupMenuItem(
@@ -352,6 +357,24 @@ class _DownloadRow extends ConsumerWidget {
   }
 
   Future<void> _openDirectory(BuildContext context) async {
+    if (Platform.isIOS) {
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('在文件 App 中查看'),
+          content: const Text(
+            '下载已开放给系统文件 App。请打开“文件”→“浏览”→“我的 iPhone”→“珊瑚音乐”→“downloads”。',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('知道了'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
     final directory = File(task.targetPath).parent;
     if (task.targetPath.isEmpty || !await directory.exists()) {
       if (context.mounted) {
@@ -388,6 +411,17 @@ class _DownloadRow extends ConsumerWidget {
 }
 
 enum _CompletedAction { openDirectory, moveToDownloadDirectory, remove }
+
+class _OpenDirectoryMenuItem extends StatelessWidget {
+  const _OpenDirectoryMenuItem();
+
+  @override
+  Widget build(BuildContext context) => Row(children: [
+        const Icon(Icons.folder_open_outlined),
+        const SizedBox(width: 12),
+        Text(Platform.isIOS ? '在文件 App 中查看' : '打开所在目录'),
+      ]);
+}
 
 class _DownloadArtwork extends StatelessWidget {
   const _DownloadArtwork({required this.uri});

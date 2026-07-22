@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -104,7 +106,9 @@ class SettingsPage extends ConsumerWidget {
           _SettingsItem(
             icon: Icons.folder_outlined,
             title: '下载目录',
-            subtitle: downloadDirectory ?? '默认应用下载目录',
+            subtitle: Platform.isIOS
+                ? '应用下载目录（可读写）'
+                : downloadDirectory ?? '默认应用下载目录',
             onTap: () =>
                 _pickDownloadDirectory(context, ref, downloadDirectory),
           ),
@@ -154,6 +158,17 @@ class SettingsPage extends ConsumerWidget {
     WidgetRef ref,
     String? current,
   ) async {
+    if (Platform.isIOS) {
+      final saved = await ref
+          .read(downloadDirectoryProvider.notifier)
+          .useApplicationDirectory();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(saved ? '已使用 iOS 应用下载目录。' : '无法创建应用下载目录。'),
+        ));
+      }
+      return;
+    }
     final directory = await FilePicker.platform.getDirectoryPath(
       dialogTitle: '选择下载目录',
       initialDirectory: current,
