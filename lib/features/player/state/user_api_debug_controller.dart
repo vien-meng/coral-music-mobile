@@ -142,25 +142,64 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
   final PlaybackResolver? _playbackResolver;
   final UserApiSourcePreferences _preferences;
   late final Future<void> _startupRestore;
+  Future<void>? _runtimeRestore;
 
   /// Returns the single launch restore operation instead of starting another
   /// WebView load while the first one is still in flight.
   Future<void> restorePersisted() => _startupRestore;
 
+  /// Re-loads the active script after the app returns to the foreground.
+  /// iOS may discard WKWebView's content process while the app is suspended.
+  Future<void> restoreRuntime() {
+    final source = state.activeSource;
+    if (source == null || state.isLoading) return Future.value();
+    return _runtimeRestore ??= _reloadRuntime(source);
+  }
+
+  Future<void> _reloadRuntime(UserApiSource source) async {
+    try {
+      await _runner.load(source.script);
+    } on AppFailure catch (error) {
+      if (state.activeSourceId == source.id && !state.isLoading) {
+        state = state.copyWith(error: error);
+      }
+    } on Object catch (error) {
+      if (state.activeSourceId == source.id && !state.isLoading) {
+        state = state.copyWith(
+          error: AppFailure(
+            code: AppFailureCode.unknown,
+            message: '音源恢复失败',
+            diagnostic: error.runtimeType.toString(),
+          ),
+        );
+      }
+    } finally {
+      _runtimeRestore = null;
+    }
+  }
+
   Future<void> _restorePersisted() async {
     ({String name, Uri url})? saved;
+    ({String name, String script})? local;
     try {
       saved = await _preferences.read();
+      local = await _preferences.readLocalScript();
     } on Object {
       // ponytail: unavailable secure storage falls back to the built-in source.
       saved = null;
+      local = null;
     }
     if (state.sources.isNotEmpty) return;
     await _restoreUrl(
       defaultUserApiSourceName,
       defaultUserApiSourceUri,
-      persist: saved == null,
+      persist: saved == null && local == null,
     );
+    if (local != null) {
+      await importScript(local.name, local.script,
+          persist: false, cache: false);
+      return;
+    }
     if (saved == null || saved.url == defaultUserApiSourceUri) return;
     await _restoreUrl(saved.name, saved.url, persist: false);
   }
@@ -217,7 +256,7 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
       return;
     }
     try {
-      await importScript(name, utf8.decode(bytes));
+      await importScript(name, utf8.decode(bytes), persistLocalScript: true);
     } on FormatException {
       state = state.copyWith(
         error: const AppFailure(
@@ -234,6 +273,7 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
     Uri? originUrl,
     bool persist = true,
     bool cache = true,
+    bool persistLocalScript = false,
   }) async {
     final info = UserApiSourceInfo.fromScript(script);
     final normalizedName =
@@ -257,6 +297,8 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
       }
       if (persist && originUrl != null) {
         await _preferences.save(normalizedName, originUrl);
+      } else if (persistLocalScript) {
+        await _preferences.saveLocalScript(normalizedName, script);
       } else if (persist) {
         await _preferences.clear();
       }
@@ -302,6 +344,8 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
       _playbackResolver?.clear();
       if (target.originUrl != null) {
         await _preferences.save(target.name, target.originUrl!);
+      } else if (!isDefaultUserApiSource(target)) {
+        await _preferences.saveLocalScript(target.name, target.script);
       } else {
         await _preferences.clear();
       }

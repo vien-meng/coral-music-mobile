@@ -12,6 +12,7 @@ class UserApiSourcePreferences {
       : _storage = storage ?? const FlutterSecureStorage();
 
   static const _key = 'user-api:active-url-source';
+  static const _localKey = 'user-api:active-local-source';
   final FlutterSecureStorage _storage;
 
   Future<({String name, Uri url})?> read() async {
@@ -40,14 +41,51 @@ class UserApiSourcePreferences {
         key: _key,
         value: jsonEncode({'name': name, 'url': url.toString()}),
       );
+      await _storage.delete(key: _localKey);
     } on Object {
       // ponytail: session-only scripts remain usable if secure storage is unavailable.
+    }
+  }
+
+  Future<({String name, String script})?> readLocalScript() async {
+    try {
+      final raw = await _storage.read(key: _localKey);
+      if (raw == null) return null;
+      final name = (jsonDecode(raw) as Map<String, dynamic>)['name'] as String?;
+      final script = await (await _localScriptFile()).readAsString();
+      return name == null ||
+              script.trim().isEmpty ||
+              script.length > UserApiScriptFetcher.maxBytes
+          ? null
+          : (name: name, script: script);
+    } on Object {
+      return null;
+    }
+  }
+
+  Future<void> saveLocalScript(String name, String script) async {
+    if (script.trim().isEmpty ||
+        script.length > UserApiScriptFetcher.maxBytes) {
+      return;
+    }
+    try {
+      final file = await _localScriptFile();
+      final temporary = File('${file.path}.tmp');
+      await temporary.writeAsString(script, flush: true);
+      await temporary.rename(file.path);
+      await _storage.write(key: _localKey, value: jsonEncode({'name': name}));
+      await _storage.delete(key: _key);
+    } on Object {
+      // ponytail: file import remains usable for this session if persistence fails.
     }
   }
 
   Future<void> clear() async {
     try {
       await _storage.delete(key: _key);
+      await _storage.delete(key: _localKey);
+      final file = await _localScriptFile();
+      if (await file.exists()) await file.delete();
     } on Object {
       // ponytail: there is no persisted URL to remove when secure storage is unavailable.
     }
@@ -92,5 +130,12 @@ class UserApiSourcePreferences {
     final directory = Directory('${supportDirectory.path}/user-api-scripts');
     await directory.create(recursive: true);
     return File('${directory.path}/$key.js');
+  }
+
+  Future<File> _localScriptFile() async {
+    final supportDirectory = await getApplicationSupportDirectory();
+    final directory = Directory('${supportDirectory.path}/user-api-scripts');
+    await directory.create(recursive: true);
+    return File('${directory.path}/imported.js');
   }
 }
