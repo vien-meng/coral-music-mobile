@@ -48,7 +48,8 @@ class _PlaybackRestore extends ConsumerStatefulWidget {
   ConsumerState<_PlaybackRestore> createState() => _PlaybackRestoreState();
 }
 
-class _PlaybackRestoreState extends ConsumerState<_PlaybackRestore> {
+class _PlaybackRestoreState extends ConsumerState<_PlaybackRestore>
+    with WidgetsBindingObserver {
   late final ProviderSubscription<List<String>> _sharedAudioSubscription;
   late final ProviderSubscription<AudioQuality> _qualitySubscription;
   var _isImportingSharedAudio = false;
@@ -56,6 +57,7 @@ class _PlaybackRestoreState extends ConsumerState<_PlaybackRestore> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     ref.read(userApiDebugProvider.notifier);
     _sharedAudioSubscription = ref.listenManual<List<String>>(
       sharedAudioPathsProvider,
@@ -72,6 +74,13 @@ class _PlaybackRestoreState extends ConsumerState<_PlaybackRestore> {
       unawaited(_restorePlayback());
       unawaited(SharedAudioReceiver.install(ref));
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(ref.read(userApiDebugProvider.notifier).restoreRuntime());
+    }
   }
 
   Future<void> _restorePlayback() async {
@@ -97,6 +106,7 @@ class _PlaybackRestoreState extends ConsumerState<_PlaybackRestore> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _sharedAudioSubscription.close();
     _qualitySubscription.close();
     super.dispose();

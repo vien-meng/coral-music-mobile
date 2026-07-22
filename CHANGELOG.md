@@ -2,6 +2,27 @@
 
 All notable changes to 珊瑚音乐移动端 (Coral Music Mobile) will be documented in this file.
 
+## [1.0.2] - 2026-07-22
+
+### iOS WKWebView 进程终止恢复
+
+- `UserApiRunner.swift` 新增 `webViewWebContentProcessDidTerminate` 回调
+- 进程被系统回收时清除已加载状态和缓存、取消待处理请求并自动 `reload`
+
+### 前台恢复重新加载音源
+
+- `UserApiDebugController` 新增 `restoreRuntime()`，App 从后台返回前台时重新加载当前音源脚本
+- 使用 `_runtimeRestore` 单例 Future 防止重复加载，完成后自动清空
+- `app.dart` 注册 `WidgetsBindingObserver`，`AppLifecycleState.resumed` 时触发恢复
+
+### 本地脚本文件持久化
+
+- `UserApiSourcePreferences` 新增 `readLocalScript`/`saveLocalScript`，文件导入的脚本保存到 `applicationSupportDirectory/user-api-scripts/imported.js`
+- 安全存储只保存名称引用，脚本内容写入文件（原子写入 `.tmp` → rename，256KB 限制）
+- 启动恢复优先级：URL 来源 → 本地脚本文件 → 默认源
+- `importBytes` 和无 URL 的脚本源切换时自动持久化到本地文件
+- 新增 `restoreRuntime`、本地脚本恢复和持久化的单元测试
+
 ## [1.0.1] - 2026-07-22
 
 ### 自定义下载目录

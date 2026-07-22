@@ -207,6 +207,15 @@ final class UserApiRunner: NSObject, WKNavigationDelegate, WKScriptMessageHandle
     evaluateUserScript()
   }
 
+  func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+    guard webView === self.webView, !script.isEmpty else { return }
+    loaded = false
+    sources.removeAll()
+    lyricSources.removeAll()
+    cancelPendingRequests(message: "音源运行时已重启，请重试")
+    webView.reload()
+  }
+
   func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
     let url = navigationAction.request.url
     decisionHandler(url?.host == "localhost.invalid" || url?.scheme == "about" ? .allow : .cancel)

@@ -87,6 +87,16 @@ kw-script
     expect(runner.resolveCount, 2);
   });
 
+  test('reloads the active source when restoring its runtime', () async {
+    final runner = _Runner();
+    final controller = await _sessionController(runner);
+
+    await controller.restoreRuntime();
+
+    expect(runner.loadedScript, 'kw-default-script');
+    expect(runner.loadCount, 2);
+  });
+
   test('imports UTF-8 script bytes and rejects an oversized file', () async {
     final controller = await _sessionController(_Runner());
 
@@ -95,6 +105,35 @@ kw-script
 
     await controller.importBytes('', List.filled(256 * 1024 + 1, 0));
     expect(controller.state.error?.message, '音源脚本超过大小限制');
+  });
+
+  test('restores a script imported from a local JS file', () async {
+    final preferences = _LocalScriptPreferences('文件音源', 'kw-local-script');
+    final controller = UserApiDebugController(
+      _Runner(),
+      _Fetcher('kw-default-script'),
+      null,
+      preferences,
+    );
+
+    await controller.restorePersisted();
+
+    expect(controller.state.activeSource?.name, '文件音源');
+    expect(controller.state.activeSource?.script, 'kw-local-script');
+  });
+
+  test('persists a script imported from a local JS file', () async {
+    final preferences = _WritableLocalScriptPreferences();
+    final controller = UserApiDebugController(
+      _Runner(),
+      _Fetcher('kw-default-script'),
+      null,
+      preferences,
+    );
+
+    await controller.importBytes('文件音源', utf8.encode('kw-local-script'));
+
+    expect(preferences.saved, (name: '文件音源', script: 'kw-local-script'));
   });
 
   test('loads and saves the default LX source when no source is configured',
@@ -273,6 +312,26 @@ final class _CachingPreferences extends UserApiSourcePreferences {
   }
 }
 
+final class _LocalScriptPreferences extends UserApiSourcePreferences {
+  _LocalScriptPreferences(this.name, this.script);
+
+  final String name;
+  final String script;
+
+  @override
+  Future<({String name, String script})?> readLocalScript() async =>
+      (name: name, script: script);
+}
+
+final class _WritableLocalScriptPreferences extends UserApiSourcePreferences {
+  ({String name, String script})? saved;
+
+  @override
+  Future<void> saveLocalScript(String name, String script) async {
+    saved = (name: name, script: script);
+  }
+}
+
 final class _Fetcher extends UserApiScriptFetcher {
   _Fetcher(this.script) : super(Dio());
 
@@ -299,6 +358,7 @@ final class _FailingFetcher extends UserApiScriptFetcher {
 final class _Runner implements UserApiRunner {
   String? loadedScript;
   bool wasCleared = false;
+  var loadCount = 0;
   var resolveCount = 0;
 
   @override
@@ -309,6 +369,7 @@ final class _Runner implements UserApiRunner {
 
   @override
   Future<UserApiManifest> load(String script) async {
+    loadCount++;
     loadedScript = script;
     return UserApiManifest({script.startsWith('kw') ? 'kw' : 'qq'});
   }
