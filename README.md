@@ -1,6 +1,6 @@
 # 珊瑚音乐移动端
 
-基于 Flutter 的珊瑚音乐移动客户端，一套业务代码同时覆盖 **iOS**、**Android** 和 **鸿蒙 (HarmonyOS)** 三个平台。
+基于 Flutter 的珊瑚音乐移动客户端，一套业务代码同时覆盖 **iOS**、**Android** 和 **鸿蒙 (HarmonyOS)** 三个平台。桌面版应用请见 [珊瑚音乐桌面端](https://github.com/vien-meng/coral-music-desktop)。
 
 ## 当前状态
 
