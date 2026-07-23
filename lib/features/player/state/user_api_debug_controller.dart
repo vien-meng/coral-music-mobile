@@ -21,10 +21,12 @@ final userApiDebugProvider =
   ),
 );
 
-const defaultUserApiSourceName = '落雪音源';
-const defaultUserApiSourceUrl =
+// Kept only to remove the record written by versions that auto-configured it.
+const _removedDefaultUserApiSourceName = '落雪音源';
+const _removedDefaultUserApiSourceUrl =
     'https://raw.githubusercontent.com/pdone/lx-music-source/main/lx/latest.js';
-final defaultUserApiSourceUri = Uri.parse(defaultUserApiSourceUrl);
+final _removedDefaultUserApiSourceUri =
+    Uri.parse(_removedDefaultUserApiSourceUrl);
 
 final class UserApiDebugState {
   const UserApiDebugState({
@@ -82,9 +84,6 @@ final class UserApiSource {
   final Map<String, Set<AudioQuality>> musicUrlQualities;
   final Uri? originUrl;
 }
-
-bool isDefaultUserApiSource(UserApiSource source) =>
-    source.originUrl == defaultUserApiSourceUri;
 
 /// Public, comment-header metadata only. It is never executed or persisted.
 final class UserApiSourceInfo {
@@ -185,22 +184,22 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
       saved = await _preferences.read();
       local = await _preferences.readLocalScript();
     } on Object {
-      // ponytail: unavailable secure storage falls back to the built-in source.
+      // ponytail: unavailable secure storage leaves the session without a source.
       saved = null;
       local = null;
     }
     if (state.sources.isNotEmpty) return;
-    await _restoreUrl(
-      defaultUserApiSourceName,
-      defaultUserApiSourceUri,
-      persist: saved == null && local == null,
-    );
     if (local != null) {
       await importScript(local.name, local.script,
           persist: false, cache: false);
       return;
     }
-    if (saved == null || saved.url == defaultUserApiSourceUri) return;
+    if (saved == null) return;
+    if (saved.name == _removedDefaultUserApiSourceName &&
+        saved.url == _removedDefaultUserApiSourceUri) {
+      await _preferences.clear();
+      return;
+    }
     await _restoreUrl(saved.name, saved.url, persist: false);
   }
 
@@ -344,10 +343,8 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
       _playbackResolver?.clear();
       if (target.originUrl != null) {
         await _preferences.save(target.name, target.originUrl!);
-      } else if (!isDefaultUserApiSource(target)) {
-        await _preferences.saveLocalScript(target.name, target.script);
       } else {
-        await _preferences.clear();
+        await _preferences.saveLocalScript(target.name, target.script);
       }
       state = state.copyWith(
         isLoading: false,
@@ -427,15 +424,6 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
   Future<void> remove(String id) async {
     final source = state.sources.where((item) => item.id == id).firstOrNull;
     if (source == null) return;
-    if (isDefaultUserApiSource(source)) {
-      state = state.copyWith(
-        error: const AppFailure(
-          code: AppFailureCode.invalidData,
-          message: '内置落雪音源不能移除',
-        ),
-      );
-      return;
-    }
     if (id != state.activeSourceId) {
       state = state.copyWith(
         sources: state.sources.where((item) => item.id != id).toList(),

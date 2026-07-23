@@ -21,6 +21,29 @@ bool isFfmpegStreamUri(Uri uri) {
   return extension == 'dsf' || extension == 'dff';
 }
 
+Uri? relocateIosSandboxDocumentUri(Uri uri, Directory documentsDirectory) {
+  if (uri.scheme != 'file') return null;
+  const documentsMarker = '/Documents/';
+  final offset = uri.path.indexOf(documentsMarker);
+  if (offset < 0) return null;
+  final relativePath = uri.path.substring(offset + documentsMarker.length);
+  if (relativePath.isEmpty) return null;
+  return Uri.file('${documentsDirectory.path}/$relativePath');
+}
+
+Future<Uri> recoverIosSandboxDocumentUri(Uri uri) async {
+  if (!Platform.isIOS ||
+      uri.scheme != 'file' ||
+      await File.fromUri(uri).exists()) {
+    return uri;
+  }
+  final relocated = relocateIosSandboxDocumentUri(
+      uri, await getApplicationDocumentsDirectory());
+  return relocated != null && await File.fromUri(relocated).exists()
+      ? relocated
+      : uri;
+}
+
 bool containsDtsFrameSync(List<int> bytes) {
   const syncWords = [
     [0x7f, 0xfe, 0x80, 0x01],

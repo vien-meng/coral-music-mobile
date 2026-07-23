@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:coral_music_mobile/domain/music.dart';
 import 'package:coral_music_mobile/features/player/data/audio_engine.dart';
+import 'package:coral_music_mobile/features/player/state/playback_queue_controller.dart';
 import 'package:coral_music_mobile/features/player/state/player_controller.dart';
 import 'package:coral_music_mobile/features/player/view/mini_player.dart';
 import 'package:flutter/material.dart';
@@ -30,6 +31,51 @@ void main() {
     expect(find.text('调试音频'), findsOneWidget);
     expect(find.text('example.com · 正在播放'), findsOneWidget);
     expect(find.byType(Slider), findsOneWidget);
+  });
+
+  testWidgets('plays the previous and next queued tracks', (tester) async {
+    final engine = _DebugAudioEngine();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [audioEngineProvider.overrideWithValue(engine)],
+        child: const MaterialApp(home: Scaffold(body: MiniPlayer())),
+      ),
+    );
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(MiniPlayer)),
+    );
+    final first = Track(
+      sourceKind: TrackSourceKind.local,
+      sourceId: 'local',
+      sourceTrackId: '1',
+      title: '第一首',
+      artist: '珊瑚音乐',
+      localUri: Uri.file('/tmp/first.mp3'),
+    );
+    final second = Track(
+      sourceKind: TrackSourceKind.local,
+      sourceId: 'local',
+      sourceTrackId: '2',
+      title: '第二首',
+      artist: '珊瑚音乐',
+      localUri: Uri.file('/tmp/second.mp3'),
+    );
+    container
+        .read(playbackQueueProvider.notifier)
+        .replaceQueue([first, second]);
+    await container.read(playerProvider.notifier).playTrack(first);
+    await tester.pump();
+
+    expect(find.byTooltip('上一曲'), findsOneWidget);
+    expect(find.byTooltip('下一曲'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('下一曲'));
+    await tester.pump();
+    expect(find.text('第二首'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('上一曲'));
+    await tester.pump();
+    expect(find.text('第一首'), findsOneWidget);
   });
 }
 

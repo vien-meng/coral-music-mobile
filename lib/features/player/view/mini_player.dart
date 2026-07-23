@@ -17,6 +17,11 @@ class MiniPlayer extends ConsumerWidget {
     final queueTrack = ref.watch(
       playbackQueueProvider.select((queue) => queue.currentTrack),
     );
+    final canSkip = ref.watch(
+      playbackQueueProvider.select(
+        (queue) => queue.currentTrack != null && queue.tracks.length > 1,
+      ),
+    );
     final player = ref.watch(playerProvider);
     final track = player.track ?? queueTrack;
     final colors = Theme.of(context).colorScheme;
@@ -85,6 +90,19 @@ class MiniPlayer extends ConsumerWidget {
                         ],
                       ),
                     ),
+                    IconButton(
+                      tooltip: '上一曲',
+                      onPressed: canSkip
+                          ? () => _playSibling(ref, previous: true)
+                          : null,
+                      style: IconButton.styleFrom(
+                        minimumSize: const Size(32, 32),
+                        maximumSize: const Size(32, 32),
+                        padding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      icon: const Icon(Icons.skip_previous, size: 22),
+                    ),
                     IconButton.outlined(
                       tooltip: player.isPlaying ? '暂停' : '播放',
                       onPressed: track == null
@@ -102,6 +120,17 @@ class MiniPlayer extends ConsumerWidget {
                       icon: Icon(
                         player.isPlaying ? Icons.pause : Icons.play_arrow,
                       ),
+                    ),
+                    IconButton(
+                      tooltip: '下一曲',
+                      onPressed: canSkip ? () => _playSibling(ref) : null,
+                      style: IconButton.styleFrom(
+                        minimumSize: const Size(32, 32),
+                        maximumSize: const Size(32, 32),
+                        padding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      icon: const Icon(Icons.skip_next, size: 22),
                     ),
                   ],
                 ),
@@ -134,6 +163,14 @@ class MiniPlayer extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _playSibling(WidgetRef ref, {bool previous = false}) async {
+    final queue = ref.read(playbackQueueProvider.notifier);
+    final sibling = previous ? queue.selectPrevious() : queue.selectNext();
+    if (sibling != null) {
+      await ref.read(playerProvider.notifier).playTrack(sibling);
+    }
   }
 
   static String _statusText(AudioEngineStatus status) => switch (status) {
