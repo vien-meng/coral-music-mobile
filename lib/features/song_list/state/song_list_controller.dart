@@ -5,8 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/app_failure.dart';
 import '../../../core/http_client.dart';
 import '../../../domain/music.dart';
+import '../data/kugou_playlist_service.dart';
 import '../data/kuwo_playlist_service.dart';
 import '../data/migu_playlist_service.dart';
+import '../data/netease_playlist_service.dart';
 import '../data/qq_playlist_service.dart';
 
 final playlistCatalogServicesProvider =
@@ -15,8 +17,10 @@ final playlistCatalogServicesProvider =
     final dio = createHttpClient();
     return {
       OnlineSource.kuwo: KuwoPlaylistService(dio),
+      OnlineSource.kugou: KugouPlaylistService(dio),
       OnlineSource.qq: QqPlaylistService(dio),
       OnlineSource.migu: MiguPlaylistService(dio),
+      OnlineSource.netease: NeteasePlaylistService(dio),
     };
   },
 );
@@ -99,6 +103,7 @@ final class SongListController extends StateNotifier<SongListState> {
 
   final Map<OnlineSource, PlaylistCatalogService> _services;
   int _requestId = 0;
+  int _artworkRevision = 0;
   Future<void>? _artworkResolution;
   final _artworkListeners = <void Function(Track)>[];
 
@@ -156,6 +161,8 @@ final class SongListController extends StateNotifier<SongListState> {
       final detail =
           await _serviceFor(playlist.source).getPlaylistDetail(playlist);
       if (requestId != _requestId) return;
+      _artworkRevision++;
+      _artworkResolution = null;
       state =
           state.copyWith(detail: detail, isLoading: false, clearError: true);
       unawaited(resolveAllTrackArtwork());
@@ -183,13 +190,18 @@ final class SongListController extends StateNotifier<SongListState> {
     }
     final service = _services[OnlineSource.kuwo];
     if (service is! KuwoPlaylistService) return track;
+    final target = state.detail;
     final resolved = await service.resolveTrackArtwork(
       track,
-      fallbackCover: state.detail?.playlist.coverUri,
+      fallbackCover: target?.playlist.coverUri,
     );
     if (resolved.coverUri == track.coverUri) return resolved;
     final detail = state.detail;
-    if (detail == null) return resolved;
+    if (detail == null ||
+        detail.playlist.source != target?.playlist.source ||
+        detail.playlist.id != target?.playlist.id) {
+      return resolved;
+    }
     final index = detail.tracks.indexWhere((item) => item.id == track.id);
     if (index < 0) return resolved;
     final tracks = [...detail.tracks]..[index] = resolved;
@@ -201,13 +213,18 @@ final class SongListController extends StateNotifier<SongListState> {
 
   Future<void> resolveAllTrackArtwork([void Function(Track)? onResolved]) {
     if (onResolved != null) _artworkListeners.add(onResolved);
-    return _artworkResolution ??= _resolveAllTrackArtwork().whenComplete(() {
+    final active = _artworkResolution;
+    if (active != null) return active;
+    final revision = _artworkRevision;
+    return _artworkResolution =
+        _resolveAllTrackArtwork(revision).whenComplete(() {
+      if (revision != _artworkRevision) return;
       _artworkResolution = null;
       _artworkListeners.clear();
     });
   }
 
-  Future<void> _resolveAllTrackArtwork() async {
+  Future<void> _resolveAllTrackArtwork(int revision) async {
     final detail = state.detail;
     if (detail == null || detail.playlist.source != OnlineSource.kuwo) return;
     final tracks = detail.tracks;
@@ -217,6 +234,7 @@ final class SongListController extends StateNotifier<SongListState> {
       await Future.wait(
         batch.map((track) async {
           final resolved = await resolveTrackArtwork(track);
+          if (revision != _artworkRevision) return;
           for (final listener in _artworkListeners) {
             listener(resolved);
           }
@@ -230,6 +248,8 @@ final class SongListController extends StateNotifier<SongListState> {
 
   void closeDetail() {
     ++_requestId;
+    _artworkRevision++;
+    _artworkResolution = null;
     state = state.copyWith(clearDetail: true, clearError: true);
   }
 

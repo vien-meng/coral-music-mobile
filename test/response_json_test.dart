@@ -8,4 +8,13 @@ void main() {
       'value': 'ok',
     });
   });
+
+  test('decodes Kuwo single-quoted result objects', () {
+    expect(decodeJsonMap("{'TOTAL':'1','abslist':[{'name':'Jay\\'s'}]}"), {
+      'TOTAL': '1',
+      'abslist': [
+        {'name': "Jay's"},
+      ],
+    });
+  });
 }

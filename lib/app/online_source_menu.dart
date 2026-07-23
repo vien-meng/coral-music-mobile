@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../domain/music.dart';
 
 List<OnlineSource> supportedOnlineSources(
-  List<OnlineSource> candidates,
+  Iterable<OnlineSource> candidates,
   Set<String> supportedSourceIds,
 ) =>
     candidates

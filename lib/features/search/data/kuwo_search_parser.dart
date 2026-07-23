@@ -19,32 +19,33 @@ final class KuwoSearchParser {
     final tracks = <Track>[];
     final ids = <String>{};
     for (final value in rawList) {
-      if (value is! Map<String, Object?>) continue;
-      final sourceTrackId = _id(value);
+      if (value is! Map) continue;
+      final item = Map<String, Object?>.from(value);
+      final sourceTrackId = _id(item);
       final title = KuwoLeaderboardParser.decodeText(
-        '${value['SONGNAME'] ?? value['NAME'] ?? ''}',
+        '${item['SONGNAME'] ?? item['NAME'] ?? ''}',
       ).trim();
       if (sourceTrackId.isEmpty || title.isEmpty || !ids.add(sourceTrackId)) {
         continue;
       }
-      final duration = int.tryParse('${value['DURATION'] ?? ''}');
+      final duration = int.tryParse('${item['DURATION'] ?? ''}');
       tracks.add(
         Track(
           sourceKind: TrackSourceKind.online,
           sourceId: OnlineSource.kuwo.id,
           sourceTrackId: sourceTrackId,
           title: title,
-          artist: KuwoLeaderboardParser.decodeText('${value['ARTIST'] ?? ''}')
+          artist: KuwoLeaderboardParser.decodeText('${item['ARTIST'] ?? ''}')
               .replaceAll('&', '、')
               .trim(),
-          album: KuwoLeaderboardParser.decodeText('${value['ALBUM'] ?? ''}')
-              .trim(),
+          album:
+              KuwoLeaderboardParser.decodeText('${item['ALBUM'] ?? ''}').trim(),
           duration: duration == null ? null : Duration(seconds: duration),
-          coverUri: _cover(value['web_albumpic_short']),
+          coverUri: _cover(item['web_albumpic_short']),
           availableQualities: KuwoLeaderboardParser.parseQualities(
-            '${value['N_MINFO'] ?? value['MINFO'] ?? ''}',
+            '${item['N_MINFO'] ?? item['MINFO'] ?? ''}',
           ),
-          extra: {'albumId': value['ALBUMID']},
+          extra: {'albumId': item['ALBUMID']},
         ),
       );
     }
@@ -69,12 +70,13 @@ final class KuwoSearchParser {
 
   static Uri? _cover(Object? value) {
     final parts = '$value'.trim().split('/');
-    if (parts.length < 2 || parts.skip(1).any((part) => part.isEmpty)) {
+    final path = parts.firstOrNull?.isEmpty == true ? parts.skip(1) : parts;
+    if (path.length < 2 || path.any((part) => part.isEmpty)) {
       return null;
     }
     return Uri.https(
       'img3.kuwo.cn',
-      '/star/albumcover/500/${parts.skip(1).join('/')}',
+      '/star/albumcover/500/${path.join('/')}',
     );
   }
 }

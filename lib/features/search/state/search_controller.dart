@@ -203,16 +203,9 @@ final class SearchController extends StateNotifier<SearchState> {
   }
 
   Future<PageResult<Track>> _searchCombined(String query, int page) async {
-    const sources = [
-      OnlineSource.kuwo,
-      OnlineSource.kugou,
-      OnlineSource.qq,
-      OnlineSource.netease,
-      OnlineSource.migu,
-    ];
     AppFailure? firstFailure;
     final results = await Future.wait(
-      sources.map((source) async {
+      OnlineSource.values.map((source) async {
         try {
           return await _service.searchTracks(source, query, page);
         } on AppFailure catch (error) {

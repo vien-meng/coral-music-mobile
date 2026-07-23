@@ -352,7 +352,7 @@ final class MiguPlaylistService implements PlaylistCatalogService {
         artist: _artists(item['singerList']),
         album: '${item['album'] ?? ''}'.trim(),
         duration: _duration(item['duration']),
-        coverUri: _httpsUri(item['img3'] ?? item['img2'] ?? item['img1']),
+        coverUri: _trackCover(item),
         availableQualities: miguAudioQualities(item['audioFormats']),
         extra: {
           'songId': item['songId'],
@@ -374,9 +374,8 @@ final class MiguPlaylistService implements PlaylistCatalogService {
         name: '${infoData['title'] ?? fallback.name}'.trim(),
         author: '${infoData['ownerName'] ?? fallback.author}'.trim(),
         description: '${infoData['summary'] ?? fallback.description}'.trim(),
-        trackCount:
-            int.tryParse('${(songData as Map)['totalCount'] ?? ''}') ??
-                tracks.length,
+        trackCount: int.tryParse('${(songData as Map)['totalCount'] ?? ''}') ??
+            tracks.length,
         playCount: _formatCount(opNum is Map ? opNum['playNum'] : null),
         coverUri:
             _httpsUri(image is Map ? image['img'] : null) ?? fallback.coverUri,
@@ -402,9 +401,27 @@ final class MiguPlaylistService implements PlaylistCatalogService {
   }
 
   static Uri? _httpsUri(Object? value) {
-    final uri = Uri.tryParse('$value'.trim());
+    final raw = '$value'.trim();
+    if (raw.isEmpty) return null;
+    final uri = Uri.tryParse(raw.startsWith('//') ? 'https:$raw' : raw);
     if (uri == null || uri.host.isEmpty) return null;
     return uri.scheme == 'http' ? uri.replace(scheme: 'https') : uri;
+  }
+
+  static Uri? _trackCover(Map item) {
+    final albumImages = item['albumImgs'];
+    final values = <Object?>[
+      item['img3'],
+      item['img2'],
+      item['img1'],
+      if (albumImages is List)
+        for (final image in albumImages.whereType<Map>()) image['img'],
+    ];
+    for (final value in values) {
+      final cover = _httpsUri(value);
+      if (cover != null) return cover;
+    }
+    return null;
   }
 
   static String _formatCount(Object? value) {

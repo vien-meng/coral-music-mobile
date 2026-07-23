@@ -47,11 +47,7 @@ class _PlaylistSquare extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tags = ref.watch(songListTagsProvider);
-    const candidates = [
-      OnlineSource.kuwo,
-      OnlineSource.qq,
-      OnlineSource.migu,
-    ];
+    final candidates = ref.watch(playlistCatalogServicesProvider).keys;
     final supported = ref.watch(userApiDebugProvider.select((userApi) =>
         userApi.activeSource?.musicUrlSources ?? const <String>{}));
     return Column(

@@ -8,6 +8,7 @@ import '../../../domain/music.dart';
 import '../../download/view/download_track_button.dart';
 import '../../library/view/favorite_track_button.dart';
 import '../../library/view/playlist_picker.dart';
+import '../../leaderboard/state/leaderboard_controller.dart';
 import '../../player/state/playback_queue_controller.dart';
 import '../../player/state/player_controller.dart';
 import '../../player/state/user_api_debug_controller.dart';
@@ -173,16 +174,9 @@ class _SearchHeader extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    const candidates = [
-      OnlineSource.kuwo,
-      OnlineSource.kugou,
-      OnlineSource.qq,
-      OnlineSource.netease,
-      OnlineSource.migu,
-    ];
+    final candidates = ref.watch(onlineCatalogServicesProvider).keys;
     final supported = ref.watch(userApiDebugProvider.select((userApi) =>
         userApi.activeSource?.musicUrlSources ?? const <String>{}));
-    final sources = supportedOnlineSources(candidates, supported);
     return Row(
       children: [
         Text('搜索',
@@ -195,10 +189,8 @@ class _SearchHeader extends ConsumerWidget {
           activeSource: state.source,
           isLoading: state.isLoading,
           isCombined: state.isCombined,
-          onSelectCombined: sources.length == candidates.length
-              ? ref.read(searchProvider.notifier).selectCombined
-              : null,
-          sources: sources,
+          onSelectCombined: ref.read(searchProvider.notifier).selectCombined,
+          sources: supportedOnlineSources(candidates, supported),
           onSelected: ref.read(searchProvider.notifier).selectSource,
         ),
       ],

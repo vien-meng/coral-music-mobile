@@ -1,4 +1,5 @@
 import '../../../core/app_failure.dart';
+import '../../../core/response_json.dart';
 import '../../../domain/music.dart';
 
 final class KugouSearchParser {
@@ -7,9 +8,10 @@ final class KugouSearchParser {
     required int page,
     int pageSize = 30,
   }) {
-    final data = response is Map ? response['data'] : null;
-    final rawList = data is Map ? data['lists'] : null;
-    if (response is! Map || response['error_code'] != 0 || rawList is! List) {
+    final responseMap = decodeJsonMap(response);
+    final data = responseMap['data'] as Map?;
+    final rawList = data?['lists'];
+    if (responseMap['error_code'] != 0 || data == null || rawList is! List) {
       throw const AppFailure(
         code: AppFailureCode.invalidData,
         message: '酷狗音乐搜索数据格式异常',

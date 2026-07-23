@@ -46,7 +46,11 @@ class AppShell extends StatelessWidget {
     return PopScope<void>(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _moveTaskToBack();
+        if (!didPop) {
+          shouldMoveTaskToBack(navigationShell.currentIndex)
+              ? _moveTaskToBack()
+              : navigationShell.goBranch(0);
+        }
       },
       child: Scaffold(
         // Keep the live mini player above the bottom navigation on phones.
@@ -96,6 +100,8 @@ class AppShell extends StatelessWidget {
     );
   }
 }
+
+bool shouldMoveTaskToBack(int branchIndex) => branchIndex == 0;
 
 class _CoralRail extends StatelessWidget {
   const _CoralRail({required this.selectedIndex, required this.onSelected});

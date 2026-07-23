@@ -14,6 +14,19 @@ void main() {
     );
   });
 
+  test('filters the current page service platforms without a fixed list', () {
+    final services = {
+      OnlineSource.kuwo: Object(),
+      OnlineSource.kugou: Object(),
+      OnlineSource.netease: Object(),
+    };
+
+    expect(
+      supportedOnlineSources(services.keys, {'kg', 'wy'}),
+      [OnlineSource.kugou, OnlineSource.netease],
+    );
+  });
+
   testWidgets('uses a shared source menu and forwards the selected source',
       (tester) async {
     OnlineSource? selected;

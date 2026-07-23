@@ -131,4 +131,36 @@ void main() {
     expect(
         track.availableQualities, [AudioQuality.flac, AudioQuality.high320k]);
   });
+
+  test('uses Migu albumImgs when a playlist track has no direct artwork', () {
+    const fallback = OnlinePlaylist(
+      id: 'playlist-1',
+      source: OnlineSource.migu,
+      name: '旧歌单',
+    );
+    final detail = MiguPlaylistService.parseDetail(
+      songs: {
+        'code': '000000',
+        'data': {
+          'songList': [
+            {
+              'songId': 'song-1',
+              'songName': '歌曲',
+              'albumImgs': [
+                {'img': '//d.musicapp.migu.cn/cover.jpg'},
+              ],
+            },
+          ],
+        },
+      },
+      info: {
+        'code': '000000',
+        'data': const {},
+      },
+      fallback: fallback,
+    );
+
+    expect(detail.tracks.single.coverUri.toString(),
+        'https://d.musicapp.migu.cn/cover.jpg');
+  });
 }

@@ -126,4 +126,52 @@ void main() {
         track.availableQualities, [AudioQuality.flac, AudioQuality.high320k]);
     expect(track.extra['mediaMid'], 'media-mid');
   });
+
+  test('normalizes the current QQ Musicu playlist detail response', () {
+    const fallback = OnlinePlaylist(
+      id: '123',
+      source: OnlineSource.qq,
+      name: '旧歌单',
+    );
+    final detail = QqPlaylistService.parseDetail(
+      {
+        'code': 0,
+        'req_0': {
+          'code': 0,
+          'data': {
+            'code': 0,
+            'dirinfo': {
+              'title': '新歌单',
+              'host_nick': '创建者',
+              'picurl': 'http://cover.example.com/list.jpg',
+              'listennum': 20000,
+            },
+            'songlist': [
+              {
+                'id': 7,
+                'mid': 'song-mid',
+                'title': '歌曲',
+                'interval': 180,
+                'singer': [
+                  {'name': '歌手', 'mid': 'singer-mid'},
+                ],
+                'album': {'name': '专辑', 'mid': 'album-mid'},
+                'file': {
+                  'media_mid': 'media-mid',
+                  'size_128mp3': 2000000,
+                },
+              },
+            ],
+          },
+        },
+      },
+      fallback: fallback,
+    );
+
+    expect(detail.playlist.name, '新歌单');
+    expect(detail.playlist.playCount, '2.0万');
+    expect(detail.playlist.coverUri.toString(),
+        'https://cover.example.com/list.jpg');
+    expect(detail.tracks.single.sourceTrackId, 'song-mid');
+  });
 }

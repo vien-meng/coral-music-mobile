@@ -4,6 +4,33 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('prefers title and artist lookup before the source endpoint', () async {
+    final requestHosts = <String>[];
+    final dio = Dio()
+      ..interceptors.add(InterceptorsWrapper(
+        onRequest: (options, handler) {
+          requestHosts.add(options.uri.host);
+          handler.resolve(Response<Object?>(
+            requestOptions: options,
+            statusCode: 200,
+            data: {'syncedLyrics': '[00:01.00]独立检索歌词'},
+          ));
+        },
+      ));
+
+    final lyric = await IndependentLyricService(dio).resolve(const Track(
+      sourceKind: TrackSourceKind.online,
+      sourceId: 'tx',
+      sourceTrackId: 'qq-mid',
+      title: '独立检索歌曲',
+      artist: '独立检索歌手',
+      duration: Duration(minutes: 3),
+    ));
+
+    expect(lyric?.lyric, '[00:01.00]独立检索歌词');
+    expect(requestHosts, ['lrclib.net']);
+  });
+
   test('loads QQ lyrics without a User API script', () async {
     final dio = Dio()
       ..interceptors.add(InterceptorsWrapper(
