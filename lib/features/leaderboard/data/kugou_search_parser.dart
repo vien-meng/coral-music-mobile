@@ -42,11 +42,9 @@ final class KugouSearchParser {
     Set<String> ids,
     Map value,
   ) {
-    final audioId = '${value['Audioid'] ?? ''}'.trim();
     final hash = '${value['FileHash'] ?? ''}'.trim();
     final title = '${value['SongName'] ?? ''}'.trim();
-    final id = audioId.isNotEmpty ? audioId : hash;
-    if (id.isEmpty || title.isEmpty || !ids.add('$id:$hash')) return;
+    if (hash.isEmpty || title.isEmpty || !ids.add(hash)) return;
 
     final qualityMeta = <String, Map<String, Object?>>{};
     void addQuality(String name, String hashKey, String sizeKey) {
@@ -75,7 +73,7 @@ final class KugouSearchParser {
       Track(
         sourceKind: TrackSourceKind.online,
         sourceId: OnlineSource.kugou.id,
-        sourceTrackId: id,
+        sourceTrackId: hash,
         title: title,
         artist: _artists(value['Singers']),
         album: '${value['AlbumName'] ?? ''}'.trim(),
@@ -83,7 +81,6 @@ final class KugouSearchParser {
         coverUri: _cover(value['Image'] ?? value['AlbumImage']),
         availableQualities: qualities,
         extra: {
-          'songId': audioId,
           'albumId': value['AlbumID'],
           'hash': hash,
           'qualityMeta': qualityMeta,

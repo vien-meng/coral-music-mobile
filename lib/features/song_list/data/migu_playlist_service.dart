@@ -403,7 +403,12 @@ final class MiguPlaylistService implements PlaylistCatalogService {
   static Uri? _httpsUri(Object? value) {
     final raw = '$value'.trim();
     if (raw.isEmpty) return null;
-    final uri = Uri.tryParse(raw.startsWith('//') ? 'https:$raw' : raw);
+    final normalized = raw.startsWith('//')
+        ? 'https:$raw'
+        : raw.startsWith('/') && !raw.startsWith('//')
+            ? 'https://d.musicapp.migu.cn$raw'
+            : raw;
+    final uri = Uri.tryParse(normalized);
     if (uri == null || uri.host.isEmpty) return null;
     return uri.scheme == 'http' ? uri.replace(scheme: 'https') : uri;
   }

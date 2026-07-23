@@ -5,16 +5,22 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('prefers title and artist lookup before the source endpoint', () async {
-    final requestHosts = <String>[];
     final dio = Dio()
       ..interceptors.add(InterceptorsWrapper(
         onRequest: (options, handler) {
-          requestHosts.add(options.uri.host);
-          handler.resolve(Response<Object?>(
-            requestOptions: options,
-            statusCode: 200,
-            data: {'syncedLyrics': '[00:01.00]独立检索歌词'},
-          ));
+          if (options.uri.host == 'lrclib.net') {
+            handler.resolve(Response<Object?>(
+              requestOptions: options,
+              statusCode: 200,
+              data: {'syncedLyrics': '[00:01.00]独立检索歌词'},
+            ));
+          } else {
+            handler.resolve(Response<Object?>(
+              requestOptions: options,
+              statusCode: 200,
+              data: {'code': '1'},
+            ));
+          }
         },
       ));
 
@@ -28,7 +34,6 @@ void main() {
     ));
 
     expect(lyric?.lyric, '[00:01.00]独立检索歌词');
-    expect(requestHosts, ['lrclib.net']);
   });
 
   test('loads QQ lyrics without a User API script', () async {

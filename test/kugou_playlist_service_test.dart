@@ -3,7 +3,7 @@ import 'package:coral_music_mobile/features/song_list/data/kugou_playlist_servic
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('parses KuGou HTTPS playlist plaza and embedded playlist tracks', () {
+  test('parses KuGou HTTPS playlist plaza', () {
     final popular = parseKugouPopularPlaylists({
       'plist': {
         'list': {
@@ -20,30 +20,81 @@ void main() {
         },
       },
     }, page: 1);
-    final detail = parseKugouPlaylistDetail(
-      '{"list":{"list":{"info":[{"hash":"hash-1","audio_id":2,"filename":"歌手 - 歌曲","album_name":"专辑","duration":1000,"filesize":100,"trans_param":{"union_cover":"http://img.kugou.com/{size}/cover.jpg"}}]}},"info":{"list":{"specialname":"酷狗歌单","nickname":"","intro":"","imgurl":""}}}',
-      popular.items.single,
-    );
 
     expect(popular.items.single.source, OnlineSource.kugou);
+    expect(popular.items.single.name, '酷狗歌单');
+  });
+
+  test('parses KuGou playlist detail from mobilecdn API', () {
+    final detail = parseKugouPlaylistDetailV3(
+      {
+        'data': {
+          'specialname': '酷狗歌单',
+          'nickname': '作者名',
+          'intro': '简介',
+          'imgurl': 'http://img.kugou.com/{size}/cover.jpg',
+        },
+      },
+      {
+        'data': {
+          'total': 1,
+          'info': [
+            {
+              'hash': 'hash-1',
+              'audio_id': 2,
+              'filename': '歌手 - 歌曲',
+              'duration': 240,
+              'filesize': 100,
+              '320hash': 'hash-320',
+              '320filesize': 200,
+              'sqhash': 'hash-sq',
+              'sqfilesize': 300,
+              'trans_param': {
+                'union_cover': 'http://img.kugou.com/{size}/cover.jpg',
+              },
+            },
+          ],
+        },
+      },
+      const OnlinePlaylist(
+        id: '1',
+        source: OnlineSource.kugou,
+        name: '酷狗歌单',
+      ),
+    );
+
     expect(detail.playlist.name, '酷狗歌单');
-    expect(detail.tracks.single.sourceTrackId, '2');
+    expect(detail.playlist.author, '作者名');
+    expect(detail.tracks.single.sourceTrackId, 'hash-1');
     expect(detail.tracks.single.coverUri.toString(),
         'https://img.kugou.com/480/cover.jpg');
   });
 
-  test('parses KuGou playlist detail JSON without playlist metadata', () {
-    const fallback = OnlinePlaylist(
-      id: '1',
-      source: OnlineSource.kugou,
-      name: '酷狗歌单',
-    );
-    final detail = parseKugouPlaylistDetail(
-      '{"list":{"list":{"info":[{"hash":"hash-1","audio_id":2,"filename":"歌手 - 歌曲","duration":1000,"filesize":100}]}}}',
-      fallback,
+  test('parses KuGou playlist detail without playlist metadata', () {
+    final detail = parseKugouPlaylistDetailV3(
+      const {},
+      {
+        'data': {
+          'info': [
+            {
+              'hash': 'hash-1',
+              'audio_id': 2,
+              'filename': '歌手 - 歌曲',
+              'duration': 240,
+              'filesize': 100,
+            },
+          ],
+        },
+      },
+      const OnlinePlaylist(
+        id: '1',
+        source: OnlineSource.kugou,
+        name: '酷狗歌单',
+      ),
     );
 
-    expect(detail.tracks.single.sourceTrackId, '2');
+    expect(detail.tracks.single.sourceTrackId, 'hash-1');
+    expect(detail.playlist.name, '酷狗歌单');
   });
 
   test('parses KuGou HTTPS playlist search results', () {

@@ -41,7 +41,7 @@ final class KuwoSearchParser {
           album:
               KuwoLeaderboardParser.decodeText('${item['ALBUM'] ?? ''}').trim(),
           duration: duration == null ? null : Duration(seconds: duration),
-          coverUri: _cover(item['web_albumpic_short']),
+          coverUri: _cover(item),
           availableQualities: KuwoLeaderboardParser.parseQualities(
             '${item['N_MINFO'] ?? item['MINFO'] ?? ''}',
           ),
@@ -68,15 +68,26 @@ final class KuwoSearchParser {
         : '${value['DC_TARGETID'] ?? ''}'.trim();
   }
 
-  static Uri? _cover(Object? value) {
-    final parts = '$value'.trim().split('/');
-    final path = parts.firstOrNull?.isEmpty == true ? parts.skip(1) : parts;
-    if (path.length < 2 || path.any((part) => part.isEmpty)) {
+  static Uri? _cover(Map<String, Object?> item) {
+    final direct = _httpsUri('${item['pic'] ?? ''}') ??
+        _httpsUri('${item['albumpic'] ?? ''}') ??
+        _httpsUri('${item['albumPic'] ?? ''}');
+    if (direct != null) return direct;
+    final parts = '${item['web_albumpic_short'] ?? ''}'.trim().split('/');
+    if (parts.length < 2 || parts.skip(1).any((part) => part.isEmpty)) {
       return null;
     }
     return Uri.https(
       'img3.kuwo.cn',
-      '/star/albumcover/500/${path.join('/')}',
+      '/star/albumcover/500/${parts.skip(1).join('/')}',
     );
+  }
+
+  static Uri? _httpsUri(String value) {
+    final raw = value.trim();
+    if (raw.isEmpty) return null;
+    final uri = Uri.tryParse(raw);
+    if (uri == null || uri.host.isEmpty) return null;
+    return uri.scheme == 'http' ? uri.replace(scheme: 'https') : uri;
   }
 }

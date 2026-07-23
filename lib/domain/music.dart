@@ -94,6 +94,20 @@ final class Track {
   final Map<String, Object?> extra;
 
   String get id => '${sourceKind.name}:$sourceId:$sourceTrackId';
+
+  Track copyWith({Uri? coverUri}) => Track(
+        sourceKind: sourceKind,
+        sourceId: sourceId,
+        sourceTrackId: sourceTrackId,
+        title: title,
+        artist: artist,
+        album: album,
+        duration: duration,
+        coverUri: coverUri ?? this.coverUri,
+        localUri: localUri,
+        availableQualities: availableQualities,
+        extra: extra,
+      );
 }
 
 final class LeaderboardBoard {

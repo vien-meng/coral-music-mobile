@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../../core/app_failure.dart';
 import '../../../core/http_client.dart';
@@ -164,6 +165,8 @@ final class NeteaseCatalogService implements OnlineCatalogService {
       final track = neteaseTrackFromSong(song);
       if (track != null) tracks.add(track);
     }
+    final withCover = tracks.where((t) => t.coverUri != null).length;
+    debugPrint('[NeteaseBoard] songs=${songs.length} tracks=${tracks.length} withCover=$withCover');
     return PageResult(
         items: tracks, page: 1, pageSize: tracks.length, total: tracks.length);
   }

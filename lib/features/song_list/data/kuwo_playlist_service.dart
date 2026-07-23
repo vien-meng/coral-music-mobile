@@ -432,6 +432,7 @@ final class KuwoPlaylistService implements PlaylistCatalogService {
 
   static Uri? _trackCover(Map<Object?, Object?> item) {
     final direct = _httpsUri('${item['pic'] ?? ''}') ??
+        _httpsUri('${item['albumpic'] ?? ''}') ??
         _httpsUri('${item['albumPic'] ?? ''}');
     if (direct != null) return direct;
     final parts = '${item['web_albumpic_short'] ?? ''}'.trim().split('/');

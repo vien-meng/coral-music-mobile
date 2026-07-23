@@ -1,9 +1,11 @@
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../../core/app_failure.dart';
 import '../../../core/http_client.dart';
+import '../../../core/response_json.dart';
 import '../../../domain/music.dart';
 import 'kugou_search_parser.dart';
 import 'online_catalog_service.dart';
@@ -168,9 +170,21 @@ final class KugouCatalogService implements OnlineCatalogService {
           },
         ),
       );
-      final values = response.data is Map ? response.data as Map : const {};
+      final dynamic rawData = response.data;
+      final Map values;
+      if (rawData is Map) {
+        values = rawData;
+      } else if (rawData is String) {
+        values = decodeJsonMap(rawData);
+      } else {
+        debugPrint('[KugouArtwork] response.data is ${rawData.runtimeType}, cannot parse');
+        return result;
+      }
       final resources = values['data'];
-      if (resources is! List) return result;
+      if (resources is! List) {
+        debugPrint('[KugouArtwork] response has no data list, keys=${values.keys.toList()}');
+        return result;
+      }
       final covers = <String, Uri>{};
       for (final resource in resources.whereType<Map>()) {
         final hash = '${resource['hash'] ?? ''}'.trim();
@@ -178,6 +192,7 @@ final class KugouCatalogService implements OnlineCatalogService {
         final cover = info is Map ? _kugouCoverUri(info['image']) : null;
         if (hash.isNotEmpty && cover != null) covers[hash] = cover;
       }
+      debugPrint('[KugouArtwork] tracks=${result.items.length} covers=${covers.length}');
       if (covers.isEmpty) return result;
       return PageResult(
         items: [
@@ -188,8 +203,8 @@ final class KugouCatalogService implements OnlineCatalogService {
         pageSize: result.pageSize,
         total: result.total,
       );
-    } on Object {
-      // ponytail: artwork is supplementary; keep the usable rank when its public API is unavailable.
+    } on Object catch (error, stack) {
+      debugPrint('[KugouArtwork] failed: $error\n$stack');
       return result;
     }
   }

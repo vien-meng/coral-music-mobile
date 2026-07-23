@@ -73,7 +73,7 @@ void main() {
     expect(result.total, 81);
     expect(result.items, hasLength(2));
     final track = result.items.first;
-    expect(track.id, 'online:kg:123');
+    expect(track.id, 'online:kg:128-hash');
     expect(track.artist, '歌手甲、歌手乙');
     expect(track.duration, const Duration(seconds: 215));
     expect(track.coverUri.toString(),

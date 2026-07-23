@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
@@ -18,10 +19,15 @@ final class IndependentLyricService {
   final LrcLibLyricService _fallback;
 
   Future<LyricPayload?> resolve(Track track) async {
-    final independent = await _fallback.resolve(track);
-    if (_hasContent(independent)) return independent;
+    final platformFuture = _platformLyric(track);
+    final independentFuture = _fallback.resolve(track);
+    final result = await _firstContent([independentFuture, platformFuture]);
+    return result;
+  }
+
+  Future<LyricPayload?> _platformLyric(Track track) async {
     try {
-      final lyric = await switch (track.sourceId) {
+      return await switch (track.sourceId) {
         'tx' => _qq(track),
         'kw' => _kuwo(track),
         'wy' => _netease(track),
@@ -29,11 +35,38 @@ final class IndependentLyricService {
         'kg' => _kugou(track),
         _ => Future.value(null),
       };
-      if (_hasContent(lyric)) return lyric;
     } on Object {
-      // Public platform endpoints are best-effort after independent lookup.
+      return null;
     }
-    return null;
+  }
+
+  /// Returns the first non-empty [LyricPayload] from [futures], or `null` if
+  /// all futures resolve empty. Futures that throw are treated as empty.
+  static Future<LyricPayload?> _firstContent(
+    List<Future<LyricPayload?>> futures,
+  ) async {
+    final completer = Completer<LyricPayload?>();
+    var remaining = futures.length;
+    void checkDone() {
+      remaining--;
+      if (remaining == 0 && !completer.isCompleted) {
+        completer.complete(null);
+      }
+    }
+
+    for (final future in futures) {
+      future.then((value) {
+        if (!completer.isCompleted && _hasContent(value)) {
+          completer.complete(value);
+        } else {
+          checkDone();
+        }
+      }).catchError((_) {
+        checkDone();
+        return null;
+      });
+    }
+    return completer.future;
   }
 
   Future<LyricPayload?> _qq(Track track) async {

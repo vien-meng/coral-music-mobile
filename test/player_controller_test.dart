@@ -350,6 +350,7 @@ void main() {
       PlaybackQueueController(),
       null,
       null,
+      null,
       () async => [
         PlayHistoryEntry(
           track: track,
@@ -378,6 +379,7 @@ void main() {
       _FakeAudioEngine(),
       PlaybackResolver(_FakeUserApiRunner()),
       PlaybackQueueController(),
+      null,
       null,
       null,
       () async => [

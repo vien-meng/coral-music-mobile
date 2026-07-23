@@ -9,7 +9,9 @@ import '../../library/data/library_store.dart';
 import '../data/audio_engine.dart';
 import '../data/audio_file_probe.dart';
 import '../data/playback_resolver.dart';
+import '../data/track_artwork_resolver.dart';
 import '../data/user_api_runner.dart';
+import '../../leaderboard/state/leaderboard_controller.dart';
 import 'playback_queue_controller.dart';
 
 final userApiRunnerProvider =
@@ -28,6 +30,10 @@ final audioEngineProvider = Provider<AudioEngine>((ref) {
 final audioFileProbeProvider =
     Provider<AudioFileProbe>((_) => HttpAudioFileProbe());
 
+final trackArtworkResolverProvider = Provider<TrackArtworkResolver>(
+  (ref) => TrackArtworkResolver(ref.watch(onlineCatalogServicesProvider)),
+);
+
 final playerProvider = StateNotifierProvider<PlayerController, PlayerState>(
   (ref) => PlayerController(
     ref.watch(audioEngineProvider),
@@ -35,6 +41,7 @@ final playerProvider = StateNotifierProvider<PlayerController, PlayerState>(
     ref.watch(playbackQueueProvider.notifier),
     ref.watch(libraryStoreProvider),
     ref.watch(audioFileProbeProvider),
+    ref.watch(trackArtworkResolverProvider),
   ),
 );
 
@@ -106,9 +113,11 @@ final class PlayerController extends StateNotifier<PlayerState> {
     this._queue, [
     LibraryStore? library,
     AudioFileProbe? fileProbe,
+    TrackArtworkResolver? artworkResolver,
     Future<List<PlayHistoryEntry>> Function()? loadHistory,
   ])  : _library = library ?? LibraryStore(),
         _fileProbe = fileProbe ?? const NoopAudioFileProbe(),
+        _artworkResolver = artworkResolver,
         super(const PlayerState()) {
     _loadHistory = loadHistory ?? _library.listHistory;
     _subscription = _engine.snapshots.listen(_onSnapshot);
@@ -120,6 +129,7 @@ final class PlayerController extends StateNotifier<PlayerState> {
   final PlaybackQueueController _queue;
   final LibraryStore _library;
   final AudioFileProbe _fileProbe;
+  final TrackArtworkResolver? _artworkResolver;
   late final Future<List<PlayHistoryEntry>> Function() _loadHistory;
   final _failedTrackIds = <String>{};
   final _refreshedTrackQualities = <String>{};
@@ -257,6 +267,7 @@ final class PlayerController extends StateNotifier<PlayerState> {
       if (resumePosition != null) await _engine.seek(resumePosition);
       if (request != _playRequest) return;
       if (autoPlay) await _engine.play();
+      unawaited(_resolveArtwork(request, track));
     } on AppFailure catch (error) {
       if (request != _playRequest) return;
       _handleEngineFailure(
@@ -328,6 +339,19 @@ final class PlayerController extends StateNotifier<PlayerState> {
           diagnostic: error.runtimeType.toString(),
         ),
       );
+    }
+  }
+
+  Future<void> _resolveArtwork(int request, Track track) async {
+    final resolver = _artworkResolver;
+    if (resolver == null || track.coverUri != null) return;
+    try {
+      final cover = await resolver.resolve(track);
+      if (cover == null || request != _playRequest) return;
+      if (state.track?.id != track.id) return;
+      state = state.copyWith(track: track.copyWith(coverUri: cover));
+    } on Object {
+      // Best-effort artwork resolution; failures are not user-facing.
     }
   }
 

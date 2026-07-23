@@ -87,13 +87,25 @@ final class KugouPlaylistService implements PlaylistCatalogService {
           code: AppFailureCode.invalidData, message: '酷狗歌单标识无效');
     }
     try {
-      final response = await _dio.getUri<String>(
-        Uri.https('m.kugou.com', '/plist/list/${playlist.id}', {
-          'json': 'true',
-        }),
-        options: Options(responseType: ResponseType.plain),
+      final results = await Future.wait([
+        _dio.getUri<Object?>(
+          Uri.http('mobilecdn.kugou.com', '/api/v3/special/info', {
+            'specialid': playlist.id,
+          }),
+        ),
+        _dio.getUri<Object?>(
+          Uri.http('mobilecdn.kugou.com', '/api/v3/special/song', {
+            'specialid': playlist.id,
+            'page': '1',
+            'pagesize': '200',
+          }),
+        ),
+      ]);
+      return parseKugouPlaylistDetailV3(
+        results[0].data,
+        results[1].data,
+        playlist,
       );
-      return parseKugouPlaylistDetail(response.data ?? '', playlist);
     } on DioException catch (error) {
       throw mapDioException(error);
     } on AppFailure {
@@ -156,11 +168,14 @@ PageResult<OnlinePlaylist> parseKugouSearchPlaylists(
   );
 }
 
-PlaylistDetail parseKugouPlaylistDetail(String body, OnlinePlaylist fallback) {
-  final root = decodeJsonMap(body);
-  final listNode = root['list'] as Map?;
-  final trackList = listNode?['list'] as Map?;
-  final rawTracks = trackList?['info'];
+PlaylistDetail parseKugouPlaylistDetailV3(
+  Object? infoRaw,
+  Object? songsRaw,
+  OnlinePlaylist fallback,
+) {
+  final infoData = (decodeJsonMap(infoRaw)['data'] as Map?);
+  final songData = (decodeJsonMap(songsRaw)['data'] as Map?);
+  final rawTracks = songData?['info'];
   if (rawTracks is! List) {
     throw const AppFailure(
         code: AppFailureCode.invalidData, message: '酷狗歌单歌曲缺失');
@@ -174,17 +189,17 @@ PlaylistDetail parseKugouPlaylistDetail(String body, OnlinePlaylist fallback) {
     throw const AppFailure(
         code: AppFailureCode.invalidData, message: '酷狗歌单歌曲缺失');
   }
-  final info = (root['info'] as Map?)?['list'] as Map?;
   return PlaylistDetail(
     playlist: OnlinePlaylist(
       id: fallback.id,
       source: OnlineSource.kugou,
-      name: '${info?['specialname'] ?? fallback.name}'.trim(),
-      author: '${info?['nickname'] ?? fallback.author}'.trim(),
-      description: '${info?['intro'] ?? fallback.description}'.trim(),
+      name: '${infoData?['specialname'] ?? fallback.name}'.trim(),
+      author: '${infoData?['nickname'] ?? fallback.author}'.trim(),
+      description: '${infoData?['intro'] ?? fallback.description}'.trim(),
       trackCount: tracks.length,
-      coverUri:
-          _uri(info?['imgurl']) ?? fallback.coverUri ?? tracks.first.coverUri,
+      coverUri: _uri(infoData?['imgurl']) ??
+          fallback.coverUri ??
+          tracks.first.coverUri,
     ),
     tracks: tracks,
   );
@@ -237,7 +252,7 @@ Track? _track(Map item) {
   return Track(
     sourceKind: TrackSourceKind.online,
     sourceId: OnlineSource.kugou.id,
-    sourceTrackId: '${item['audio_id'] ?? hash}',
+    sourceTrackId: hash,
     title: title,
     artist: artist,
     album: '${item['album_name'] ?? ''}'.trim(),
@@ -249,7 +264,6 @@ Track? _track(Map item) {
       if (meta.containsKey('128k')) AudioQuality.standard128k,
     ],
     extra: {
-      'songId': item['audio_id'],
       'albumId': item['album_id'],
       'hash': hash,
       'qualityMeta': meta,
