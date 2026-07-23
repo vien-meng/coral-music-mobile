@@ -1,10 +1,13 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
 
 import '../../../core/response_json.dart';
 import '../../../domain/music.dart';
+import 'kugou_krc.dart';
 import 'lrclib_lyric_service.dart';
+import 'netease_yrc.dart';
 
 /// Independent of User API scripts and the currently enabled music source.
 final class IndependentLyricService {
@@ -16,8 +19,15 @@ final class IndependentLyricService {
   final LrcLibLyricService _fallback;
 
   Future<LyricPayload?> resolve(Track track) async {
+    final platformFuture = _platformLyric(track);
+    final independentFuture = _fallback.resolve(track);
+    final result = await _firstContent([independentFuture, platformFuture]);
+    return result;
+  }
+
+  Future<LyricPayload?> _platformLyric(Track track) async {
     try {
-      final lyric = await switch (track.sourceId) {
+      return await switch (track.sourceId) {
         'tx' => _qq(track),
         'kw' => _kuwo(track),
         'wy' => _netease(track),
@@ -25,11 +35,38 @@ final class IndependentLyricService {
         'kg' => _kugou(track),
         _ => Future.value(null),
       };
-      if (_hasContent(lyric)) return lyric;
     } on Object {
-      // Public endpoints change independently; retain the shared fallback.
+      return null;
     }
-    return _fallback.resolve(track);
+  }
+
+  /// Returns the first non-empty [LyricPayload] from [futures], or `null` if
+  /// all futures resolve empty. Futures that throw are treated as empty.
+  static Future<LyricPayload?> _firstContent(
+    List<Future<LyricPayload?>> futures,
+  ) async {
+    final completer = Completer<LyricPayload?>();
+    var remaining = futures.length;
+    void checkDone() {
+      remaining--;
+      if (remaining == 0 && !completer.isCompleted) {
+        completer.complete(null);
+      }
+    }
+
+    for (final future in futures) {
+      future.then((value) {
+        if (!completer.isCompleted && _hasContent(value)) {
+          completer.complete(value);
+        } else {
+          checkDone();
+        }
+      }).catchError((_) {
+        checkDone();
+        return null;
+      });
+    }
+    return completer.future;
   }
 
   Future<LyricPayload?> _qq(Track track) async {
@@ -85,8 +122,10 @@ final class IndependentLyricService {
       options: Options(headers: const {'Referer': 'https://music.163.com/'}),
     );
     final data = decodeJsonMap(response.data);
+    final yrc = _text(data['yrc']);
     return LyricPayload(
       lyric: _text(data['lrc']),
+      lxlyric: yrc.isEmpty ? '' : neteaseYrcToLx(yrc),
       tlyric: _text(data['tlyric']),
       rlyric: _text(data['romalrc']),
     );
@@ -115,7 +154,7 @@ final class IndependentLyricService {
       'User-Agent': 'KuGou2012-9020-ExpandSearchManager',
     };
     final search = await _dio.getUri<Object?>(
-      Uri.http('lyrics.kugou.com', '/search', {
+      Uri.https('lyrics.kugou.com', '/search', {
         'ver': '1',
         'man': 'yes',
         'client': 'pc',
@@ -126,22 +165,26 @@ final class IndependentLyricService {
       options: Options(headers: headers),
     );
     final candidates = decodeJsonMap(search.data)['candidates'];
-    final candidate =
-        candidates is List ? candidates.whereType<Map>().firstOrNull : null;
+    final candidate = selectKugouLyricCandidate(candidates, track);
     if (candidate == null) return null;
+    final isKrc = '${candidate['krctype']}' == '1' &&
+        '${candidate['contenttype']}' != '1';
     final response = await _dio.getUri<Object?>(
-      Uri.http('lyrics.kugou.com', '/download', {
+      Uri.https('lyrics.kugou.com', '/download', {
         'ver': '1',
         'client': 'pc',
         'id': '${candidate['id'] ?? ''}',
         'accesskey': '${candidate['accesskey'] ?? ''}',
-        'fmt': 'lrc',
+        'fmt': isKrc ? 'krc' : 'lrc',
         'charset': 'utf8',
       }),
       options: Options(headers: headers),
     );
     final lyric = _decode(decodeJsonMap(response.data)['content']);
-    return lyric.isEmpty ? null : LyricPayload(lyric: lyric);
+    if (lyric.isEmpty) return null;
+    if (!isKrc) return LyricPayload(lyric: lyric);
+    final lxlyric = decodeKugouKrc(lyric);
+    return lxlyric.isEmpty ? null : LyricPayload(lxlyric: lxlyric);
   }
 
   static bool _hasContent(LyricPayload? value) =>
@@ -166,3 +209,42 @@ final class IndependentLyricService {
     }
   }
 }
+
+Map? selectKugouLyricCandidate(Object? raw, Track track) {
+  if (raw is! List) return null;
+  final candidates = raw.whereType<Map>().where((candidate) =>
+      '${candidate['id'] ?? ''}'.isNotEmpty &&
+      '${candidate['accesskey'] ?? ''}'.isNotEmpty);
+  if (candidates.isEmpty) return null;
+  final expectedDuration = track.duration?.inSeconds;
+  return candidates.reduce((best, candidate) =>
+      _kugouCandidateScore(candidate, track, expectedDuration) >
+              _kugouCandidateScore(best, track, expectedDuration)
+          ? candidate
+          : best);
+}
+
+int _kugouCandidateScore(Map candidate, Track track, int? expectedDuration) {
+  final title = '${candidate['song'] ?? candidate['songname'] ?? ''}'.trim();
+  final artist =
+      '${candidate['singer'] ?? candidate['singername'] ?? ''}'.trim();
+  final duration =
+      int.tryParse('${candidate['duration'] ?? candidate['timelength'] ?? ''}');
+  return (_sameText(title, track.title) ? 4 : 0) +
+      (_sameText(artist, track.artist) ? 3 : 0) +
+      (expectedDuration != null &&
+              duration != null &&
+              ((duration > 1000 ? duration ~/ 1000 : duration) -
+                          expectedDuration)
+                      .abs() <=
+                  3
+          ? 2
+          : 0) +
+      ('${candidate['krctype']}' == '1' && '${candidate['contenttype']}' != '1'
+          ? 1
+          : 0);
+}
+
+bool _sameText(String left, String right) =>
+    left.toLowerCase().replaceAll(RegExp(r'[\s\-_/·•]'), '') ==
+    right.toLowerCase().replaceAll(RegExp(r'[\s\-_/·•]'), '');

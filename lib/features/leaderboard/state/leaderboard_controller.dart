@@ -10,17 +10,24 @@ import '../data/netease_catalog_service.dart';
 import '../data/online_catalog_service.dart';
 import '../data/qq_catalog_service.dart';
 
-final onlineCatalogServiceProvider = Provider<OnlineCatalogService>(
+final onlineCatalogServicesProvider =
+    Provider<Map<OnlineSource, OnlineCatalogService>>(
   (ref) {
     final dio = createHttpClient();
-    return MultiSourceOnlineCatalogService({
+    return {
       OnlineSource.kuwo: KuwoCatalogService(dio),
       OnlineSource.kugou: KugouCatalogService(dio),
       OnlineSource.qq: QqCatalogService(dio),
       OnlineSource.migu: MiguCatalogService(dio),
       OnlineSource.netease: NeteaseCatalogService(dio),
-    });
+    };
   },
+);
+
+final onlineCatalogServiceProvider = Provider<OnlineCatalogService>(
+  (ref) => MultiSourceOnlineCatalogService(
+    ref.watch(onlineCatalogServicesProvider),
+  ),
 );
 
 final leaderboardProvider =

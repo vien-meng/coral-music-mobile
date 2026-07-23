@@ -1,8 +1,33 @@
+import 'dart:convert';
+
 import 'package:coral_music_mobile/domain/music.dart';
 import 'package:coral_music_mobile/features/leaderboard/data/kugou_search_parser.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('parses a JSON body sent as text/plain', () {
+    final result = KugouSearchParser.parse(
+      jsonEncode({
+        'error_code': 0,
+        'data': {
+          'total': 1,
+          'lists': [
+            {
+              'Audioid': 1,
+              'FileHash': 'hash',
+              'SongName': '文本响应歌曲',
+              'Singers': const [],
+              'FileSize': 1,
+            },
+          ],
+        },
+      }),
+      page: 1,
+    );
+
+    expect(result.items.single.title, '文本响应歌曲');
+  });
+
   test('normalizes Kugou search tracks and keeps quality hashes', () {
     final result = KugouSearchParser.parse(
       {
@@ -48,7 +73,7 @@ void main() {
     expect(result.total, 81);
     expect(result.items, hasLength(2));
     final track = result.items.first;
-    expect(track.id, 'online:kg:123');
+    expect(track.id, 'online:kg:128-hash');
     expect(track.artist, '歌手甲、歌手乙');
     expect(track.duration, const Duration(seconds: 215));
     expect(track.coverUri.toString(),

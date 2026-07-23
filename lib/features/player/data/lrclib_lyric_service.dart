@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 
 import '../../../domain/music.dart';
@@ -8,33 +10,38 @@ final class LrcLibLyricService {
   final Dio _dio;
 
   Future<LyricPayload?> resolve(Track track) async {
-    if (track.duration != null) {
-      try {
-        final response = await _dio.get<Object?>(
-          'https://lrclib.net/api/get',
-          queryParameters: {
-            'track_name': track.title,
-            'artist_name': track.artist,
-            if (track.album?.trim().isNotEmpty == true)
-              'album_name': track.album,
-            'duration': track.duration!.inSeconds,
-          },
-        );
-        final exact = parseLrcLibPayload(response.data);
-        if (exact != null) return exact;
-      } on DioException {
-        // Exact lookup is optional; continue with keyword search when the
-        // public service rejects, throttles, or cannot match this source.
-      } on Object {
-        // Keep the keyword fallback available for malformed exact responses.
-      }
-    }
+    final exactFuture = _exactGet(track);
+    final searchFuture = _search(track, includeArtist: true);
+    final searchOnlyTitleFuture = track.artist.trim().isEmpty
+        ? Future<LyricPayload?>.value(null)
+        : _search(track, includeArtist: false);
+    final result = await _firstContent([
+      exactFuture,
+      searchFuture,
+      searchOnlyTitleFuture,
+    ]);
+    return result;
+  }
 
-    final byTitleAndArtist = await _search(track, includeArtist: true);
-    if (byTitleAndArtist != null || track.artist.trim().isEmpty) {
-      return byTitleAndArtist;
+  Future<LyricPayload?> _exactGet(Track track) async {
+    if (track.duration == null) return null;
+    try {
+      final response = await _dio.get<Object?>(
+        'https://lrclib.net/api/get',
+        queryParameters: {
+          'track_name': track.title,
+          'artist_name': track.artist,
+          if (track.album?.trim().isNotEmpty == true)
+            'album_name': track.album,
+          'duration': track.duration!.inSeconds,
+        },
+      );
+      return parseLrcLibPayload(response.data);
+    } on DioException {
+      return null;
+    } on Object {
+      return null;
     }
-    return _search(track, includeArtist: false);
   }
 
   Future<LyricPayload?> _search(
@@ -52,12 +59,41 @@ final class LrcLibLyricService {
       );
       return selectLrcLibSearchResult(response.data, track);
     } on DioException {
-      // A public lyrics backend is best-effort; leave the page retryable.
       return null;
     } on Object {
       return null;
     }
   }
+
+  static Future<LyricPayload?> _firstContent(
+    List<Future<LyricPayload?>> futures,
+  ) async {
+    final completer = Completer<LyricPayload?>();
+    var remaining = futures.length;
+    void checkDone() {
+      remaining--;
+      if (remaining == 0 && !completer.isCompleted) {
+        completer.complete(null);
+      }
+    }
+
+    for (final future in futures) {
+      future.then((value) {
+        if (!completer.isCompleted && _hasContent(value)) {
+          completer.complete(value);
+        } else {
+          checkDone();
+        }
+      }).catchError((_) {
+        checkDone();
+        return null;
+      });
+    }
+    return completer.future;
+  }
+
+  static bool _hasContent(LyricPayload? value) =>
+      value != null && value.lyric.trim().isNotEmpty;
 }
 
 LyricPayload? selectLrcLibSearchResult(Object? raw, Track track) {

@@ -76,7 +76,7 @@ GoRouter createAppRouter() => GoRouter(
                   name: 'song-list',
                   path: '/song-list',
                   pageBuilder: (context, state) =>
-                      _page(state, const SongListPage()),
+                      _page(state, const AppBackScope(child: SongListPage())),
                 ),
                 GoRoute(
                   name: 'song-list-detail',
@@ -104,7 +104,7 @@ GoRouter createAppRouter() => GoRouter(
                   name: 'library',
                   path: '/library',
                   pageBuilder: (context, state) =>
-                      _page(state, const HistoryPage()),
+                      _page(state, const AppBackScope(child: HistoryPage())),
                 ),
                 GoRoute(
                   name: 'download',
@@ -116,7 +116,7 @@ GoRouter createAppRouter() => GoRouter(
                   name: 'webdav',
                   path: '/webdav',
                   pageBuilder: (context, state) =>
-                      _page(state, const WebDavPage()),
+                      _page(state, const AppBackScope(child: WebDavPage())),
                 ),
                 GoRoute(
                   name: 'setting',

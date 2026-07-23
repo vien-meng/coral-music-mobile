@@ -30,10 +30,21 @@ class SearchAlbumDetailPage extends ConsumerWidget {
   final SearchAlbumDetail detail;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => Scaffold(
-        body: Column(
-          children: [
-            _AlbumDetailBanner(detail: detail),
+  Widget build(BuildContext context, WidgetRef ref) => PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) {
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            } else {
+              context.go('/search');
+            }
+          }
+        },
+        child: Scaffold(
+          body: Column(
+            children: [
+              _AlbumDetailBanner(detail: detail),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
               child: Row(
@@ -107,6 +118,7 @@ class SearchAlbumDetailPage extends ConsumerWidget {
               ),
             ),
           ],
+        ),
         ),
       );
 

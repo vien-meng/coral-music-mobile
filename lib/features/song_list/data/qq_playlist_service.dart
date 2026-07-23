@@ -129,31 +129,32 @@ final class QqPlaylistService implements PlaylistCatalogService {
         message: 'QQ 音乐歌单标识无效',
       );
     }
-    final uri = Uri.https(
-        'c.y.qq.com', '/qzone/fcg-bin/fcg_ucc_getcdinfo_byids_cp.fcg', {
-      'type': '1',
-      'json': '1',
-      'utf8': '1',
-      'onlysong': '0',
-      'new_format': '1',
-      'disstid': playlist.id,
-      'loginUin': '0',
-      'hostUin': '0',
-      'format': 'json',
-      'inCharset': 'utf8',
-      'outCharset': 'utf-8',
-      'notice': '0',
-      'platform': 'yqq.json',
-      'needNewCode': '0',
-    });
     try {
-      final response = await _dio.getUri<Object?>(uri,
-          options: Options(
-            headers: {
-              'Origin': 'https://y.qq.com',
-              'Referer': 'https://y.qq.com/n/ryqq/playlist/${playlist.id}',
+      final response = await _dio.postUri<Object?>(
+        Uri.https('u.y.qq.com', '/cgi-bin/musicu.fcg'),
+        data: {
+          'comm': {'cv': 10000, 'ct': 24, 'format': 'json'},
+          'req_0': {
+            'module': 'music.srfDissInfo.aiDissInfo',
+            'method': 'uniform_get_Dissinfo',
+            'param': {
+              'disstid': int.tryParse(playlist.id) ?? playlist.id,
+              'tag': 1,
+              'userinfo': 1,
+              'song_begin': 0,
+              'song_num': 1000,
+              'orderlist': 1,
             },
-          ));
+          },
+        },
+        options: Options(
+          contentType: Headers.jsonContentType,
+          headers: const {
+            'Referer':
+                'https://i2.y.qq.com/n3/other/pages/details/playlist.html',
+          },
+        ),
+      );
       return parseDetail(response.data, fallback: playlist);
     } on DioException catch (error) {
       throw mapDioException(error);
@@ -253,12 +254,18 @@ final class QqPlaylistService implements PlaylistCatalogService {
     required OnlinePlaylist fallback,
   }) {
     final response = decodeJsonMap(raw);
+    final uniform = response['req_0'];
+    final uniformData = uniform is Map ? uniform['data'] : null;
     final list = response['cdlist'];
-    final detail = list is List && list.isNotEmpty && list.first is Map
-        ? list.first as Map
-        : null;
+    final detail = uniformData is Map
+        ? uniformData['dirinfo']
+        : list is List && list.isNotEmpty && list.first is Map
+            ? list.first as Map
+            : null;
     final songs = detail?['songlist'];
-    if ('${response['code']}' != '0' || detail == null || songs is! List) {
+    final rawSongs = uniformData is Map ? uniformData['songlist'] : songs;
+    final code = uniformData is Map ? uniformData['code'] : response['code'];
+    if ('$code' != '0' || detail is! Map || rawSongs is! List) {
       throw const AppFailure(
         code: AppFailureCode.invalidData,
         message: 'QQ 音乐歌单详情格式异常',
@@ -266,7 +273,7 @@ final class QqPlaylistService implements PlaylistCatalogService {
     }
     final tracks = <Track>[];
     final ids = <String>{};
-    for (final song in songs.whereType<Map>()) {
+    for (final song in rawSongs.whereType<Map>()) {
       final mid = '${song['mid'] ?? ''}'.trim();
       final title = '${song['title'] ?? ''}'.trim();
       if (mid.isEmpty || title.isEmpty || !ids.add(mid)) continue;
@@ -306,14 +313,18 @@ final class QqPlaylistService implements PlaylistCatalogService {
       playlist: OnlinePlaylist(
         id: fallback.id,
         source: OnlineSource.qq,
-        name: '${detail['dissname'] ?? fallback.name}'.trim(),
-        author: '${detail['nickname'] ?? fallback.author}'.trim(),
+        name:
+            '${detail['dissname'] ?? detail['title'] ?? fallback.name}'.trim(),
+        author:
+            '${detail['nickname'] ?? detail['host_nick'] ?? fallback.author}'
+                .trim(),
         description: _description(detail['desc']).isEmpty
             ? fallback.description
             : _description(detail['desc']),
         trackCount: tracks.length,
-        playCount: _formatCount(detail['visitnum']),
-        coverUri: _httpsUri(detail['logo']) ?? fallback.coverUri,
+        playCount: _formatCount(detail['visitnum'] ?? detail['listennum']),
+        coverUri:
+            _httpsUri(detail['logo'] ?? detail['picurl']) ?? fallback.coverUri,
       ),
       tracks: tracks,
     );

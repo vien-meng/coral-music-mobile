@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../app/cover_image.dart';
 import '../../../app/online_source_menu.dart';
@@ -33,9 +34,20 @@ class _SongListPageState extends ConsumerState<SongListPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(songListProvider);
-    return state.detail == null
-        ? _PlaylistSquare(state: state)
-        : _PlaylistDetail(detail: state.detail!);
+    final hasDetail = state.detail != null;
+    return PopScope(
+      canPop: !hasDetail,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        ref.read(songListProvider.notifier).closeDetail();
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: hasDetail
+          ? _PlaylistDetail(detail: state.detail!)
+          : _PlaylistSquare(state: state),
+    );
   }
 }
 
@@ -47,11 +59,7 @@ class _PlaylistSquare extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tags = ref.watch(songListTagsProvider);
-    const candidates = [
-      OnlineSource.kuwo,
-      OnlineSource.qq,
-      OnlineSource.migu,
-    ];
+    final candidates = ref.watch(playlistCatalogServicesProvider).keys;
     final supported = ref.watch(userApiDebugProvider.select((userApi) =>
         userApi.activeSource?.musicUrlSources ?? const <String>{}));
     return Column(
@@ -69,23 +77,45 @@ class _PlaylistSquare extends ConsumerWidget {
                 sources: supportedOnlineSources(candidates, supported),
                 onSelected: ref.read(songListProvider.notifier).selectSource,
               ),
-              PopupMenuButton<String>(
-                enabled: !state.isLoading,
-                tooltip: '歌单排序',
-                onSelected: ref.read(songListProvider.notifier).selectSort,
-                itemBuilder: (context) => [
-                  CheckedPopupMenuItem(
-                    value: 'hot',
-                    checked: state.sortId == 'hot',
-                    child: const Text('最热'),
+              MenuAnchor(
+                style: onlineSourceMenuStyle(context),
+                menuChildren: [
+                  const OnlineSourceMenuHeading(title: '歌单排序'),
+                  OnlineSourceMenuItem(
+                    icon: Icons.local_fire_department_outlined,
+                    label: '最热',
+                    selected: state.sortId == 'hot',
+                    onPressed: state.isLoading
+                        ? null
+                        : () => ref
+                            .read(songListProvider.notifier)
+                            .selectSort('hot'),
                   ),
-                  CheckedPopupMenuItem(
-                    value: 'new',
-                    checked: state.sortId == 'new',
-                    child: const Text('最新'),
+                  OnlineSourceMenuItem(
+                    icon: Icons.fiber_new_outlined,
+                    label: '最新',
+                    selected: state.sortId == 'new',
+                    onPressed: state.isLoading
+                        ? null
+                        : () => ref
+                            .read(songListProvider.notifier)
+                            .selectSort('new'),
                   ),
                 ],
-                icon: const Icon(Icons.sort_outlined),
+                builder: (context, controller, _) => IconButton(
+                  tooltip: '歌单排序',
+                  onPressed: state.isLoading
+                      ? null
+                      : () => controller.isOpen
+                          ? controller.close()
+                          : controller.open(),
+                  icon: Icon(
+                    Icons.sort_outlined,
+                    color: controller.isOpen
+                        ? Theme.of(context).colorScheme.primary
+                        : null,
+                  ),
+                ),
               ),
               IconButton(
                 tooltip: '刷新',
@@ -229,9 +259,14 @@ class _PlaylistSquare extends ConsumerWidget {
                                   borderRadius: BorderRadius.circular(8),
                                   onTap: state.isLoading
                                       ? null
-                                      : () => ref
-                                          .read(songListProvider.notifier)
-                                          .open(playlist),
+                                      : () async {
+                                          await ref
+                                              .read(songListProvider.notifier)
+                                              .open(playlist);
+                                          if (context.mounted) {
+                                            context.push('/song-list/detail');
+                                          }
+                                        },
                                   child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,

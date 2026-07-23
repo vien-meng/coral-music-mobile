@@ -1,13 +1,27 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/http_client.dart';
 import '../../../domain/music.dart';
 import '../data/independent_lyric_service.dart';
 import '../data/local_lyric_loader.dart';
 
 final _sessionLyricCacheProvider = Provider((_) => <String, LyricPayload>{});
 final lyricFallbackProvider = Provider<Future<LyricPayload?> Function(Track)>(
-    (_) => IndependentLyricService(createHttpClient()).resolve);
+    (_) => IndependentLyricService(_createLyricHttpClient()).resolve);
+
+Dio _createLyricHttpClient() => Dio(
+      BaseOptions(
+        connectTimeout: const Duration(seconds: 8),
+        sendTimeout: const Duration(seconds: 8),
+        receiveTimeout: const Duration(seconds: 8),
+        validateStatus: (status) =>
+            status != null && status >= 200 && status < 300,
+        headers: const {
+          'User-Agent': 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 '
+              'Chrome/120 Mobile Safari/537.36',
+        },
+      ),
+    );
 final lyricProvider =
     FutureProvider.family<LyricPayload?, Track>((ref, track) async {
   final local = await LocalLyricLoader().load(track);

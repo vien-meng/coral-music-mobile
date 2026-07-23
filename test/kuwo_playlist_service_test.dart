@@ -43,17 +43,7 @@ void main() {
     final service = KuwoPlaylistService(_fakeDio(
       requests,
       data: (uri) => uri.host == 'search.kuwo.cn'
-          ? {
-              'TOTAL': '1',
-              'abslist': [
-                {
-                  'playlistid': 'playlist-1',
-                  'name': '搜索歌单',
-                  'nickname': '创建者',
-                  'pic': 'http://cover.example.com/list.jpg',
-                },
-              ],
-            }
+          ? "{'TOTAL':'1','abslist':[{'playlistid':'playlist-1','name':'搜索歌单','nickname':'创建者','pic':'http://cover.example.com/list.jpg'}]}"
           : {
               'result': 'ok',
               'musiclist': <Object?>[],
@@ -106,6 +96,7 @@ void main() {
             'abslist': [
               {
                 'MUSICRID': second ? 'MUSIC_song-2' : 'MUSIC_song-1',
+                'SONGNAME': second ? '歌曲二' : '歌曲一',
                 'web_albumpic_short':
                     second ? '4/76/1414274524.jpg' : '3/75/1414274523.jpg',
               },

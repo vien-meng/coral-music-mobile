@@ -19,32 +19,33 @@ final class KuwoSearchParser {
     final tracks = <Track>[];
     final ids = <String>{};
     for (final value in rawList) {
-      if (value is! Map<String, Object?>) continue;
-      final sourceTrackId = _id(value);
+      if (value is! Map) continue;
+      final item = Map<String, Object?>.from(value);
+      final sourceTrackId = _id(item);
       final title = KuwoLeaderboardParser.decodeText(
-        '${value['SONGNAME'] ?? value['NAME'] ?? ''}',
+        '${item['SONGNAME'] ?? item['NAME'] ?? ''}',
       ).trim();
       if (sourceTrackId.isEmpty || title.isEmpty || !ids.add(sourceTrackId)) {
         continue;
       }
-      final duration = int.tryParse('${value['DURATION'] ?? ''}');
+      final duration = int.tryParse('${item['DURATION'] ?? ''}');
       tracks.add(
         Track(
           sourceKind: TrackSourceKind.online,
           sourceId: OnlineSource.kuwo.id,
           sourceTrackId: sourceTrackId,
           title: title,
-          artist: KuwoLeaderboardParser.decodeText('${value['ARTIST'] ?? ''}')
+          artist: KuwoLeaderboardParser.decodeText('${item['ARTIST'] ?? ''}')
               .replaceAll('&', '、')
               .trim(),
-          album: KuwoLeaderboardParser.decodeText('${value['ALBUM'] ?? ''}')
-              .trim(),
+          album:
+              KuwoLeaderboardParser.decodeText('${item['ALBUM'] ?? ''}').trim(),
           duration: duration == null ? null : Duration(seconds: duration),
-          coverUri: _cover(value['web_albumpic_short']),
+          coverUri: _cover(item),
           availableQualities: KuwoLeaderboardParser.parseQualities(
-            '${value['N_MINFO'] ?? value['MINFO'] ?? ''}',
+            '${item['N_MINFO'] ?? item['MINFO'] ?? ''}',
           ),
-          extra: {'albumId': value['ALBUMID']},
+          extra: {'albumId': item['ALBUMID']},
         ),
       );
     }
@@ -67,8 +68,12 @@ final class KuwoSearchParser {
         : '${value['DC_TARGETID'] ?? ''}'.trim();
   }
 
-  static Uri? _cover(Object? value) {
-    final parts = '$value'.trim().split('/');
+  static Uri? _cover(Map<String, Object?> item) {
+    final direct = _httpsUri('${item['pic'] ?? ''}') ??
+        _httpsUri('${item['albumpic'] ?? ''}') ??
+        _httpsUri('${item['albumPic'] ?? ''}');
+    if (direct != null) return direct;
+    final parts = '${item['web_albumpic_short'] ?? ''}'.trim().split('/');
     if (parts.length < 2 || parts.skip(1).any((part) => part.isEmpty)) {
       return null;
     }
@@ -76,5 +81,13 @@ final class KuwoSearchParser {
       'img3.kuwo.cn',
       '/star/albumcover/500/${parts.skip(1).join('/')}',
     );
+  }
+
+  static Uri? _httpsUri(String value) {
+    final raw = value.trim();
+    if (raw.isEmpty) return null;
+    final uri = Uri.tryParse(raw);
+    if (uri == null || uri.host.isEmpty) return null;
+    return uri.scheme == 'http' ? uri.replace(scheme: 'https') : uri;
   }
 }

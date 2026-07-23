@@ -62,7 +62,7 @@ class _LeaderboardPageState extends ConsumerState<LeaderboardPage> {
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
               children: [
                 _SectionHeader(
-                  title: '推荐歌单',
+                  title: '推荐榜单',
                   trailing: state.isLoading
                       ? const SizedBox.square(
                           dimension: 18,
@@ -205,13 +205,7 @@ class _TopBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    const candidates = [
-      OnlineSource.kuwo,
-      OnlineSource.kugou,
-      OnlineSource.qq,
-      OnlineSource.migu,
-      OnlineSource.netease,
-    ];
+    final candidates = ref.watch(onlineCatalogServicesProvider).keys;
     final supported = ref.watch(userApiDebugProvider.select((userApi) =>
         userApi.activeSource?.musicUrlSources ?? const <String>{}));
     return Row(

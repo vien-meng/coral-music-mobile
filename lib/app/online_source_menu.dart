@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../domain/music.dart';
 
 List<OnlineSource> supportedOnlineSources(
-  List<OnlineSource> candidates,
+  Iterable<OnlineSource> candidates,
   Set<String> supportedSourceIds,
 ) =>
     candidates
@@ -42,14 +42,14 @@ class OnlineSourceMenu extends StatelessWidget {
               ),
             ),
           if (onSelectCombined case final selectCombined?)
-            _MenuItem(
+            OnlineSourceMenuItem(
               icon: Icons.grid_view_rounded,
               label: '综合搜索',
               selected: isCombined,
               onPressed: isCombined ? null : selectCombined,
             ),
           for (final source in sources)
-            _MenuItem(
+            OnlineSourceMenuItem(
               icon: onlineSourceIcon(source),
               label: source.label,
               selected: source == activeSource && !isCombined,
@@ -74,12 +74,13 @@ class OnlineSourceMenu extends StatelessWidget {
       );
 }
 
-class _MenuItem extends StatelessWidget {
-  const _MenuItem({
+class OnlineSourceMenuItem extends StatelessWidget {
+  const OnlineSourceMenuItem({
     required this.icon,
     required this.label,
     required this.selected,
     required this.onPressed,
+    super.key,
   });
 
   final IconData icon;

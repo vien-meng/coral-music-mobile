@@ -2,6 +2,72 @@
 
 All notable changes to 珊瑚音乐移动端 (Coral Music Mobile) will be documented in this file.
 
+## [1.0.3] - 2026-07-23(02)
+
+### 多音源封面、播放与歌词链路修复
+
+- **酷狗播放失败**：歌单详情和搜索结果的 `sourceTrackId` 统一用 `hash`，移除 `extra['songId']`，修复 JS 脚本用数字 `audio_id` 取链报"歌曲不存在"
+- **酷我封面缺失**：歌单详情 `_trackCover` 增加 `albumpic`（全小写）字段回退；搜索解析器 `_cover` 增加 `pic`/`albumpic`/`albumPic` 回退
+- **咪咕封面缺失**：`_httpsUri` 处理根相对路径（`/data/oss/...`），补上 `d.musicapp.migu.cn` host
+- **歌单/专辑详情返回键**：`SongListPage` 和 `SearchAlbumDetailPage` 用 `PopScope` 拦截系统返回键，详情页返回广场而非退出
+- **歌词加载优化**：LrcLib 与平台端点并行发起（原串行），LrcLib 内部 3 请求并行，超时从 15s 缩短到 8s；最坏 75s → 8s
+- **播放页封面兜底**：新增 `TrackArtworkResolver`，播放页进入时缺封面则通过各音源 `searchTracks` 搜索补全，请求隔离防止旧结果覆盖
+
+### 在线来源歌词与返回行为
+
+- 酷狗歌词保留 KRC 逐字时间轴解析，网易云补齐 YRC 逐字数据
+- 搜索与"我的"根页面系统返回回到首页，首页才退到桌面
+
+### 独立歌词检索优先级
+
+- LrcLib 按歌名、歌手（可用时加专辑与时长）优先检索，平台歌词端点仅作兜底
+- 独立服务命中时不访问平台歌词端点
+- 音乐分类、歌单广场、网盘资源的系统返回回到"更多"而非退出应用
+
+### 酷狗文本 JSON 搜索修复
+
+- `songsearch.kugou.com` 返回 `Content-Type: text/plain` 的 JSON，Dio 不自动解码
+- 复用 `decodeJsonMap` 兼容文本 JSON 字符串，无需改端点或加签名
+
+### 网易云搜索封面与歌单
+
+- EAPI 歌曲封面 URL 规范为 HTTPS，供搜索列表和媒体通知共用
+- 网易云搜索"歌单"标签返回该平台歌单（`api/search/get/web?type=1000`），可进入详情
+
+## [1.0.3] - 2026-07-23
+
+### 酷狗与网易云榜单接入
+
+- 网易云改用 `api/v6/playlist/detail` 获取榜单，兼容文本 JSON 响应
+- 酷狗使用 HTTPS 榜单网页 `www.kugou.com/yy/rank/home/1-<id>.html`，解析 `global.features` JSON 获取曲目
+- 酷狗榜单解析后批量请求 `media.store.kugou.com/v1/get_res_privilege` 补齐封面，接口不可用时降级为无图
+
+### 来源能力菜单动态过滤
+
+- 排行榜、搜索、歌单广场的平台菜单从各自注册的服务 Map 读取候选来源，再通过当前 User API `musicUrlSources` 取交集
+- 不再写死平台集合，未声明可播放的来源不显示
+
+### 酷狗与网易云歌单广场
+
+- 网易云补齐推荐歌单（`api/personalized/playlist`）
+- 酷狗补齐 HTTPS 广场（`m.kugou.com/plist/index`）、详情页曲目和 User API 所需的 hash/质量元数据
+- 酷狗歌单关键词搜索仍无可验证 HTTPS 端点，保留"暂未接入"提示
+
+### 搜索歌单修复
+
+- `decodeJsonMap` 兼容酷我单引号对象文本，修复歌单搜索返回空
+- 酷狗实现 HTTPS 歌单搜索（`msearchretry.kugou.com`）与分页解析
+- 网易云 EAPI 补齐 `pic` 与 `picUrl` 备用字段，修复搜索结果封面缺失
+- 网易云 EAPI 搜索保留 `uiElement.image.imageUrl` 资源卡片图片
+
+### 歌单详情兼容与补图
+
+- 酷狗详情解析接受 `var data=[…];` 新格式，不再依赖后续变量名
+- 咪咕曲目封面按 `img3/img2/img1/albumImgs[].img` 顺序读取，兼容协议相对 URL
+- 酷我补图任务跨歌单切换隔离，旧任务不阻塞新歌单
+- QQ 详情切至 Musicu `uniform_get_Dissinfo`，保留旧 `cdlist` 响应解析兼容
+- 网易云空封面字段回退 `picUrl`，空字符串不再解析为无封面
+
 ## [1.0.2] - 2026-07-22
 
 ### iOS WKWebView 进程终止恢复

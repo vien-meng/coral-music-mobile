@@ -109,7 +109,6 @@ final class _DelayedSearchCatalogService implements OnlineCatalogService {
             message: '网易云不可用',
           )),
         OnlineSource.migu => Future.value(_page('mg')),
-        _ => Future.value(_page('other')),
       };
     }
     return query == 'first' ? first.future : second.future;

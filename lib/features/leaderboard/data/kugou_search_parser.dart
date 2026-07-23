@@ -1,4 +1,5 @@
 import '../../../core/app_failure.dart';
+import '../../../core/response_json.dart';
 import '../../../domain/music.dart';
 
 final class KugouSearchParser {
@@ -7,9 +8,10 @@ final class KugouSearchParser {
     required int page,
     int pageSize = 30,
   }) {
-    final data = response is Map ? response['data'] : null;
-    final rawList = data is Map ? data['lists'] : null;
-    if (response is! Map || response['error_code'] != 0 || rawList is! List) {
+    final responseMap = decodeJsonMap(response);
+    final data = responseMap['data'] as Map?;
+    final rawList = data?['lists'];
+    if (responseMap['error_code'] != 0 || data == null || rawList is! List) {
       throw const AppFailure(
         code: AppFailureCode.invalidData,
         message: '酷狗音乐搜索数据格式异常',
@@ -40,11 +42,9 @@ final class KugouSearchParser {
     Set<String> ids,
     Map value,
   ) {
-    final audioId = '${value['Audioid'] ?? ''}'.trim();
     final hash = '${value['FileHash'] ?? ''}'.trim();
     final title = '${value['SongName'] ?? ''}'.trim();
-    final id = audioId.isNotEmpty ? audioId : hash;
-    if (id.isEmpty || title.isEmpty || !ids.add('$id:$hash')) return;
+    if (hash.isEmpty || title.isEmpty || !ids.add(hash)) return;
 
     final qualityMeta = <String, Map<String, Object?>>{};
     void addQuality(String name, String hashKey, String sizeKey) {
@@ -73,7 +73,7 @@ final class KugouSearchParser {
       Track(
         sourceKind: TrackSourceKind.online,
         sourceId: OnlineSource.kugou.id,
-        sourceTrackId: id,
+        sourceTrackId: hash,
         title: title,
         artist: _artists(value['Singers']),
         album: '${value['AlbumName'] ?? ''}'.trim(),
@@ -81,7 +81,6 @@ final class KugouSearchParser {
         coverUri: _cover(value['Image'] ?? value['AlbumImage']),
         availableQualities: qualities,
         extra: {
-          'songId': audioId,
           'albumId': value['AlbumID'],
           'hash': hash,
           'qualityMeta': qualityMeta,
