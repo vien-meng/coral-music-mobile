@@ -41,7 +41,7 @@ class _UserApiDebugPageState extends ConsumerState<UserApiDebugPage> {
         Text('音源管理', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 6),
         Text(
-          '内置落雪音源会在应用启动时加载；可继续导入和管理其他音源。',
+          '请导入并启用可用音源后播放在线歌曲。',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: scheme.onSurfaceVariant,
               ),
@@ -131,9 +131,7 @@ class _UserApiDebugPageState extends ConsumerState<UserApiDebugPage> {
                       source.originUrl != null
                   ? () => controller.refresh(source.id)
                   : null,
-              onRemove: isDefaultUserApiSource(source)
-                  ? null
-                  : () => controller.remove(source.id),
+              onRemove: () => controller.remove(source.id),
             ),
             const SizedBox(height: 10),
           ],

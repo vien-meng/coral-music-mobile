@@ -21,7 +21,7 @@ void main() {
     await controller.importScript('酷我音源', 'kw-script');
     await controller.importScript('QQ 音源', 'qq-script');
 
-    expect(controller.state.sources, hasLength(3));
+    expect(controller.state.sources, hasLength(2));
     expect(controller.state.activeSource?.name, 'QQ 音源');
     expect(controller.state.activeSource?.musicUrlSources, {'qq'});
 
@@ -90,10 +90,11 @@ kw-script
   test('reloads the active source when restoring its runtime', () async {
     final runner = _Runner();
     final controller = await _sessionController(runner);
+    await controller.importScript('酷我音源', 'kw-script');
 
     await controller.restoreRuntime();
 
-    expect(runner.loadedScript, 'kw-default-script');
+    expect(runner.loadedScript, 'kw-script');
     expect(runner.loadCount, 2);
   });
 
@@ -136,8 +137,7 @@ kw-script
     expect(preferences.saved, (name: '文件音源', script: 'kw-local-script'));
   });
 
-  test('loads and saves the default LX source when no source is configured',
-      () async {
+  test('does not load a source when no source is configured', () async {
     final preferences = _Preferences();
     final fetcher = _Fetcher('kw-default-script');
     final controller = UserApiDebugController(
@@ -149,14 +149,12 @@ kw-script
 
     await controller.restorePersisted();
 
-    expect(controller.state.activeSource?.name, defaultUserApiSourceName);
-    expect(fetcher.urls, [Uri.parse(defaultUserApiSourceUrl)]);
-    expect(preferences.saved, [
-      (name: defaultUserApiSourceName, url: Uri.parse(defaultUserApiSourceUrl)),
-    ]);
+    expect(controller.state.activeSource, isNull);
+    expect(fetcher.urls, isEmpty);
+    expect(preferences.saved, isEmpty);
   });
 
-  test('loads the default LX source when persisted storage is unavailable',
+  test('does not load a source when persisted storage is unavailable',
       () async {
     final fetcher = _Fetcher('kw-default-script');
     final controller = UserApiDebugController(
@@ -168,13 +166,39 @@ kw-script
 
     await controller.restorePersisted();
 
-    expect(controller.state.activeSource?.name, defaultUserApiSourceName);
-    expect(fetcher.urls, [Uri.parse(defaultUserApiSourceUrl)]);
+    expect(controller.state.activeSource, isNull);
+    expect(fetcher.urls, isEmpty);
+  });
+
+  test('clears the source record written by the removed default source',
+      () async {
+    final preferences = _Preferences(
+      (
+        name: '落雪音源',
+        url: Uri.parse(
+          'https://raw.githubusercontent.com/pdone/lx-music-source/main/lx/latest.js',
+        ),
+      ),
+    );
+    final fetcher = _Fetcher('kw-default-script');
+    final controller = UserApiDebugController(
+      _Runner(),
+      fetcher,
+      null,
+      preferences,
+    );
+
+    await controller.restorePersisted();
+
+    expect(controller.state.activeSource, isNull);
+    expect(fetcher.urls, isEmpty);
+    expect(preferences.clearCount, 1);
   });
 
   test('restores a cached source script before requesting the network',
       () async {
-    final preferences = _CachingPreferences('kw-cached-script');
+    final saved = (name: '缓存音源', url: Uri.parse('https://example.com/me.js'));
+    final preferences = _CachingPreferences('kw-cached-script', saved);
     final fetcher = _Fetcher('kw-network-script');
     final controller = UserApiDebugController(
       _Runner(),
@@ -185,13 +209,13 @@ kw-script
 
     await controller.restorePersisted();
 
-    expect(controller.state.activeSource?.name, defaultUserApiSourceName);
+    expect(controller.state.activeSource?.name, saved.name);
     expect(controller.state.activeSource?.script, 'kw-cached-script');
     expect(fetcher.urls, isEmpty);
   });
 
   test('caches a fetched source script after it has initialized', () async {
-    final preferences = _CachingPreferences();
+    final preferences = _CachingPreferences(null, null);
     final controller = UserApiDebugController(
       _Runner(),
       _Fetcher('kw-network-script'),
@@ -207,7 +231,7 @@ kw-script
     expect(preferences.cached, (url: url, script: 'kw-network-script'));
   });
 
-  test('keeps the default source while restoring the saved source', () async {
+  test('restores the saved source without adding another source', () async {
     final saved = (name: '我的音源', url: Uri.parse('https://example.com/me.js'));
     final preferences = _Preferences(saved);
     final fetcher = _Fetcher('kw-saved-script');
@@ -221,35 +245,43 @@ kw-script
     await controller.restorePersisted();
 
     expect(controller.state.activeSource?.name, saved.name);
-    expect(controller.state.sources.map((source) => source.name),
-        [defaultUserApiSourceName, saved.name]);
-    expect(fetcher.urls, [Uri.parse(defaultUserApiSourceUrl), saved.url]);
+    expect(controller.state.sources.map((source) => source.name), [saved.name]);
+    expect(fetcher.urls, [saved.url]);
     expect(preferences.saved, isEmpty);
   });
 
-  test('does not remove the built-in LX source', () async {
-    final controller = await _sessionController(_Runner());
+  test('removes an imported URL source', () async {
+    final preferences = _Preferences();
+    final controller = UserApiDebugController(
+      _Runner(),
+      _Fetcher('kw-script'),
+      null,
+      preferences,
+    );
+    await controller.importUrl('我的音源', 'https://example.com/me.js');
     final source = controller.state.sources.single;
 
     await controller.remove(source.id);
 
-    expect(controller.state.sources, [source]);
-    expect(controller.state.error?.message, '内置落雪音源不能移除');
+    expect(controller.state.sources, isEmpty);
+    expect(controller.state.activeSource, isNull);
+    expect(preferences.clearCount, 1);
   });
 
-  test('a default source failure completes startup restore without a source',
+  test('a saved source failure completes startup restore without a source',
       () async {
+    final saved = (name: '失效音源', url: Uri.parse('https://example.com/me.js'));
     final controller = UserApiDebugController(
       _Runner(),
       _FailingFetcher(),
       null,
-      _Preferences(),
+      _Preferences(saved),
     );
 
     await controller.restorePersisted();
 
     expect(controller.state.activeSource, isNull);
-    expect(controller.state.error?.message, '默认音源不可用');
+    expect(controller.state.error?.message, '保存的音源不可用');
   });
 }
 
@@ -278,6 +310,7 @@ final class _Preferences extends UserApiSourcePreferences {
 
   final ({String name, Uri url})? value;
   final saved = <({String name, Uri url})>[];
+  var clearCount = 0;
 
   @override
   Future<({String name, Uri url})?> read() async => value;
@@ -288,17 +321,18 @@ final class _Preferences extends UserApiSourcePreferences {
   }
 
   @override
-  Future<void> clear() async {}
+  Future<void> clear() async => clearCount++;
 }
 
 final class _CachingPreferences extends UserApiSourcePreferences {
-  _CachingPreferences([this.script]);
+  _CachingPreferences(this.script, this.value);
 
   final String? script;
+  final ({String name, Uri url})? value;
   ({Uri url, String script})? cached;
 
   @override
-  Future<({String name, Uri url})?> read() async => null;
+  Future<({String name, Uri url})?> read() async => value;
 
   @override
   Future<void> save(String name, Uri url) async {}
@@ -351,7 +385,7 @@ final class _FailingFetcher extends UserApiScriptFetcher {
   @override
   Future<String> fetch(Uri uri) async => throw const AppFailure(
         code: AppFailureCode.noNetwork,
-        message: '默认音源不可用',
+        message: '保存的音源不可用',
       );
 }
 

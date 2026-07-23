@@ -195,6 +195,7 @@ final class _CoralAudioHandler extends BaseAudioHandler with SeekHandler {
         AudioEngineSnapshot(track: track, status: AudioEngineStatus.loading);
     _snapshots.add(_snapshot);
     FfmpegAudioStream? stream;
+    final playableUri = await recoverIosSandboxDocumentUri(uri);
     mediaItem.add(MediaItem(
       id: uri.toString(),
       title: track.title,
@@ -204,9 +205,9 @@ final class _CoralAudioHandler extends BaseAudioHandler with SeekHandler {
       artUri: track.coverUri,
     ));
     try {
-      stream = await FfmpegAudioStream.open(uri);
+      stream = await FfmpegAudioStream.open(playableUri);
       await _player.setAudioSource(
-        AudioSource.uri(stream?.uri ?? uri, headers: headers),
+        AudioSource.uri(stream?.uri ?? playableUri, headers: headers),
       );
       _ffmpegStream = stream;
     } on Object {
