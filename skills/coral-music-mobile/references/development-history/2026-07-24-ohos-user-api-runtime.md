@@ -21,6 +21,7 @@
 - 文件选择统一经 `coral_music/file_access`；鸿蒙手机保留音频/文档选择，资料备份、列表导出和下载文件导出使用系统文档保存器。
 - 鸿蒙手机不支持任意目录授权，因此下载固定在应用目录；完成下载可导出到用户选择的位置。
 - `just_audio_harmonyos` 将固化为工程内的最小上游副本，补齐 API 20/6.1.1 要求的 `MediaSource.enableOfflineCache`，避免依赖本机 pub 缓存的手工改动。
+- 完整的本机配置、构建、安装、调试与回归流程见 [鸿蒙构建与真机调试流程](../ohos-build-and-device-debugging.md)。
 
 ## 2026-07-24 取链空结果回归（DOING）
 
