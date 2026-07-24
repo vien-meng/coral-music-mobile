@@ -13,8 +13,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('imports, activates and removes session-only User API sources',
-      () async {
+  test('imports, activates and removes User API sources', () async {
     final runner = _Runner();
     final controller = await _sessionController(runner);
 
@@ -124,7 +123,7 @@ kw-script
   });
 
   test('persists a script imported from a local JS file', () async {
-    final preferences = _WritableLocalScriptPreferences();
+    final preferences = _SavedSourcesPreferences();
     final controller = UserApiDebugController(
       _Runner(),
       _Fetcher('kw-default-script'),
@@ -134,7 +133,81 @@ kw-script
 
     await controller.importBytes('文件音源', utf8.encode('kw-local-script'));
 
-    expect(preferences.saved, (name: '文件音源', script: 'kw-local-script'));
+    expect(preferences.value?.sources.single.name, '文件音源');
+    expect(preferences.value?.sources.single.script, 'kw-local-script');
+  });
+
+  test('restores every JS file source and its active selection', () async {
+    final preferences = _SavedSourcesPreferences();
+    final imported = UserApiDebugController(
+      _Runner(),
+      _Fetcher('unused'),
+      null,
+      preferences,
+    );
+    await imported.restorePersisted();
+    await imported.importBytes('酷我文件音源', utf8.encode('kw-file-script'));
+    await imported.importBytes('QQ 文件音源', utf8.encode('qq-file-script'));
+
+    final restored = UserApiDebugController(
+      _Runner(),
+      _Fetcher('unused'),
+      null,
+      preferences,
+    );
+    await restored.restorePersisted();
+
+    expect(restored.state.sources.map((source) => source.name), [
+      '酷我文件音源',
+      'QQ 文件音源',
+    ]);
+    expect(restored.state.activeSource?.name, 'QQ 文件音源');
+
+    final firstId = restored.state.sources.first.id;
+    await restored.activate(firstId);
+    final restarted = UserApiDebugController(
+      _Runner(),
+      _Fetcher('unused'),
+      null,
+      preferences,
+    );
+    await restarted.restorePersisted();
+
+    expect(restarted.state.sources, hasLength(2));
+    expect(restarted.state.activeSource?.name, '酷我文件音源');
+  });
+
+  test('restores every URL source from its saved local script', () async {
+    final firstUrl = Uri.parse('https://example.com/kw.js');
+    final secondUrl = Uri.parse('https://example.com/qq.js');
+    final preferences = _SavedSourcesPreferences();
+    final imported = UserApiDebugController(
+      _Runner(),
+      _MappingFetcher({
+        firstUrl: 'kw-url-script',
+        secondUrl: 'qq-url-script',
+      }),
+      null,
+      preferences,
+    );
+    await imported.restorePersisted();
+    await imported.importUrl('酷我 URL 音源', firstUrl.toString());
+    await imported.importUrl('QQ URL 音源', secondUrl.toString());
+
+    final restored = UserApiDebugController(
+      _Runner(),
+      _FailingFetcher(),
+      null,
+      preferences,
+    );
+    await restored.restorePersisted();
+
+    expect(restored.state.sources.map((source) => source.name), [
+      '酷我 URL 音源',
+      'QQ URL 音源',
+    ]);
+    expect(restored.state.activeSource?.name, 'QQ URL 音源');
+    expect(restored.state.error, isNull);
   });
 
   test('does not load a source when no source is configured', () async {
@@ -303,6 +376,10 @@ final class _UnavailablePreferences extends UserApiSourcePreferences {
 
   @override
   Future<void> clear() async {}
+
+  @override
+  Future<void> saveSources(List<UserApiSavedSource> sources,
+      {String? activeSourceId}) async {}
 }
 
 final class _Preferences extends UserApiSourcePreferences {
@@ -318,6 +395,12 @@ final class _Preferences extends UserApiSourcePreferences {
   @override
   Future<void> save(String name, Uri url) async {
     saved.add((name: name, url: url));
+  }
+
+  @override
+  Future<void> saveSources(List<UserApiSavedSource> sources,
+      {String? activeSourceId}) async {
+    if (sources.isEmpty) await clear();
   }
 
   @override
@@ -338,6 +421,10 @@ final class _CachingPreferences extends UserApiSourcePreferences {
   Future<void> save(String name, Uri url) async {}
 
   @override
+  Future<void> saveSources(List<UserApiSavedSource> sources,
+      {String? activeSourceId}) async {}
+
+  @override
   Future<String?> readCachedScript(Uri url) async => script;
 
   @override
@@ -355,15 +442,31 @@ final class _LocalScriptPreferences extends UserApiSourcePreferences {
   @override
   Future<({String name, String script})?> readLocalScript() async =>
       (name: name, script: script);
-}
-
-final class _WritableLocalScriptPreferences extends UserApiSourcePreferences {
-  ({String name, String script})? saved;
 
   @override
-  Future<void> saveLocalScript(String name, String script) async {
-    saved = (name: name, script: script);
+  Future<void> saveSources(List<UserApiSavedSource> sources,
+      {String? activeSourceId}) async {}
+}
+
+final class _SavedSourcesPreferences extends UserApiSourcePreferences {
+  UserApiSavedSources? value;
+
+  @override
+  Future<UserApiSavedSources?> readSources() async => value;
+
+  @override
+  Future<void> saveSources(
+    List<UserApiSavedSource> sources, {
+    String? activeSourceId,
+  }) async {
+    value = UserApiSavedSources(
+      sources: List.of(sources),
+      activeSourceId: activeSourceId,
+    );
   }
+
+  @override
+  Future<void> clear() async => value = null;
 }
 
 final class _Fetcher extends UserApiScriptFetcher {
@@ -377,6 +480,15 @@ final class _Fetcher extends UserApiScriptFetcher {
     urls.add(uri);
     return script;
   }
+}
+
+final class _MappingFetcher extends UserApiScriptFetcher {
+  _MappingFetcher(this.scripts) : super(Dio());
+
+  final Map<Uri, String> scripts;
+
+  @override
+  Future<String> fetch(Uri uri) async => scripts[uri]!;
 }
 
 final class _FailingFetcher extends UserApiScriptFetcher {

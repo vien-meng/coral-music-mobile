@@ -178,9 +178,11 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
   }
 
   Future<void> _restorePersisted() async {
+    UserApiSavedSources? savedSources;
     ({String name, Uri url})? saved;
     ({String name, String script})? local;
     try {
+      savedSources = await _preferences.readSources();
       saved = await _preferences.read();
       local = await _preferences.readLocalScript();
     } on Object {
@@ -189,9 +191,14 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
       local = null;
     }
     if (state.sources.isNotEmpty) return;
+    if (savedSources != null) {
+      await _restoreSources(savedSources);
+      return;
+    }
     if (local != null) {
       await importScript(local.name, local.script,
           persist: false, cache: false);
+      await _persistSources(state.sources, state.activeSourceId);
       return;
     }
     if (saved == null) return;
@@ -201,6 +208,24 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
       return;
     }
     await _restoreUrl(saved.name, saved.url, persist: false);
+    await _persistSources(state.sources, state.activeSourceId);
+  }
+
+  Future<void> _restoreSources(UserApiSavedSources saved) async {
+    for (final source in saved.sources) {
+      await importScript(
+        source.name,
+        source.script,
+        originUrl: source.originUrl,
+        persist: false,
+        cache: false,
+        sourceId: source.id,
+      );
+    }
+    final activeId = saved.activeSourceId;
+    if (activeId != null && activeId != state.activeSourceId) {
+      await _activate(activeId, persist: false);
+    }
   }
 
   Future<void> _restoreUrl(String name, Uri url,
@@ -255,7 +280,7 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
       return;
     }
     try {
-      await importScript(name, utf8.decode(bytes), persistLocalScript: true);
+      await importScript(name, utf8.decode(bytes));
     } on FormatException {
       state = state.copyWith(
         error: const AppFailure(
@@ -272,7 +297,7 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
     Uri? originUrl,
     bool persist = true,
     bool cache = true,
-    bool persistLocalScript = false,
+    String? sourceId,
   }) async {
     final info = UserApiSourceInfo.fromScript(script);
     final normalizedName =
@@ -282,7 +307,7 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
     try {
       final manifest = await _runner.load(script);
       final source = UserApiSource(
-        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        id: sourceId ?? DateTime.now().microsecondsSinceEpoch.toString(),
         name: normalizedName,
         script: script,
         info: info,
@@ -294,16 +319,11 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
       if (cache && originUrl != null) {
         await _preferences.cacheScript(originUrl, script);
       }
-      if (persist && originUrl != null) {
-        await _preferences.save(normalizedName, originUrl);
-      } else if (persistLocalScript) {
-        await _preferences.saveLocalScript(normalizedName, script);
-      } else if (persist) {
-        await _preferences.clear();
-      }
+      final sources = [...state.sources, source];
+      if (persist) await _persistSources(sources, source.id);
       state = state.copyWith(
         isLoading: false,
-        sources: [...state.sources, source],
+        sources: sources,
         activeSourceId: source.id,
         runtimeRevision: state.runtimeRevision + 1,
         clearError: true,
@@ -324,7 +344,9 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
     }
   }
 
-  Future<void> activate(String id) async {
+  Future<void> activate(String id) => _activate(id);
+
+  Future<void> _activate(String id, {bool persist = true}) async {
     final target = state.sources.where((source) => source.id == id).firstOrNull;
     if (target == null || target.id == state.activeSourceId) return;
     final previous = state.activeSource;
@@ -341,17 +363,13 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
         originUrl: target.originUrl,
       );
       _playbackResolver?.clear();
-      if (target.originUrl != null) {
-        await _preferences.save(target.name, target.originUrl!);
-      } else {
-        await _preferences.saveLocalScript(target.name, target.script);
-      }
+      final sources = [
+        for (final source in state.sources) source.id == id ? updated : source,
+      ];
+      if (persist) await _persistSources(sources, id);
       state = state.copyWith(
         isLoading: false,
-        sources: [
-          for (final source in state.sources)
-            source.id == id ? updated : source,
-        ],
+        sources: sources,
         activeSourceId: id,
         runtimeRevision: state.runtimeRevision + 1,
         clearError: true,
@@ -396,12 +414,14 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
       );
       _playbackResolver?.clear();
       await _preferences.cacheScript(target.originUrl!, script);
+      final sources = [
+        for (final source in state.sources)
+          source.id == target.id ? updated : source,
+      ];
+      await _persistSources(sources, target.id);
       state = state.copyWith(
         isLoading: false,
-        sources: [
-          for (final source in state.sources)
-            source.id == target.id ? updated : source,
-        ],
+        sources: sources,
         runtimeRevision: state.runtimeRevision + 1,
         clearError: true,
       );
@@ -424,9 +444,11 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
   Future<void> remove(String id) async {
     final source = state.sources.where((item) => item.id == id).firstOrNull;
     if (source == null) return;
+    final remaining = state.sources.where((item) => item.id != id).toList();
     if (id != state.activeSourceId) {
+      await _persistSources(remaining, state.activeSourceId);
       state = state.copyWith(
-        sources: state.sources.where((item) => item.id != id).toList(),
+        sources: remaining,
       );
       return;
     }
@@ -434,10 +456,10 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
     try {
       await _runner.clear();
       _playbackResolver?.clear();
-      await _preferences.clear();
+      await _persistSources(remaining, null);
       state = state.copyWith(
         isLoading: false,
-        sources: state.sources.where((item) => item.id != id).toList(),
+        sources: remaining,
         clearActiveSource: true,
         runtimeRevision: state.runtimeRevision + 1,
         clearError: true,
@@ -467,4 +489,21 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
       // 恢复失败不覆盖当前导入/启用操作的原始错误。
     }
   }
+
+  Future<void> _persistSources(
+    List<UserApiSource> sources,
+    String? activeSourceId,
+  ) =>
+      _preferences.saveSources(
+        [
+          for (final source in sources)
+            UserApiSavedSource(
+              id: source.id,
+              name: source.name,
+              script: source.script,
+              originUrl: source.originUrl,
+            ),
+        ],
+        activeSourceId: activeSourceId,
+      );
 }
