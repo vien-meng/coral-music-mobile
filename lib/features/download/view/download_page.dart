@@ -9,6 +9,7 @@ import '../../../app/app_back_navigation.dart';
 import '../../../app/audio_quality_labels.dart';
 import '../../../app/cover_image.dart';
 import '../../../domain/music.dart';
+import '../../../platform/ohos_file_access.dart';
 import '../../player/state/player_controller.dart';
 import '../state/download_controller.dart';
 
@@ -109,6 +110,7 @@ class _DownloadRow extends ConsumerWidget {
     final tasks = ref.watch(downloadProvider);
     final configuredDirectory = ref.watch(downloadDirectoryProvider);
     final canMoveToConfiguredDirectory = !Platform.isIOS &&
+        !OhosFileAccess.isOhos &&
         (configuredDirectory == null ||
             task.targetPath.isEmpty ||
             File(task.targetPath).parent.absolute.path !=
@@ -375,6 +377,25 @@ class _DownloadRow extends ConsumerWidget {
       );
       return;
     }
+    if (OhosFileAccess.isOhos) {
+      final file = File(task.targetPath);
+      if (task.targetPath.isEmpty || !await file.exists()) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(const SnackBar(content: Text('下载文件不存在。')));
+        }
+        return;
+      }
+      final exported = await OhosFileAccess.exportFile(
+        sourcePath: file.path,
+        fileName: file.uri.pathSegments.last,
+      );
+      if (context.mounted && exported) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('下载文件已导出。')));
+      }
+      return;
+    }
     final directory = File(task.targetPath).parent;
     if (task.targetPath.isEmpty || !await directory.exists()) {
       if (context.mounted) {
@@ -417,9 +438,15 @@ class _OpenDirectoryMenuItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(children: [
-        const Icon(Icons.folder_open_outlined),
+        Icon(OhosFileAccess.isOhos
+            ? Icons.file_upload_outlined
+            : Icons.folder_open_outlined),
         const SizedBox(width: 12),
-        Text(Platform.isIOS ? '在文件 App 中查看' : '打开所在目录'),
+        Text(OhosFileAccess.isOhos
+            ? '导出下载文件'
+            : Platform.isIOS
+                ? '在文件 App 中查看'
+                : '打开所在目录'),
       ]);
 }
 

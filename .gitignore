@@ -33,6 +33,11 @@ migrate_working_dir/
 .pub/
 /build/
 .hvigor/
+third_party/just_audio_harmonyos/ohos/build/
+third_party/just_audio_harmonyos/ohos/local.properties
+third_party/flutter_secure_storage_ohos/ohos/build/
+third_party/flutter_secure_storage_ohos/ohos/oh_modules/
+third_party/flutter_secure_storage_ohos/ohos/local.properties
 
 # Symbolication related
 app.*.symbols

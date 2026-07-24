@@ -122,7 +122,7 @@ final class MethodChannelUserApiRunner implements UserApiRunner {
       final value = await _channel.invokeMethod<Object?>('resolveMusicUrl', {
         'source': track.sourceId,
         'quality': _qualityName(quality),
-        'musicInfo': _legacyMusicInfo(track),
+        'musicInfo': _legacyMusicInfo(track, quality),
       });
       final map = value is Map ? value : null;
       final url = value is String ? value : map?['url'] as String?;
@@ -180,7 +180,10 @@ final class MethodChannelUserApiRunner implements UserApiRunner {
         _ => null,
       };
 
-  static Map<String, Object?> _legacyMusicInfo(Track track) {
+  static Map<String, Object?> _legacyMusicInfo(
+    Track track,
+    AudioQuality requestedQuality,
+  ) {
     final songId = track.extra['songId'] ?? track.sourceTrackId;
     final qualityMeta = track.extra['qualityMeta'];
     Map<String, Object?> metadataFor(AudioQuality quality) {
@@ -193,12 +196,16 @@ final class MethodChannelUserApiRunner implements UserApiRunner {
       };
     }
 
+    final availableQualities = [
+      ...track.availableQualities,
+      if (track.availableQualities.isEmpty) requestedQuality,
+    ];
     final qualities = [
-      for (final quality in track.availableQualities)
+      for (final quality in availableQualities)
         {'type': _qualityName(quality), ...metadataFor(quality)},
     ];
     final qualitys = {
-      for (final quality in track.availableQualities)
+      for (final quality in availableQualities)
         _qualityName(quality): metadataFor(quality),
     };
     final lrcUrl = track.extra['lrcUrl'];

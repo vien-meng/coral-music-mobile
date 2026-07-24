@@ -1,12 +1,12 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 
 import '../../../app/app_back_navigation.dart';
 import '../../../app/cover_image.dart';
 import '../../../domain/music.dart';
+import '../../../platform/ohos_file_access.dart';
 import '../../player/state/playback_queue_controller.dart';
 import '../../player/state/player_controller.dart';
 import '../data/library_store.dart';
@@ -69,12 +69,14 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                           fontWeight: FontWeight.w700,
                         )),
                 const Spacer(),
-                IconButton(
-                  tooltip: '导入文件夹',
-                  onPressed:
-                      state.isLoading ? null : () => _importDirectory(context),
-                  icon: const Icon(Icons.folder_open_outlined),
-                ),
+                if (!OhosFileAccess.isOhos)
+                  IconButton(
+                    tooltip: '导入文件夹',
+                    onPressed: state.isLoading
+                        ? null
+                        : () => _importDirectory(context),
+                    icon: const Icon(Icons.folder_open_outlined),
+                  ),
                 IconButton(
                   tooltip: '导入本地音频',
                   onPressed:
@@ -277,11 +279,17 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   }
 
   Future<void> _importLocalAudio(BuildContext context) async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.audio,
-      allowMultiple: true,
-    );
-    final paths = result?.paths.whereType<String>().toList() ?? const [];
+    List<String> paths;
+    try {
+      paths = await OhosFileAccess.pickAudio();
+    } on PlatformException {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('无法打开系统音频选择器')),
+        );
+      }
+      return;
+    }
     if (paths.isEmpty) return;
     final imported = await ref.read(libraryProvider.notifier).importSharedAudio(
           paths,
@@ -620,11 +628,12 @@ class _PlaylistTracksState extends ConsumerState<_PlaylistTracks> {
             title: const Text('选择音频文件'),
             onTap: () => Navigator.pop(context, false),
           ),
-          ListTile(
-            leading: const Icon(Icons.folder_open_outlined),
-            title: const Text('选择目录并扫描'),
-            onTap: () => Navigator.pop(context, true),
-          ),
+          if (!OhosFileAccess.isOhos)
+            ListTile(
+              leading: const Icon(Icons.folder_open_outlined),
+              title: const Text('选择目录并扫描'),
+              onTap: () => Navigator.pop(context, true),
+            ),
         ]),
       ),
     );
@@ -657,19 +666,16 @@ class _PlaylistTracksState extends ConsumerState<_PlaylistTracks> {
   }
 
   Future<void> _exportPlaylist(BuildContext context) async {
-    final path = await FilePicker.platform.saveFile(
-      dialogTitle: '导出列表',
-      fileName: '${_safeFileName(widget.playlist.name)}.json',
-      type: FileType.custom,
-      allowedExtensions: const ['json'],
-    );
-    if (path == null) return;
     try {
       final raw = await ref
           .read(libraryProvider.notifier)
           .exportPlaylist(widget.playlist);
-      await File(path).writeAsString(raw, flush: true);
-      if (context.mounted) {
+      final saved = await OhosFileAccess.saveTextDocument(
+        content: raw,
+        fileName: '${_safeFileName(widget.playlist.name)}.json',
+        extensions: const ['json'],
+      );
+      if (saved && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('列表已导出，可直接在珊瑚音乐桌面端导入。')),
         );
@@ -703,12 +709,15 @@ class _PlaylistTracksState extends ConsumerState<_PlaylistTracks> {
   }
 
   Future<LocalAudioScanResult> _scanFiles() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.audio,
-      allowMultiple: true,
-    );
-    return LocalAudioScanner()
-        .scanFiles(result?.paths.whereType<String>() ?? const []);
+    try {
+      return LocalAudioScanner().scanFiles(await OhosFileAccess.pickAudio());
+    } on PlatformException {
+      return const LocalAudioScanResult(
+        tracks: [],
+        skipped: [],
+        errorMessage: '无法打开系统音频选择器',
+      );
+    }
   }
 
   Future<LocalAudioScanResult> _scanDirectory() async {

@@ -3,10 +3,10 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../../../core/app_failure.dart';
 import '../../../domain/music.dart';
+import '../../../platform/ohos_file_access.dart';
 import '../../library/data/library_store.dart';
 import '../../player/data/playback_resolver.dart';
 import '../../player/state/player_controller.dart';
@@ -35,7 +35,7 @@ final class DownloadDirectoryController extends StateNotifier<String?> {
 
   Future<void> _load() async {
     final saved = await _store.downloadDirectory();
-    if (Platform.isIOS) {
+    if (Platform.isIOS || OhosFileAccess.isOhos) {
       // iOS document-provider paths are not persistently writable from Dart.
       if (saved != null) await _store.saveDownloadDirectory(null);
       state = null;
@@ -45,7 +45,7 @@ final class DownloadDirectoryController extends StateNotifier<String?> {
   }
 
   Future<Directory> _applicationDownloads() async {
-    final documents = await getApplicationDocumentsDirectory();
+    final documents = await OhosFileAccess.applicationDocumentsDirectory();
     return Directory('${documents.path}/downloads');
   }
 
@@ -62,7 +62,9 @@ final class DownloadDirectoryController extends StateNotifier<String?> {
   }
 
   Future<bool> setDirectory(String path) async {
-    if (Platform.isIOS) return useApplicationDirectory();
+    if (Platform.isIOS || OhosFileAccess.isOhos) {
+      return useApplicationDirectory();
+    }
     final directory = Directory(path);
     try {
       await directory.create(recursive: true);
@@ -76,13 +78,15 @@ final class DownloadDirectoryController extends StateNotifier<String?> {
 
   Future<Directory> resolve() async {
     await _ready;
-    if (!Platform.isIOS && state != null) return Directory(state!);
+    if (!Platform.isIOS && !OhosFileAccess.isOhos && state != null) {
+      return Directory(state!);
+    }
     return _applicationDownloads();
   }
 
   Future<Directory?> configured() async {
     await _ready;
-    if (Platform.isIOS) return resolve();
+    if (Platform.isIOS || OhosFileAccess.isOhos) return resolve();
     return state == null ? null : Directory(state!);
   }
 }

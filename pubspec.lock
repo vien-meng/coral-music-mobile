@@ -238,6 +238,13 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "3.1.3"
+  flutter_secure_storage_ohos:
+    dependency: "direct main"
+    description:
+      path: "third_party/flutter_secure_storage_ohos"
+      relative: true
+    source: path
+    version: "1.2.2"
   flutter_secure_storage_platform_interface:
     dependency: transitive
     description:
@@ -315,10 +322,9 @@ packages:
   just_audio_harmonyos:
     dependency: "direct main"
     description:
-      name: just_audio_harmonyos
-      sha256: c33778c72388b6321b509348965d5b83cdee5a2b775f9eca46bf5c1536c59678
-      url: "https://pub.flutter-io.cn"
-    source: hosted
+      path: "third_party/just_audio_harmonyos"
+      relative: true
+    source: path
     version: "0.0.1"
   just_audio_platform_interface:
     dependency: transitive
@@ -648,5 +654,5 @@ packages:
     source: hosted
     version: "1.1.0"
 sdks:
-  dart: ">=3.6.2 <4.0.0"
+  dart: ">=3.6.2 <3.7.0"
   flutter: ">=3.27.0"

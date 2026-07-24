@@ -300,8 +300,13 @@ final class UserApiDebugController extends StateNotifier<UserApiDebugState> {
     String? sourceId,
   }) async {
     final info = UserApiSourceInfo.fromScript(script);
+    final suppliedName = name.trim();
     final normalizedName =
-        name.trim().isNotEmpty ? name.trim() : info.name ?? '未命名音源';
+        info.name != null && suppliedName.startsWith('coral-import-')
+            ? info.name!
+            : suppliedName.isNotEmpty
+                ? suppliedName
+                : info.name ?? '未命名音源';
     final previous = state.activeSource;
     state = state.copyWith(isLoading: true, clearError: true);
     try {

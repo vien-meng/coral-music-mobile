@@ -60,6 +60,17 @@ kw-script
         'https://github.com/lxmusics/lx-music-api-server');
   });
 
+  test('uses a script header for HarmonyOS cache-file imports', () async {
+    final controller = await _sessionController(_Runner());
+
+    await controller.importScript('coral-import-1234567890-0', '''
+// @name 真正的音源名称
+kw-script
+''');
+
+    expect(controller.state.activeSource?.name, '真正的音源名称');
+  });
+
   test('clears cached URLs after the active source changes', () async {
     final runner = _Runner();
     final resolver = PlaybackResolver(runner);

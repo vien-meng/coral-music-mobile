@@ -3,7 +3,8 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
-import 'package:path_provider/path_provider.dart';
+
+import '../../../platform/ohos_file_access.dart';
 
 // ponytail: cap tag reads at 2 MiB; use a native metadata reader only if
 // real-world libraries show larger embedded covers are common.
@@ -311,7 +312,7 @@ Future<Uri?> cacheEmbeddedArtwork(
         .convert(utf8
             .encode('${source.absolute.path}:${stat.size}:${stat.modified}'))
         .toString();
-    final directory = await getApplicationSupportDirectory();
+    final directory = await OhosFileAccess.applicationSupportDirectory();
     final extension = metadata.artworkExtension ?? 'jpg';
     final target = File('${directory.path}/local-covers/$key.$extension');
     if (!await target.exists()) {

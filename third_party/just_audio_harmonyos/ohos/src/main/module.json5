@@ -1,0 +1,10 @@
+{
+  "module": {
+    "name": "just_audio_harmonyos",
+    "type": "har",
+    "deviceTypes": [
+      "default",
+      "tablet"
+    ]
+  }
+}

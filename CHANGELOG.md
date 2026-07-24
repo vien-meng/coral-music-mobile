@@ -2,6 +2,37 @@
 
 All notable changes to 珊瑚音乐移动端 (Coral Music Mobile) will be documented in this file.
 
+## [1.0.4] - 2026-07-24
+
+### 鸿蒙受限 User API 运行时
+
+- 新增 `OhosUserApiPlugin.ets`（556 行）：鸿蒙原生 Web WebView 加载本地空页面 + 原生 HTTP 代理取链
+- 禁止页面导航、`fetch` 与 XHR；脚本下载必须 HTTPS，取链请求经原生代理允许公开 HTTP/HTTPS
+- DNS 解析后拒绝回环、私网、链路本地、组播和保留地址
+- 限制 GET/POST、20 秒超时、64 KiB 请求体、1 MiB 响应
+- 取链空结果归一化对齐桌面：`{url}` 与 `{data:{url}}` 等价返回
+- `_legacyMusicInfo` 增加请求音质回退参数，`availableQualities` 为空时传入请求音质
+- `flutter build hap --debug` 通过，真机 `22M0224425009013`（OpenHarmony 6.1 / API 23）已部署
+- 真实 LX 取链与播放待真机回归（DOING）
+
+### 鸿蒙文件访问统一通道
+
+- 新增 `ohos_file_access.dart` 和 `CoralFilePickerPlugin.ets`，统一音频选择、文档保存和文件导出
+- 鸿蒙手机保留音频/文档选择，资料备份/列表导出/下载导出使用系统文档保存器
+- 鸿蒙不支持任意目录授权，下载固定应用目录，完成可导出到用户选择位置
+
+### 鸿蒙安全存储与音频引擎固化
+
+- 新增 `third_party/flutter_secure_storage_ohos`，`pubspec.yaml` 从 pub 改为 path 依赖
+- `just_audio_harmonyos` 从 pub 改为 path 依赖，补齐 API 20/6.1.1 的 `MediaSource.enableOfflineCache`
+
+### 鸿蒙平台适配
+
+- 下载控制器、设置页、列表页、备份页统一 `OhosFileAccess.isOhos` 判断
+- 鸿蒙下载目录固定应用目录（同 iOS 逻辑）
+- 鸿蒙列表页隐藏文件夹导入按钮，音频导入通过 `OhosFileAccess.pickAudio()`
+- 设置页下载目录提示文案去除平台前缀
+
 ## [1.0.3] - 2026-07-23(02)
 
 ### 多音源封面、播放与歌词链路修复

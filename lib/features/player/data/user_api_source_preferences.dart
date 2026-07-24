@@ -3,8 +3,8 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:path_provider/path_provider.dart';
 
+import '../../../platform/ohos_file_access.dart';
 import 'user_api_script_fetcher.dart';
 
 final class UserApiSavedSource {
@@ -106,36 +106,22 @@ class UserApiSourcePreferences {
   }
 
   Future<UserApiSavedSources?> readSources() async {
+    if (OhosFileAccess.isOhos) {
+      try {
+        final raw = await _readOhosSourcesMetadata();
+        if (raw != null) {
+          final sources = await _decodeSources(raw);
+          if (sources != null) return sources;
+        }
+        return await _recoverOhosSources();
+      } on Object {
+        // Fall through to secure storage for a migration from an older build.
+      }
+    }
     try {
       final raw = await _storage.read(key: _sourcesKey);
       if (raw == null) return null;
-      final data = jsonDecode(raw);
-      if (data is! Map || data['sources'] is! List) return null;
-      final sources = <UserApiSavedSource>[];
-      for (final value in data['sources'] as List) {
-        if (value is! Map) continue;
-        final id = value['id'] as String?;
-        final name = value['name'] as String?;
-        if (id == null || name == null || !_isSafeSourceId(id)) continue;
-        final script = await _readSourceScript(id);
-        if (script == null) continue;
-        final rawUrl = value['originUrl'] as String?;
-        final uri = rawUrl == null ? null : Uri.tryParse(rawUrl);
-        sources.add(UserApiSavedSource(
-          id: id,
-          name: name,
-          script: script,
-          originUrl: uri?.scheme == 'https' ? uri : null,
-        ));
-      }
-      if (sources.isEmpty) return null;
-      final activeSourceId = data['activeSourceId'] as String?;
-      return UserApiSavedSources(
-        sources: sources,
-        activeSourceId: sources.any((source) => source.id == activeSourceId)
-            ? activeSourceId
-            : null,
-      );
+      return _decodeSources(raw);
     } on Object {
       return null;
     }
@@ -164,13 +150,15 @@ class UserApiSourcePreferences {
         });
       }
       if (entries.isEmpty) return;
-      await _storage.write(
-        key: _sourcesKey,
-        value: jsonEncode({
-          'activeSourceId': activeSourceId,
-          'sources': entries,
-        }),
-      );
+      final metadata = jsonEncode({
+        'activeSourceId': activeSourceId,
+        'sources': entries,
+      });
+      if (OhosFileAccess.isOhos) {
+        await _writeOhosSourcesMetadata(metadata);
+      } else {
+        await _storage.write(key: _sourcesKey, value: metadata);
+      }
       await _storage.delete(key: _key);
       await _storage.delete(key: _localKey);
       final legacy = await _localScriptFile();
@@ -185,12 +173,18 @@ class UserApiSourcePreferences {
       await _storage.delete(key: _key);
       await _storage.delete(key: _localKey);
       await _storage.delete(key: _sourcesKey);
+    } on Object {
+      // An unavailable platform secure store must not retain source scripts.
+    }
+    try {
       final file = await _localScriptFile();
       if (await file.exists()) await file.delete();
+      final metadata = await _sourceMetadataFile();
+      if (await metadata.exists()) await metadata.delete();
       final directory = await _sourceScriptsDirectory();
       if (await directory.exists()) await directory.delete(recursive: true);
     } on Object {
-      // ponytail: unavailable secure storage leaves no persisted source data to remove.
+      // The next import replaces any partially removed source data.
     }
   }
 
@@ -226,7 +220,7 @@ class UserApiSourcePreferences {
   }
 
   Future<File> _scriptFile(Uri url) async {
-    final supportDirectory = await getApplicationSupportDirectory();
+    final supportDirectory = await OhosFileAccess.applicationSupportDirectory();
     final key = base64Url
         .encode(sha256.convert(utf8.encode(url.toString())).bytes)
         .replaceAll('=', '');
@@ -236,7 +230,7 @@ class UserApiSourcePreferences {
   }
 
   Future<File> _localScriptFile() async {
-    final supportDirectory = await getApplicationSupportDirectory();
+    final supportDirectory = await OhosFileAccess.applicationSupportDirectory();
     final directory = Directory('${supportDirectory.path}/user-api-scripts');
     await directory.create(recursive: true);
     return File('${directory.path}/imported.js');
@@ -266,8 +260,79 @@ class UserApiSourcePreferences {
     return File('${directory.path}/$id.js');
   }
 
+  Future<UserApiSavedSources?> _decodeSources(String raw) async {
+    final data = jsonDecode(raw);
+    if (data is! Map || data['sources'] is! List) return null;
+    final sources = <UserApiSavedSource>[];
+    for (final value in data['sources'] as List) {
+      if (value is! Map) continue;
+      final id = value['id'] as String?;
+      final name = value['name'] as String?;
+      if (id == null || name == null || !_isSafeSourceId(id)) continue;
+      final script = await _readSourceScript(id);
+      if (script == null) continue;
+      final rawUrl = value['originUrl'] as String?;
+      final uri = rawUrl == null ? null : Uri.tryParse(rawUrl);
+      sources.add(UserApiSavedSource(
+        id: id,
+        name: name,
+        script: script,
+        originUrl: uri?.scheme == 'https' ? uri : null,
+      ));
+    }
+    if (sources.isEmpty) return null;
+    final activeSourceId = data['activeSourceId'] as String?;
+    return UserApiSavedSources(
+      sources: sources,
+      activeSourceId: sources.any((source) => source.id == activeSourceId)
+          ? activeSourceId
+          : null,
+    );
+  }
+
+  Future<String?> _readOhosSourcesMetadata() async {
+    final file = await _sourceMetadataFile();
+    return await file.exists() ? file.readAsString() : null;
+  }
+
+  Future<void> _writeOhosSourcesMetadata(String metadata) async {
+    final file = await _sourceMetadataFile();
+    final temporary = File('${file.path}.tmp');
+    await temporary.writeAsString(metadata, flush: true);
+    await temporary.rename(file.path);
+  }
+
+  Future<UserApiSavedSources?> _recoverOhosSources() async {
+    final directory = await _sourceScriptsDirectory();
+    final files = <File>[];
+    await for (final entity in directory.list(followLinks: false)) {
+      if (entity is File && entity.path.endsWith('.js')) files.add(entity);
+    }
+    files.sort((left, right) => left.path.compareTo(right.path));
+    final sources = <UserApiSavedSource>[];
+    for (final file in files) {
+      final name = file.uri.pathSegments.last;
+      final id = name.substring(0, name.length - 3);
+      if (!_isSafeSourceId(id)) continue;
+      final script = await _readSourceScript(id);
+      if (script == null) continue;
+      sources.add(UserApiSavedSource(id: id, name: '', script: script));
+    }
+    return sources.isEmpty
+        ? null
+        : UserApiSavedSources(
+            sources: sources,
+            activeSourceId: sources.last.id,
+          );
+  }
+
+  Future<File> _sourceMetadataFile() async {
+    final directory = await _sourceScriptsDirectory();
+    return File('${directory.path}/sources.json');
+  }
+
   Future<Directory> _sourceScriptsDirectory() async {
-    final supportDirectory = await getApplicationSupportDirectory();
+    final supportDirectory = await OhosFileAccess.applicationSupportDirectory();
     final directory = Directory('${supportDirectory.path}/user-api-sources');
     await directory.create(recursive: true);
     return directory;

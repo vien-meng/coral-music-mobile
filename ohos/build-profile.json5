@@ -1,13 +1,27 @@
-
 {
   "app": {
-    "signingConfigs": [],
+    "signingConfigs": [
+      {
+        "name": "default",
+        "type": "HarmonyOS",
+        "material": {
+          "certpath": "/Users/vien.meng/.ohos/config/default_ohos_t7oNyj-C-ZNygRVjJNv_m2H3aiEy2T99D9UQAg78ueM=.cer",
+          "keyAlias": "debugKey",
+          "keyPassword": "0000001B2094DA7397B639FFDB510C96C12C0EE446943181061CEC7B06D7E5616EE0F90F667651717F2CC1",
+          "profile": "/Users/vien.meng/.ohos/config/default_ohos_t7oNyj-C-ZNygRVjJNv_m2H3aiEy2T99D9UQAg78ueM=.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "/Users/vien.meng/.ohos/config/default_ohos_t7oNyj-C-ZNygRVjJNv_m2H3aiEy2T99D9UQAg78ueM=.p12",
+          "storePassword": "0000001B10D007A69909A5F0E26E2A87F014ED3CA690246A12135A5D683434E5F03FFBA040019AD4894377"
+        }
+      }
+    ],
     "products": [
       {
         "name": "default",
         "signingConfig": "default",
         "compatibleSdkVersion": "5.0.0(12)",
         "runtimeOS": "HarmonyOS",
+        "targetSdkVersion": "5.0.0(12)"
       }
     ],
     "buildModeSet": [

@@ -1,10 +1,9 @@
-import 'dart:convert';
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../platform/ohos_file_access.dart';
 import '../../library/data/library_backup_codec.dart';
 import '../../library/state/library_controller.dart';
 
@@ -56,20 +55,14 @@ class _LibraryBackupPageState extends ConsumerState<LibraryBackupPage> {
       );
 
   Future<void> _export() async {
-    final path = await FilePicker.platform.saveFile(
-      dialogTitle: '导出资料备份',
-      fileName: 'coral-music-backup.json',
-      type: FileType.custom,
-      allowedExtensions: const ['json'],
-    );
-    if (path == null) return;
     setState(() => _isWorking = true);
     try {
-      await File(path).writeAsString(
-        await ref.read(libraryProvider.notifier).exportLibraryBackup(),
-        flush: true,
+      final saved = await OhosFileAccess.saveTextDocument(
+        content: await ref.read(libraryProvider.notifier).exportLibraryBackup(),
+        fileName: 'coral-music-backup.json',
+        extensions: const ['json'],
       );
-      if (mounted) _show('资料备份已导出。');
+      if (saved && mounted) _show('资料备份已导出。');
     } on Object {
       if (mounted) _show('导出备份失败。');
     } finally {
@@ -78,23 +71,16 @@ class _LibraryBackupPageState extends ConsumerState<LibraryBackupPage> {
   }
 
   Future<void> _chooseBackup() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: const ['json'],
-      withData: true,
-    );
-    final file =
-        result == null || result.files.isEmpty ? null : result.files.first;
-    if (file == null) return;
-    if (file.size > 8 * 1024 * 1024) {
+    final paths = await OhosFileAccess.pickDocuments(const ['json']);
+    if (paths.isEmpty) return;
+    final file = File(paths.first);
+    if (await file.length() > 8 * 1024 * 1024) {
       _show('备份文件不能超过 8 MB。');
       return;
     }
     setState(() => _isWorking = true);
     try {
-      final raw = file.bytes == null
-          ? await File(file.path!).readAsString()
-          : utf8.decode(file.bytes!);
+      final raw = await file.readAsString();
       final backup =
           ref.read(libraryProvider.notifier).previewLibraryBackup(raw);
       if (mounted) setState(() => _preview = backup);

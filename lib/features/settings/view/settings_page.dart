@@ -9,6 +9,7 @@ import '../../../app/app_back_navigation.dart';
 import '../../../app/app_theme.dart';
 import '../../../app/theme_mode_controller.dart';
 import '../../../domain/music.dart';
+import '../../../platform/ohos_file_access.dart';
 import '../../player/state/default_quality_controller.dart';
 import '../../download/state/download_controller.dart';
 
@@ -106,7 +107,7 @@ class SettingsPage extends ConsumerWidget {
           _SettingsItem(
             icon: Icons.folder_outlined,
             title: '下载目录',
-            subtitle: Platform.isIOS
+            subtitle: Platform.isIOS || OhosFileAccess.isOhos
                 ? '应用下载目录（可读写）'
                 : downloadDirectory ?? '默认应用下载目录',
             onTap: () =>
@@ -158,13 +159,13 @@ class SettingsPage extends ConsumerWidget {
     WidgetRef ref,
     String? current,
   ) async {
-    if (Platform.isIOS) {
+    if (Platform.isIOS || Platform.operatingSystem == 'ohos') {
       final saved = await ref
           .read(downloadDirectoryProvider.notifier)
           .useApplicationDirectory();
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(saved ? '已使用 iOS 应用下载目录。' : '无法创建应用下载目录。'),
+          content: Text(saved ? '已使用应用下载目录。' : '无法创建应用下载目录。'),
         ));
       }
       return;

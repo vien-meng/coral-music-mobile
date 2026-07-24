@@ -1,8 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:flutter/services.dart';
 
 import '../../../app/app_theme.dart';
+import '../../../platform/ohos_file_access.dart';
 import '../state/player_controller.dart';
 import '../state/user_api_debug_controller.dart';
 
@@ -214,15 +217,23 @@ class _UserApiDebugPageState extends ConsumerState<UserApiDebugPage> {
   }
 
   Future<void> _importFile(UserApiDebugController controller) async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: const ['js'],
-      withData: true,
-    );
-    final file = result?.files.singleOrNull;
-    if (file == null) return;
-    final bytes = file.bytes;
-    if (bytes == null) {
+    List<String> paths;
+    try {
+      paths = await OhosFileAccess.pickDocuments(const ['js']);
+    } on PlatformException {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('无法打开系统文件选择器')),
+        );
+      }
+      return;
+    }
+    if (paths.isEmpty) return;
+    final file = File(paths.single);
+    late final List<int> bytes;
+    try {
+      bytes = await file.readAsBytes();
+    } on FileSystemException {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('无法读取所选音源文件')),
@@ -230,8 +241,17 @@ class _UserApiDebugPageState extends ConsumerState<UserApiDebugPage> {
       }
       return;
     }
-    final dot = file.name.lastIndexOf('.');
-    final name = dot > 0 ? file.name.substring(0, dot) : file.name;
+    if (bytes.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('无法读取所选音源文件')),
+        );
+      }
+      return;
+    }
+    final fileName = file.uri.pathSegments.last;
+    final dot = fileName.lastIndexOf('.');
+    final name = dot > 0 ? fileName.substring(0, dot) : fileName;
     await controller.importBytes(name, bytes);
   }
 }
